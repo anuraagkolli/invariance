@@ -1,0 +1,28 @@
+node_modules/
+dist/
+.turbo/
+.next/
+coverage/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Playwright
+.playwright/
+
+# Claude Code local settings and memory
+.claude/settings.local.json
+.claude/projects/
+
+# Misc
+results/phase0-results.jsonl
