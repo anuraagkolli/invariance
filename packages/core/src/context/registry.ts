@@ -9,6 +9,10 @@ export interface SlotRegistration {
   alternativeLabels?: string[]
   type: 'slot' | 'text'
   textConfig?: { maxLength?: number; required?: boolean }
+  // CSS variables the scanner rewrote into this slot's source. When present,
+  // F1 customization for this slot targets theme.globals['--inv-...'] entries
+  // rather than theme.slots inline overrides.
+  cssVariables?: string[]
 }
 
 export interface SlotRegistry {

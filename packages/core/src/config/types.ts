@@ -28,12 +28,16 @@ export interface InvarianceConfig {
 // theme.json types
 // ---------------------------------------------------------------------------
 
-export interface ThemeGlobals {
+// Arbitrary CSS variables written by the scanner during migration.
+// Keys must match /^--inv-[a-z0-9-]+$/. Values are applied verbatim to :root.
+export type ThemeCssVars = { [cssVar: `--inv-${string}`]: string }
+
+export type ThemeGlobals = {
   colors?: Record<string, string>
   fonts?: Record<string, string>
   spacing?: { unit: number; scale: number[] }
   radii?: Record<string, number>
-}
+} & Partial<ThemeCssVars>
 
 export interface ThemeSection {
   globals?: ThemeGlobals

@@ -24,6 +24,20 @@ export function colorInPalette(
     }
   }
 
+  // Scanner-emitted --inv-* CSS variables live directly on theme.globals.
+  for (const [key, value] of Object.entries(theme.globals ?? {})) {
+    if (!key.startsWith('--inv-')) continue
+    if (typeof value !== 'string') continue
+    if (looksLikeColor(value) && !palette.includes(value)) {
+      violations.push(`globals.${key}: ${value}`)
+    }
+    for (const color of extractColorsFromStyleValue(value)) {
+      if (!looksLikeColor(value) && !palette.includes(color)) {
+        violations.push(`globals.${key} contains ${color}`)
+      }
+    }
+  }
+
   for (const [slot, styles] of Object.entries(theme.slots ?? {})) {
     for (const [prop, value] of Object.entries(styles)) {
       if (looksLikeColor(value) && !palette.includes(value)) {
@@ -139,6 +153,15 @@ export function validHexColors(theme: ThemeSection): TestResult {
   for (const [key, value] of Object.entries(theme.globals?.colors ?? {})) {
     if (!isValidHex(value)) {
       violations.push(`globals.colors.${key}: ${value}`)
+    }
+  }
+
+  // Scanner-emitted --inv-* CSS variables.
+  for (const [key, value] of Object.entries(theme.globals ?? {})) {
+    if (!key.startsWith('--inv-')) continue
+    if (typeof value !== 'string') continue
+    if (looksLikeColor(value) && !isValidHex(value)) {
+      violations.push(`globals.${key}: ${value}`)
     }
   }
 

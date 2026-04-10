@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Lockfiles
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Build output
+dist/
+build/
+.next/
+.turbo/
+out/
+*.tsbuildinfo
+
+# Coverage & test artifacts
+coverage/
+.nyc_output/
+.playwright/
+playwright-report/
+test-results/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Cache
+.cache/
+.eslintcache

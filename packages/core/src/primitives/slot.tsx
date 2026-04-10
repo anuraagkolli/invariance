@@ -12,6 +12,9 @@ interface SlotProps {
   children: ReactNode
   props?: Record<string, unknown>
   preserve?: boolean
+  // Optional list of --inv-* CSS variable names the scanner wired into this
+  // slot's source. Surfaced via the registry so the Builder can target them.
+  cssVariables?: string[]
 }
 
 // Convert camelCase CSS property name to kebab-case
@@ -33,6 +36,7 @@ export function Slot({
   children,
   props: slotProps,
   preserve,
+  cssVariables,
 }: SlotProps) {
   const { themeJson, componentLibrary, registry, themeStore } = useInvariance()
 
@@ -44,6 +48,7 @@ export function Slot({
       preserve: preserve ?? false,
       alternativesCount: 0,
       type: 'slot',
+      ...(cssVariables && cssVariables.length > 0 ? { cssVariables } : {}),
     })
     return () => registry.unregister(name)
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,0 +1,44 @@
+{
+  "name": "invariance-scanner",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "bin": {
+    "invariance-scan": "./dist/bin/invariance-scan.js"
+  },
+  "exports": {
+    ".": {
+      "require": "./dist/src/index.js",
+      "import": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "test": "vitest run",
+    "lint": "tsc --noEmit",
+    "scan": "tsx bin/invariance-scan.ts"
+  },
+  "dependencies": {
+    "invariance": "workspace:*",
+    "js-yaml": "^4.1.0",
+    "ts-morph": "^22.0.0",
+    "zod": "^3.23.0"
+  },
+  "peerDependencies": {
+    "tailwindcss": ">=3"
+  },
+  "peerDependenciesMeta": {
+    "tailwindcss": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}

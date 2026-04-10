@@ -73,12 +73,30 @@ const ThemeSpacingSchema = z.object({
 
 const ThemeRadiiSchema = z.record(z.string(), z.number().nonnegative())
 
-const ThemeGlobalsSchema = z.object({
-  colors: ThemeColorsSchema.optional(),
-  fonts: ThemeFontsSchema.optional(),
-  spacing: ThemeSpacingSchema.optional(),
-  radii: ThemeRadiiSchema.optional(),
-})
+// Accepts structured keys (colors/fonts/spacing/radii) plus arbitrary --inv-*
+// CSS variable keys written by the scanner during migration. Unknown
+// non-CSS-var keys are stripped; bad --inv-* values fail.
+const CSS_VAR_KEY = /^--inv-[a-z0-9-]+$/
+const ThemeGlobalsSchema = z
+  .object({
+    colors: ThemeColorsSchema.optional(),
+    fonts: ThemeFontsSchema.optional(),
+    spacing: ThemeSpacingSchema.optional(),
+    radii: ThemeRadiiSchema.optional(),
+  })
+  .catchall(z.string())
+  .superRefine((val, ctx) => {
+    for (const key of Object.keys(val)) {
+      if (key === 'colors' || key === 'fonts' || key === 'spacing' || key === 'radii') continue
+      if (!CSS_VAR_KEY.test(key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `theme.globals keys must be 'colors'|'fonts'|'spacing'|'radii' or match ${CSS_VAR_KEY}`,
+        })
+      }
+    }
+  })
 
 const SlotStylesSchema = z.record(z.string(), z.string())
 const ThemeSlotsSchema = z.record(z.string(), SlotStylesSchema)

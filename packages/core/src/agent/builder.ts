@@ -61,8 +61,17 @@ export async function callBuilder(
 CURRENT THEME.JSON:
 ${input.currentThemeJson ? JSON.stringify(input.currentThemeJson, null, 2) : '(empty — no customizations yet)'}
 
-SLOT REGISTRY:
-${JSON.stringify(input.slotRegistry.map((r) => ({ name: r.name, level: r.level, preserve: r.preserve })), null, 2)}
+SLOT REGISTRY (each slot may advertise cssVariables — a list of --inv-* CSS variables the scanner rewired into its source):
+${JSON.stringify(
+  input.slotRegistry.map((r) => ({
+    name: r.name,
+    level: r.level,
+    preserve: r.preserve,
+    cssVariables: r.cssVariables ?? [],
+  })),
+  null,
+  2,
+)}
 
 INVARIANT CONFIG:
 ${JSON.stringify(input.invariantConfig, null, 2)}
@@ -70,14 +79,21 @@ ${JSON.stringify(input.invariantConfig, null, 2)}
 RULES:
 1. Output ONLY valid JSON — a partial theme.json mutation object. No markdown fences, no commentary.
 2. The mutation will be deep-merged into the current theme.json.
-3. Slot names in theme.slots must match registered slot names.
-4. Color values must be valid 6-digit hex (#RRGGBB).
-5. Use camelCase CSS property names in slot overrides (e.g., backgroundColor, borderRight).
-6. When the config has palette mode, use colors from the palette.
-7. Do not add content/layout/component sections unless the intent level requires it.
-8. Include an "explanation" field describing what was changed.
+3. **For F1 (style) changes, PREFER setting theme.globals["--inv-<slot>-<prop>"] entries drawn from the target slot's cssVariables list.** The scanner wired these into the source; updating them repaints the slot automatically. Only fall back to theme.slots[slotName][cssProp] when the target slot has no cssVariables registered.
+4. Slot names in theme.slots must match registered slot names.
+5. Color values must be valid 6-digit hex (#RRGGBB).
+6. Use camelCase CSS property names in theme.slots overrides (e.g., backgroundColor, borderRight). CSS variable keys in theme.globals use kebab-case (e.g., --inv-sidebar-bg).
+7. When the config has palette mode, use colors from the palette.
+8. Do not add content/layout/component sections unless the intent level requires it.
+9. Include an "explanation" field describing what was changed.
 
-OUTPUT FORMAT:
+OUTPUT FORMAT (F1 style change via CSS variables — preferred):
+{
+  "mutation": { "theme": { "globals": { "--inv-sidebar-bg": "#1b2a4a" } } },
+  "explanation": "Changed sidebar background to dark blue"
+}
+
+OUTPUT FORMAT (F1 fallback for slots without cssVariables):
 {
   "mutation": { "theme": { "slots": { "sidebar": { "backgroundColor": "#1b2a4a" } } } },
   "explanation": "Changed sidebar background to dark blue"
