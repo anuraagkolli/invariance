@@ -27,7 +27,7 @@ export function AreaChart({ data }: AreaChartProps) {
   ].join(' ')
 
   return (
-    <div data-inv-chart="area" className="bg-white rounded-xl border border-gray-200 p-6">
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
       <h2 className="text-base font-semibold text-gray-900">{data.title}</h2>
       {data.description && (
         <p className="text-sm text-gray-500 mt-1">{data.description}</p>

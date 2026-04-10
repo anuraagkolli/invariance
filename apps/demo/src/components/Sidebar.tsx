@@ -1,8 +1,4 @@
-'use client'
-
 import type { ReactNode } from 'react'
-
-import { m } from 'invariance'
 import type { NavItem, User } from '@/lib/types'
 
 interface SidebarProps {
@@ -42,44 +38,40 @@ function Icon({ name }: { name: string }) {
 
 export function Sidebar({ navigationItems, user }: SidebarProps) {
   return (
-    <m.slot name="sidebar" level={3} preserve>
-      <nav className="flex flex-col w-64 h-full bg-gray-900 text-gray-100 shrink-0">
-        {/* Logo / app name */}
-        <div className="flex items-center gap-2 px-6 py-5 border-b border-gray-800">
-          <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center text-white font-bold text-sm">
-            I
-          </div>
-          <m.text name="app-name">Invariance</m.text>
+    <nav className="flex flex-col w-64 h-full bg-gray-900 text-gray-100 shrink-0">
+      {/* Logo / app name */}
+      <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-800">
+        <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center text-white font-bold text-sm">
+          I
         </div>
+        <span className="font-semibold text-white">Invariance</span>
+      </div>
 
-        {/* Navigation links — preserve: true so they can't be fully hidden */}
-        <m.slot name="sidebar-nav" level={3} preserve>
-          <ul className="flex-1 px-3 py-4 space-y-1">
-            {navigationItems.map((item) => (
-              <li key={item.href}>
-                <a
-                  href={item.href}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
-                >
-                  {item.icon && <Icon name={item.icon} />}
-                  {item.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </m.slot>
+      {/* Navigation links */}
+      <ul className="flex-1 px-3 py-4 space-y-1">
+        {navigationItems.map((item) => (
+          <li key={item.href}>
+            <a
+              href={item.href}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+            >
+              {item.icon && <Icon name={item.icon} />}
+              {item.label}
+            </a>
+          </li>
+        ))}
+      </ul>
 
-        {/* User info */}
-        <div className="px-4 py-4 border-t border-gray-800 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-semibold shrink-0">
-            {user.initials}
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-white truncate">{user.name}</p>
-            <p className="text-xs text-gray-400 truncate">{user.email}</p>
-          </div>
+      {/* User info */}
+      <div className="px-4 py-4 border-t border-gray-800 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-semibold shrink-0">
+          {user.initials}
         </div>
-      </nav>
-    </m.slot>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-gray-100 truncate">{user.name}</p>
+          <p className="text-xs text-gray-400 truncate">{user.email}</p>
+        </div>
+      </div>
+    </nav>
   )
 }
