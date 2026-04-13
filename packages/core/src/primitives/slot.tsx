@@ -79,8 +79,15 @@ export function Slot({
     }
   }
 
+  // Use display:contents when no inline F1 styles are applied (the scanner CSS-variable path).
+  // This keeps the wrapper layout-transparent so flex/grid parent-child relationships are preserved.
+  const hasInlineStyles = Object.keys(slotStyles).length > 0
+  const wrapperStyle: CSSProperties = hasInlineStyles
+    ? slotStyles
+    : { display: 'contents', ...slotStyles }
+
   return (
-    <div data-inv-slot={name} data-inv-section={name} data-inv-level={level} style={slotStyles}>
+    <div data-inv-slot={name} data-inv-section={name} data-inv-level={level} style={wrapperStyle}>
       {childCss && <style>{childCss}</style>}
       {children}
     </div>

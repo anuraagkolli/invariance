@@ -54,20 +54,45 @@ function printUsage(): void {
       '\n' +
       '  --apply      Actually write modified source files, invariance.config.yaml,\n' +
       '               and invariance.theme.initial.json.\n' +
-      '  --api-key    Anthropic API key (falls back to ANTHROPIC_API_KEY env var).\n',
+      '  --api-key    Anthropic API key (falls back to NEXT_PUBLIC_ANTHROPIC_DEV_API_KEY env var).\n',
   )
+}
+
+function loadEnvFile(dir: string): void {
+  const envPath = path.resolve(dir, '.env')
+  let content: string
+  try {
+    content = require('fs').readFileSync(envPath, 'utf-8')
+  } catch {
+    return
+  }
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eqIndex = trimmed.indexOf('=')
+    if (eqIndex === -1) continue
+    const key = trimmed.slice(0, eqIndex).trim()
+    const value = trimmed.slice(eqIndex + 1).trim().replace(/^["']|["']$/g, '')
+    if (!process.env[key]) {
+      process.env[key] = value
+    }
+  }
 }
 
 async function main(): Promise<void> {
   const parsed = parseArgs(process.argv)
-  const apiKey = parsed.apiKey ?? process.env.ANTHROPIC_API_KEY ?? ''
+  const appRoot = path.resolve(parsed.appPath)
+
+  // Load .env from the target app directory and the repo root
+  loadEnvFile(appRoot)
+  loadEnvFile(path.resolve(appRoot, '../..'))
+
+  const apiKey = parsed.apiKey ?? process.env.NEXT_PUBLIC_ANTHROPIC_DEV_API_KEY ?? ''
   if (!apiKey) {
     process.stderr.write(
       'warning: no Anthropic API key provided; the scanner will use deterministic fallback naming\n',
     )
   }
-
-  const appRoot = path.resolve(parsed.appPath)
 
   try {
     const result = await migrate({ appRoot, apiKey, dryRun: !parsed.apply })

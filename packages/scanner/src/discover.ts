@@ -6,6 +6,7 @@ export interface DiscoveredApp {
   packageJsonName: string
   pages: Array<{ route: string; file: string }>
   tailwindConfigPath: string | null
+  layoutFile: string | null
 }
 
 const TAILWIND_CONFIG_CANDIDATES = [
@@ -144,6 +145,8 @@ export async function discoverApp(appRoot: string): Promise<DiscoveredApp> {
 
   const pages: Array<{ route: string; file: string }> = []
 
+  let layoutFile: string | null = null
+
   const appRouterRoot = await findAppRouterRoot(absRoot)
   if (appRouterRoot) {
     const files = await walkDir(appRouterRoot, (full) => {
@@ -154,6 +157,15 @@ export async function discoverApp(appRoot: string): Promise<DiscoveredApp> {
     for (const file of files) {
       const route = appRouterFileToRoute(appRouterRoot, file)
       if (route) pages.push({ route, file })
+    }
+
+    // Detect root layout file for provider injection
+    for (const ext of PAGE_EXTENSIONS) {
+      const candidate = path.join(appRouterRoot, `layout${ext}`)
+      if (await fileExists(candidate)) {
+        layoutFile = candidate
+        break
+      }
     }
   }
 
@@ -171,5 +183,6 @@ export async function discoverApp(appRoot: string): Promise<DiscoveredApp> {
     packageJsonName,
     pages,
     tailwindConfigPath,
+    layoutFile,
   }
 }

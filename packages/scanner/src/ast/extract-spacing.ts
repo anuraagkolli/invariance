@@ -87,6 +87,8 @@ function readInlineStyleObject(
  */
 function parseSpacingToken(token: string): { prefix: string; suffix: string } | null {
   if (token.startsWith('rounded')) {
+    // Skip rounded-full — it resolves to 9999px which is a sentinel, not a real spacing value.
+    if (token === 'rounded-full') return null
     if (token === 'rounded') return { prefix: 'rounded', suffix: '' }
     const rest = token.slice('rounded-'.length)
     return { prefix: 'rounded', suffix: rest }

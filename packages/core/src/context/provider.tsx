@@ -44,6 +44,7 @@ interface InvarianceProviderProps {
   config: InvarianceConfig
   apiKey?: string
   userId?: string
+  initialTheme?: ThemeJson
   componentLibrary?: Record<string, React.ComponentType<any>>
   storage?: 'memory' | 'localStorage' | 'api'
   storageUrl?: string
@@ -54,6 +55,7 @@ export function InvarianceProvider({
   config,
   apiKey = '',
   userId = '',
+  initialTheme,
   componentLibrary,
   storage = 'memory',
   storageUrl,
@@ -72,19 +74,25 @@ export function InvarianceProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Load theme.json from storage on mount
+  // Load theme.json from storage on mount, falling back to initialTheme
   useEffect(() => {
     let cancelled = false
     async function loadTheme(): Promise<void> {
       try {
-        const theme = await storageBackend.loadTheme(userId, config.app)
+        const stored = await storageBackend.loadTheme(userId, config.app)
         if (cancelled) return
+        const theme = stored ?? initialTheme ?? null
         if (theme) {
           themeStore.setTheme(theme)
           applyThemeJson(theme)
         }
       } catch (e) {
         console.warn('Failed to load theme.json:', e)
+        // Still try to apply initialTheme on storage failure
+        if (!cancelled && initialTheme) {
+          themeStore.setTheme(initialTheme)
+          applyThemeJson(initialTheme)
+        }
       }
     }
     void loadTheme()

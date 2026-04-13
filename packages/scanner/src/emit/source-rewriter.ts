@@ -43,7 +43,23 @@ function ensureImport(sourceFile: SourceFile): void {
     }
     return
   }
-  sourceFile.insertImportDeclaration(0, {
+
+  // Find the insertion index: must be after any 'use client' / 'use server'
+  // directive so Next.js/React doesn't reject the file.
+  const statements = sourceFile.getStatements()
+  let insertIndex = 0
+  for (const stmt of statements) {
+    if (stmt.getKind() === SyntaxKind.ExpressionStatement) {
+      const text = stmt.getText().trim()
+      if (text === "'use client'" || text === '"use client"' ||
+          text === "'use server'" || text === '"use server"') {
+        insertIndex = stmt.getChildIndex() + 1
+        break
+      }
+    }
+  }
+
+  sourceFile.insertImportDeclaration(insertIndex, {
     moduleSpecifier: 'invariance',
     namedImports: ['m'],
   })
@@ -213,13 +229,17 @@ export function applyWrapperEdits(project: Project, plan: MigrationPlan): void {
     const sourceFile = project.getSourceFile(file)
     if (!sourceFile) continue
 
-    // Pages first (outermost wrap).
-    for (const p of pageLocations) {
-      if (p.file !== file) continue
-      const top = findTopLevelReturnJsx(sourceFile)
-      if (top) {
-        wrapPageNode(top, { file: p.file, name: routeToPageName(p.name) })
-      }
+    // Texts first (innermost wrap) — must happen before slots/pages shift paths.
+    const textsForFile = textLocations.filter((t) => t.file === file)
+    for (const textEdit of textsForFile) {
+      const index = indexJsxByPath(sourceFile)
+      const parent = index.get(textEdit.jsxPath)
+      if (!parent) continue
+      // Search all JsxText descendants, not just direct children, so nested text is found.
+      const jsxTexts = parent.getDescendantsOfKind(SyntaxKind.JsxText)
+      const jsxText = jsxTexts.find((t) => t.getText().trim().length > 0) ?? null
+      if (!jsxText) continue
+      wrapTextNode(jsxText, textEdit)
     }
 
     // Slots: walk ordered longest-path-first so ancestors wrap around descendants.
@@ -242,15 +262,13 @@ export function applyWrapperEdits(project: Project, plan: MigrationPlan): void {
       })
     }
 
-    // Texts: locate by JsxText content + jsxPath of parent.
-    const textsForFile = textLocations.filter((t) => t.file === file)
-    for (const textEdit of textsForFile) {
-      const index = indexJsxByPath(sourceFile)
-      const parent = index.get(textEdit.jsxPath)
-      if (!parent) continue
-      const jsxText = parent.getFirstChildByKind(SyntaxKind.JsxText)
-      if (!jsxText) continue
-      wrapTextNode(jsxText, textEdit)
+    // Pages last (outermost wrap) — must happen after slots so jsxPaths aren't shifted.
+    for (const p of pageLocations) {
+      if (p.file !== file) continue
+      const top = findTopLevelReturnJsx(sourceFile)
+      if (top) {
+        wrapPageNode(top, { file: p.file, name: routeToPageName(p.name) })
+      }
     }
 
     ensureImport(sourceFile)

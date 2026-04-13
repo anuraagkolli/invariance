@@ -16,6 +16,7 @@ import { applyVariableRewrites } from './emit/variable-rewriter'
 import { buildMigrationPlan } from './plan/build-plan'
 import { buildSlotPlan } from './plan/slot-plan'
 import { loadTailwindMaps } from './tailwind/resolve'
+import type { InvarianceConfig } from 'invariance'
 import type {
   CandidateSection,
   MigrationPlan,
@@ -29,6 +30,94 @@ export interface MigrateOptions {
   appRoot: string
   apiKey: string
   dryRun: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Provider injection: generates a providers.tsx and patches root layout.tsx
+// ---------------------------------------------------------------------------
+
+function buildProvidersSource(
+  config: InvarianceConfig,
+  relativeThemePath: string,
+): string {
+  const configJson = JSON.stringify(config, null, 2)
+    .split('\n')
+    .map((line, i) => (i === 0 ? line : `  ${line}`))
+    .join('\n')
+
+  return `'use client'
+
+import type { ReactNode } from 'react'
+import { InvarianceProvider, CustomizationPanel } from 'invariance'
+import type { InvarianceConfig, ThemeJson } from 'invariance'
+
+import initialThemeJson from '${relativeThemePath}'
+
+const config: InvarianceConfig = ${configJson}
+
+interface ProvidersProps {
+  children: ReactNode
+}
+
+export function Providers({ children }: ProvidersProps) {
+  return (
+    <InvarianceProvider
+      config={config}
+      apiKey={process.env.NEXT_PUBLIC_ANTHROPIC_DEV_API_KEY ?? ''}
+      initialTheme={initialThemeJson as ThemeJson}
+      storage="localStorage"
+    >
+      {children}
+      <CustomizationPanel />
+    </InvarianceProvider>
+  )
+}
+`
+}
+
+async function injectProvider(
+  layoutFile: string,
+  appRoot: string,
+  config: InvarianceConfig,
+): Promise<void> {
+  const layoutDir = path.dirname(layoutFile)
+  const providersFile = path.join(layoutDir, 'providers.tsx')
+
+  // Compute relative path from providers.tsx to invariance.theme.initial.json
+  const themeJsonPath = path.join(appRoot, 'invariance.theme.initial.json')
+  let relTheme = path.relative(layoutDir, themeJsonPath)
+  if (!relTheme.startsWith('.')) relTheme = `./${relTheme}`
+  // Strip .json extension is not needed — keep it for resolveJsonModule
+  const providersSource = buildProvidersSource(config, relTheme)
+
+  // Write providers.tsx
+  await fs.writeFile(providersFile, providersSource, 'utf-8')
+
+  // Patch layout file: add Providers import and wrap {children} with <Providers>
+  let layoutSource = await fs.readFile(layoutFile, 'utf-8')
+
+  // Skip if already patched
+  if (layoutSource.includes('Providers')) return
+
+  // Add import after existing imports
+  const lastImportIdx = layoutSource.lastIndexOf('\nimport ')
+  if (lastImportIdx !== -1) {
+    const endOfLine = layoutSource.indexOf('\n', lastImportIdx + 1)
+    layoutSource =
+      layoutSource.slice(0, endOfLine + 1) +
+      "import { Providers } from './providers'\n" +
+      layoutSource.slice(endOfLine + 1)
+  } else {
+    layoutSource = "import { Providers } from './providers'\n" + layoutSource
+  }
+
+  // Wrap {children} with <Providers>
+  layoutSource = layoutSource.replace(
+    /\{children\}/g,
+    '<Providers>{children}</Providers>',
+  )
+
+  await fs.writeFile(layoutFile, layoutSource, 'utf-8')
 }
 
 function routeToPageName(route: string): string {
@@ -66,6 +155,17 @@ export async function migrate(opts: MigrateOptions): Promise<ScannerResult> {
   const originalTexts = new Map<string, string>()
   for (const sf of project.getSourceFiles()) {
     originalTexts.set(sf.getFilePath(), sf.getFullText())
+  }
+
+  // Extract fonts from layout file (fonts applied to <body> are inherited by all pages).
+  const layoutFonts = new Set<string>()
+  if (discovered.layoutFile) {
+    const layoutSf = project.getSourceFile(discovered.layoutFile)
+    if (layoutSf) {
+      for (const f of extractFonts(layoutSf, tailwindMaps)) {
+        layoutFonts.add(f.value)
+      }
+    }
   }
 
   const extractions: StaticExtraction[] = []
@@ -131,7 +231,13 @@ export async function migrate(opts: MigrateOptions): Promise<ScannerResult> {
       section.values = values
     }
 
-    const texts = extractTextNodes(pageSourceFile)
+    // Extract text nodes from ALL files associated with this page (not just the page file).
+    const texts: import('./types').ObservedText[] = []
+    for (const file of filesForExtraction) {
+      const sf = project.getSourceFile(file)
+      if (!sf) continue
+      texts.push(...extractTextNodes(sf))
+    }
 
     // Aggregate all design values across files.
     const allColors = new Set<string>()
@@ -152,6 +258,9 @@ export async function migrate(opts: MigrateOptions): Promise<ScannerResult> {
         }
       }
     }
+
+    // Include layout-level fonts (inherited by all pages).
+    for (const f of layoutFonts) allFonts.add(f)
 
     const extraction: StaticExtraction = {
       page: page.route,
@@ -246,6 +355,11 @@ export async function migrate(opts: MigrateOptions): Promise<ScannerResult> {
       themeJson,
       'utf-8',
     )
+
+    // Inject InvarianceProvider into the root layout
+    if (discovered.layoutFile) {
+      await injectProvider(discovered.layoutFile, appRoot, plan.config)
+    }
   }
 
   return { plan, diff, report }

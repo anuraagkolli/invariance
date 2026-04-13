@@ -1,3 +1,4 @@
+import { m } from "invariance";
 import type { ReactNode } from 'react'
 import type { NavItem, User } from '@/lib/types'
 
@@ -38,40 +39,40 @@ function Icon({ name }: { name: string }) {
 
 export function Sidebar({ navigationItems, user }: SidebarProps) {
   return (
-    <nav className="flex flex-col w-64 h-full bg-gray-900 text-gray-100 shrink-0">
-      {/* Logo / app name */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-800">
-        <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center text-white font-bold text-sm">
-          I
-        </div>
-        <span className="font-semibold text-white">Invariance</span>
-      </div>
+    <m.slot name="nav" level={0} preserve={true} cssVariables={['--inv-nav-bg', '--inv-nav-text', '--inv-nav-border', '--inv-nav-bg-1', '--inv-nav-text-1', '--inv-nav-text-2', '--inv-nav-bg-2', '--inv-nav-text-3', '--inv-nav-pad', '--inv-nav-pad-1', '--inv-nav-radius', '--inv-nav-pad-2', '--inv-nav-pad-3']}><nav className="flex flex-col w-64 h-full bg-[var(--inv-nav-bg)] text-[var(--inv-nav-text)] shrink-0">
+            {/* Logo / app name */}
+            <div className="flex items-center gap-[var(--inv-nav-pad)] px-[var(--inv-nav-pad-1)] py-[var(--inv-nav-pad-1)] border-b border-[var(--inv-nav-border)]">
+              <div className="w-8 h-8 rounded-[var(--inv-nav-radius)] bg-[var(--inv-nav-bg-1)] flex items-center justify-center text-[var(--inv-nav-text-1)] font-bold text-sm">
+                <m.text name="app-icon">I
+                                </m.text></div>
+              <span className="font-semibold text-[var(--inv-nav-text-1)]"><m.text name="app-name">Invariance</m.text></span>
+            </div>
 
-      {/* Navigation links */}
-      <ul className="flex-1 px-3 py-4 space-y-1">
-        {navigationItems.map((item) => (
-          <li key={item.href}>
-            <a
-              href={item.href}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
-            >
-              {item.icon && <Icon name={item.icon} />}
-              {item.label}
-            </a>
-          </li>
-        ))}
-      </ul>
+            {/* Navigation links */}
+            <ul className="flex-1 px-[var(--inv-nav-pad)] py-[var(--inv-nav-pad-2)] space-y-1">
+              {navigationItems.map((item) => (
+                <li key={item.href}>
+                  <a
+                    href={item.href}
+                    className="flex items-center gap-[var(--inv-nav-pad)] px-[var(--inv-nav-pad)] py-[var(--inv-nav-pad-3)] rounded-[var(--inv-nav-radius)] text-sm font-medium text-[var(--inv-nav-text-2)] hover:bg-gray-800 hover:text-white transition-colors"
+                  >
+                    {item.icon && <Icon name={item.icon} />}
+                    {item.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
 
-      {/* User info */}
-      <div className="px-4 py-4 border-t border-gray-800 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-semibold shrink-0">
-          {user.initials}
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-gray-100 truncate">{user.name}</p>
-          <p className="text-xs text-gray-400 truncate">{user.email}</p>
-        </div>
-      </div>
-    </nav>
+            {/* User info */}
+            <div className="px-[var(--inv-nav-pad-2)] py-[var(--inv-nav-pad-2)] border-t border-[var(--inv-nav-border)] flex items-center gap-[var(--inv-nav-pad)]">
+              <div className="w-8 h-8 rounded-full bg-[var(--inv-nav-bg-2)] flex items-center justify-center text-[var(--inv-nav-text-1)] text-xs font-semibold shrink-0">
+                {user.initials}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-[var(--inv-nav-text)] truncate">{user.name}</p>
+                <p className="text-xs text-[var(--inv-nav-text-3)] truncate">{user.email}</p>
+              </div>
+            </div>
+          </nav></m.slot>
   )
 }

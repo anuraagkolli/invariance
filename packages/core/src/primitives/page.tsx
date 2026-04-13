@@ -11,7 +11,7 @@ export function Page({ name, children }: PageProps) {
   useInvariance()
 
   return (
-    <div data-inv-page={name}>
+    <div data-inv-page={name} style={{ display: 'contents' }}>
       {children}
     </div>
   )

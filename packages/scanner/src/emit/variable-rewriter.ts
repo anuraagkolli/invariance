@@ -19,14 +19,26 @@ function warn(msg: string): void {
   process.stderr.write(`[scanner:variable-rewriter] ${msg}\n`)
 }
 
+/** Normalize a hex color to uppercase 6-digit form for comparison. */
+function normalizeHex(value: string): string {
+  const m = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(value.trim())
+  if (!m || !m[1]) return value
+  let hex = m[1]
+  if (hex.length === 3) {
+    hex = hex.split('').map((c) => c + c).join('')
+  }
+  return `#${hex.toUpperCase()}`
+}
+
 function findVariableForRole(
   slotName: string,
   role: string,
+  value: string,
   opts: VariableRewriteOptions,
 ): string | null {
   const vars = opts.slotCssVariables[slotName] ?? []
+  const initialValues = opts.slotVariableInitialValues[slotName] ?? {}
   // Variable names look like --inv-<slot>-<abbrev>[-n]; match by role abbrev.
-  // We also disambiguate with slotVariableInitialValues when multiple vars share a role.
   const matching = vars.filter((v) => {
     // Strip leading "--inv-<kebab(slot)>-".
     const parts = v.split('-').filter(Boolean)
@@ -37,6 +49,20 @@ function findVariableForRole(
     return tail === role
   })
   if (matching.length === 0) return null
+  if (matching.length === 1) return matching[0] ?? null
+
+  // Multiple variables match the role — find the one whose initial value
+  // matches the observed value to pick the correct collision-suffixed variant.
+  const normalized = normalizeHex(value)
+  for (const varName of matching) {
+    const initial = initialValues[varName]
+    if (initial && normalizeHex(initial) === normalized) {
+      return varName
+    }
+  }
+
+  // Fallback: return first match (shouldn't normally reach here)
+  warn(`ambiguous role match for slot '${slotName}' role '${role}' value '${value}'; using first match`)
   return matching[0] ?? null
 }
 
@@ -135,7 +161,7 @@ export function applyVariableRewrites(
           ? observed.source.property
           : observed.role,
       ) ?? observed.role
-      const varName = findVariableForRole(slotName, role, opts)
+      const varName = findVariableForRole(slotName, role, observed.value, opts)
       if (!varName) {
         warn(`no css variable for slot '${slotName}' role '${role}' (value ${observed.value})`)
         continue
