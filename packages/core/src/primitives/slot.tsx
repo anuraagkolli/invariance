@@ -15,6 +15,12 @@ interface SlotProps {
   // Optional list of --inv-* CSS variable names the scanner wired into this
   // slot's source. Surfaced via the registry so the Builder can target them.
   cssVariables?: string[]
+  // Optional human-readable description (e.g. "Left-hand vertical navigation")
+  // shown to the Gatekeeper for natural-language slot disambiguation.
+  description?: string
+  // Optional alternate names the user may use to refer to this slot
+  // (e.g. ['sidebar', 'left nav'] for a slot whose canonical name is 'nav').
+  aliases?: string[]
 }
 
 // Convert camelCase CSS property name to kebab-case
@@ -37,6 +43,8 @@ export function Slot({
   props: slotProps,
   preserve,
   cssVariables,
+  description,
+  aliases,
 }: SlotProps) {
   const { themeJson, componentLibrary, registry, themeStore } = useInvariance()
 
@@ -49,6 +57,8 @@ export function Slot({
       alternativesCount: 0,
       type: 'slot',
       ...(cssVariables && cssVariables.length > 0 ? { cssVariables } : {}),
+      ...(description ? { description } : {}),
+      ...(aliases && aliases.length > 0 ? { aliases } : {}),
     })
     return () => registry.unregister(name)
     // eslint-disable-next-line react-hooks/exhaustive-deps

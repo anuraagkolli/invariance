@@ -64,6 +64,7 @@ RULES:
 5. For colors: convert color names to hex values
 6. Requirements must be specific enough for a Builder that produces theme.json mutations
 7. Each requirement should be one concrete change (e.g., "set sidebar backgroundColor to #1b2a4a")
+8. SLOT RESOLUTION: When a user mentions a UI area by name (e.g. "sidebar", "nav bar", "left panel"), match it against each slot's name, description, and aliases. Prefer the slot whose aliases or description best fit the user's wording AND that has cssVariables populated (style changes only work on slots that own CSS variables). If two slots are plausible, ask a clarifying question quoting both registered slot names. The slotName in your intent MUST be a canonical name from the registry — never an alias.
 
 RESPONSE FORMAT — respond with ONLY valid JSON, no markdown fences:
 
@@ -138,7 +139,7 @@ export async function callGatekeeper(
         'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 1024,
         temperature: 0.2,
         system: systemPrompt,

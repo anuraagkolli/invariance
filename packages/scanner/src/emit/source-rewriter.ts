@@ -14,6 +14,8 @@ interface SlotEdit {
   jsxPath: string
   preserve: boolean
   cssVariables: string[]
+  description?: string
+  aliases?: string[]
 }
 
 interface TextEdit {
@@ -140,6 +142,21 @@ function formatCssVariables(vars: string[]): string {
   return ` cssVariables={[${list}]}`
 }
 
+function escapeJsxAttr(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/"/g, '&quot;')
+}
+
+function formatDescription(desc: string | undefined): string {
+  if (!desc) return ''
+  return ` description="${escapeJsxAttr(desc)}"`
+}
+
+function formatAliases(aliases: string[] | undefined): string {
+  if (!aliases || aliases.length === 0) return ''
+  const list = aliases.map((a) => `'${a.replace(/'/g, "\\'")}'`).join(', ')
+  return ` aliases={[${list}]}`
+}
+
 function nodeTagName(node: Node): string | null {
   if (node.getKind() === SyntaxKind.JsxElement) {
     return node.asKindOrThrow(SyntaxKind.JsxElement).getOpeningElement().getTagNameNode().getText()
@@ -162,8 +179,10 @@ function wrapSlotNode(node: Node, edit: SlotEdit): void {
   if (isAlreadyWrappedBy(node, 'm.slot')) return
   const original = node.getText()
   const preserve = edit.preserve ? ' preserve={true}' : ''
+  const description = formatDescription(edit.description)
+  const aliases = formatAliases(edit.aliases)
   const vars = formatCssVariables(edit.cssVariables)
-  const wrapped = `<m.slot name="${edit.slotName}" level={0}${preserve}${vars}>${original}</m.slot>`
+  const wrapped = `<m.slot name="${edit.slotName}" level={0}${preserve}${description}${aliases}${vars}>${original}</m.slot>`
   node.replaceWithText(wrapped)
 }
 
@@ -199,6 +218,8 @@ export function applyWrapperEdits(project: Project, plan: MigrationPlan): void {
     file: string
     jsxPath: string
     preserve: boolean
+    description?: string
+    aliases?: string[]
   }
   interface TextLocation {
     name: string
@@ -259,6 +280,8 @@ export function applyWrapperEdits(project: Project, plan: MigrationPlan): void {
         jsxPath: slot.jsxPath,
         preserve: slot.preserve,
         cssVariables: vars,
+        ...(slot.description ? { description: slot.description } : {}),
+        ...(slot.aliases && slot.aliases.length > 0 ? { aliases: slot.aliases } : {}),
       })
     }
 

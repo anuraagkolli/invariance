@@ -5,7 +5,8 @@
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
   "bin": {
-    "invariance-scan": "./dist/bin/invariance-scan.js"
+    "invariance-scan": "./dist/bin/invariance-scan.js",
+    "invariance-unlock": "./dist/bin/invariance-unlock.js"
   },
   "exports": {
     ".": {
@@ -18,7 +19,8 @@
     "build": "tsc --project tsconfig.json",
     "test": "vitest run",
     "lint": "tsc --noEmit",
-    "scan": "tsx bin/invariance-scan.ts"
+    "scan": "tsx bin/invariance-scan.ts",
+    "unlock": "tsx bin/invariance-unlock.ts"
   },
   "dependencies": {
     "invariance": "workspace:*",

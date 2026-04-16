@@ -47,24 +47,24 @@ const config: InvarianceConfig = {
       },
       "structure": {
         "required_sections": [
-          "footer",
-          "header",
-          "main",
-          "main-container",
-          "nav",
-          "sidebar"
+          "section-1",
+          "section-2",
+          "section-3",
+          "section-4",
+          "section-5",
+          "section-6"
         ],
         "locked_sections": [
-          "footer",
-          "header",
-          "main",
-          "main-container",
-          "nav",
-          "sidebar"
+          "section-1",
+          "section-2",
+          "section-3",
+          "section-4",
+          "section-5",
+          "section-6"
         ],
         "section_order": {
-          "first": "sidebar",
-          "last": "footer"
+          "first": "section-1",
+          "last": "section-6"
         }
       },
       "accessibility": {
@@ -76,12 +76,12 @@ const config: InvarianceConfig = {
         "/": {
           "level": 0,
           "required": [
-            "sidebar",
-            "main-container",
-            "nav",
-            "header",
-            "main",
-            "footer"
+            "section-1",
+            "section-2",
+            "section-3",
+            "section-4",
+            "section-5",
+            "section-6"
           ]
         }
       }

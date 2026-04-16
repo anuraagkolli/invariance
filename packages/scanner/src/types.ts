@@ -64,6 +64,10 @@ export interface SemanticResult {
     file: string
     jsxPath: string
     preserve: boolean
+    /** Optional one-sentence description for Gatekeeper disambiguation. */
+    description?: string
+    /** Optional alternate names users may say (e.g. ['sidebar','left nav']). */
+    aliases?: string[]
   }>
   texts: Array<{
     name: string

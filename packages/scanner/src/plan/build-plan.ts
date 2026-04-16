@@ -363,8 +363,16 @@ function relaxConfig(config: InvarianceConfig, warnings: string[]): InvarianceCo
       design.colors.mode === 'palette' &&
       (!Array.isArray(design.colors.palette) || design.colors.palette.length === 0)
     ) {
-      design.colors = { mode: 'any' }
-      warnings.push('Relaxed colors.mode to "any" because palette was empty')
+      // Fail loudly instead of silently downgrading: an empty palette means
+      // extraction found no colors (usually because source was already migrated
+      // to var(--inv-*) refs). Downgrading to mode:any turns off palette
+      // enforcement app-wide, which is never what the user wants.
+      throw new Error(
+        'Scanner: extracted an empty color palette. Refusing to downgrade ' +
+          'colors.mode from "palette" to "any". Ensure source contains literal ' +
+          'color values (hex/rgb) before running the scanner — re-migration of ' +
+          'already-wrapped source is not supported.',
+      )
     }
     relaxed.frontend.design = design
   }

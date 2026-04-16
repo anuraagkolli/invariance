@@ -13,6 +13,13 @@ export interface SlotRegistration {
   // F1 customization for this slot targets theme.globals['--inv-...'] entries
   // rather than theme.slots inline overrides.
   cssVariables?: string[]
+  // Human-readable description of the slot (e.g. "left-hand vertical
+  // navigation panel"). Helps the Gatekeeper map natural-language requests
+  // to slot names.
+  description?: string
+  // Alternative names a user might use to refer to this slot
+  // (e.g. ['sidebar', 'left nav'] for a slot whose canonical name is 'nav').
+  aliases?: string[]
 }
 
 export interface SlotRegistry {

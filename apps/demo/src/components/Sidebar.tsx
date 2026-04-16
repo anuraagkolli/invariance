@@ -39,22 +39,22 @@ function Icon({ name }: { name: string }) {
 
 export function Sidebar({ navigationItems, user }: SidebarProps) {
   return (
-    <m.slot name="nav" level={0} preserve={true} cssVariables={['--inv-nav-bg', '--inv-nav-text', '--inv-nav-border', '--inv-nav-bg-1', '--inv-nav-text-1', '--inv-nav-text-2', '--inv-nav-bg-2', '--inv-nav-text-3', '--inv-nav-pad', '--inv-nav-pad-1', '--inv-nav-radius', '--inv-nav-pad-2', '--inv-nav-pad-3']}><nav className="flex flex-col w-64 h-full bg-[var(--inv-nav-bg)] text-[var(--inv-nav-text)] shrink-0">
+    <m.slot name="section-3" level={0} cssVariables={['--inv-section-3-bg', '--inv-section-3-text', '--inv-section-3-border', '--inv-section-3-bg-1', '--inv-section-3-text-1', '--inv-section-3-text-2', '--inv-section-3-bg-2', '--inv-section-3-text-3', '--inv-section-3-pad', '--inv-section-3-pad-1', '--inv-section-3-radius', '--inv-section-3-pad-2', '--inv-section-3-pad-3']}><nav className="flex flex-col w-64 h-full bg-[var(--inv-section-3-bg)] text-[var(--inv-section-3-text)] shrink-0">
             {/* Logo / app name */}
-            <div className="flex items-center gap-[var(--inv-nav-pad)] px-[var(--inv-nav-pad-1)] py-[var(--inv-nav-pad-1)] border-b border-[var(--inv-nav-border)]">
-              <div className="w-8 h-8 rounded-[var(--inv-nav-radius)] bg-[var(--inv-nav-bg-1)] flex items-center justify-center text-[var(--inv-nav-text-1)] font-bold text-sm">
-                <m.text name="app-icon">I
+            <div className="flex items-center gap-[var(--inv-section-3-pad)] px-[var(--inv-section-3-pad-1)] py-[var(--inv-section-3-pad-1)] border-b border-[var(--inv-section-3-border)]">
+              <div className="w-8 h-8 rounded-[var(--inv-section-3-radius)] bg-[var(--inv-section-3-bg-1)] flex items-center justify-center text-[var(--inv-section-3-text-1)] font-bold text-sm">
+                <m.text name="text-1">I
                                 </m.text></div>
-              <span className="font-semibold text-[var(--inv-nav-text-1)]"><m.text name="app-name">Invariance</m.text></span>
+              <span className="font-semibold text-[var(--inv-section-3-text-1)]"><m.text name="text-2">Invariance</m.text></span>
             </div>
 
             {/* Navigation links */}
-            <ul className="flex-1 px-[var(--inv-nav-pad)] py-[var(--inv-nav-pad-2)] space-y-1">
+            <ul className="flex-1 px-[var(--inv-section-3-pad)] py-[var(--inv-section-3-pad-2)] space-y-1">
               {navigationItems.map((item) => (
                 <li key={item.href}>
                   <a
                     href={item.href}
-                    className="flex items-center gap-[var(--inv-nav-pad)] px-[var(--inv-nav-pad)] py-[var(--inv-nav-pad-3)] rounded-[var(--inv-nav-radius)] text-sm font-medium text-[var(--inv-nav-text-2)] hover:bg-gray-800 hover:text-white transition-colors"
+                    className="flex items-center gap-[var(--inv-section-3-pad)] px-[var(--inv-section-3-pad)] py-[var(--inv-section-3-pad-3)] rounded-[var(--inv-section-3-radius)] text-sm font-medium text-[var(--inv-section-3-text-2)] hover:bg-gray-800 hover:text-white transition-colors"
                   >
                     {item.icon && <Icon name={item.icon} />}
                     {item.label}
@@ -64,13 +64,13 @@ export function Sidebar({ navigationItems, user }: SidebarProps) {
             </ul>
 
             {/* User info */}
-            <div className="px-[var(--inv-nav-pad-2)] py-[var(--inv-nav-pad-2)] border-t border-[var(--inv-nav-border)] flex items-center gap-[var(--inv-nav-pad)]">
-              <div className="w-8 h-8 rounded-full bg-[var(--inv-nav-bg-2)] flex items-center justify-center text-[var(--inv-nav-text-1)] text-xs font-semibold shrink-0">
+            <div className="px-[var(--inv-section-3-pad-2)] py-[var(--inv-section-3-pad-2)] border-t border-[var(--inv-section-3-border)] flex items-center gap-[var(--inv-section-3-pad)]">
+              <div className="w-8 h-8 rounded-full bg-[var(--inv-section-3-bg-2)] flex items-center justify-center text-[var(--inv-section-3-text-1)] text-xs font-semibold shrink-0">
                 {user.initials}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-medium text-[var(--inv-nav-text)] truncate">{user.name}</p>
-                <p className="text-xs text-[var(--inv-nav-text-3)] truncate">{user.email}</p>
+                <p className="text-sm font-medium text-[var(--inv-section-3-text)] truncate">{user.name}</p>
+                <p className="text-xs text-[var(--inv-section-3-text-3)] truncate">{user.email}</p>
               </div>
             </div>
           </nav></m.slot>

@@ -29,6 +29,7 @@ interface InvarianceContextValue {
   appId: string
   themeStore: ThemeStore
   themeJson: ThemeJson | null
+  initialTheme: ThemeJson | undefined
   registry: SlotRegistry
   storageBackend: StorageBackend
   componentLibrary: Record<string, React.ComponentType<any>> | undefined
@@ -115,11 +116,12 @@ export function InvarianceProvider({
       appId: config.app,
       themeStore,
       themeJson,
+      initialTheme,
       registry,
       storageBackend,
       componentLibrary,
     }),
-    [config, apiKey, userId, themeStore, themeJson, registry, storageBackend, componentLibrary],
+    [config, apiKey, userId, themeStore, themeJson, initialTheme, registry, storageBackend, componentLibrary],
   )
 
   return (

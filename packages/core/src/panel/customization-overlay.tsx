@@ -11,6 +11,7 @@ import {
 import { useInvariance } from '../context/provider'
 import { runPipeline, type PipelineStage } from '../agent/pipeline'
 import type { ConvTurn } from '../agent/gatekeeper'
+import { applyThemeJson } from '../runtime/apply'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -177,6 +178,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
     themeStore,
     storageBackend,
     componentLibrary,
+    initialTheme,
   } = useInvariance()
 
   const [input, setInput] = useState('')
@@ -302,14 +304,17 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
   }
 
   async function handleReset() {
-    themeStore.clear()
-    // Reset CSS variables
-    if (typeof document !== 'undefined') {
-      const root = document.documentElement
-      const props = Array.from({ length: root.style.length }, (_, i) => root.style.item(i))
-      for (const prop of props) {
-        if (prop.startsWith('--inv-')) {
-          root.style.removeProperty(prop)
+    if (initialTheme) {
+      themeStore.setTheme(initialTheme)
+      applyThemeJson(initialTheme)
+      await storageBackend.saveTheme(userId, appId, initialTheme)
+    } else {
+      themeStore.clear()
+      if (typeof document !== 'undefined') {
+        const root = document.documentElement
+        const props = Array.from({ length: root.style.length }, (_, i) => root.style.item(i))
+        for (const prop of props) {
+          if (prop.startsWith('--inv-')) root.style.removeProperty(prop)
         }
       }
     }

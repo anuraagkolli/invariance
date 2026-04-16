@@ -26,13 +26,16 @@ STRICT RULES:
 4. Compute sectionOrder as the top-to-bottom order of slot names based on the order sections appear in the input (they are already in document order).
 5. ALL slots MUST get level: 0 (locked). NEVER assign any other level.
 6. Slots whose tag name or snippet indicate structural chrome (sidebar, header, footer, nav) MUST get preserve: true. All others MUST get preserve: false.
-7. FORBIDDEN: do not output colors, hex values, font names, spacing, CSS properties, class names, or any mutation. Only names and boundaries.
-8. Output STRICT JSON matching the SemanticResult shape. NO markdown fences. NO prose. JSON only.
+7. For each slot, ALSO output:
+   - "description": one short sentence (<= 15 words) describing the slot's role and on-screen location. Used by the runtime Gatekeeper to map natural-language requests to slot names.
+   - "aliases": 1-3 lowercase alternate names users might say (e.g. ["sidebar","left nav"] for a slot named "nav", or ["top bar","banner"] for "header"). Omit aliases only if the canonical name already captures every plausible user phrasing.
+8. FORBIDDEN: do not output colors, hex values, font names, spacing, CSS properties, class names, or any mutation. Only names and boundaries.
+9. Output STRICT JSON matching the SemanticResult shape. NO markdown fences. NO prose. JSON only.
 
 SHAPE:
 {
   "page": "<the page path>",
-  "slots": [{"name":"sidebar","level":0,"file":"...","jsxPath":"...","preserve":true}],
+  "slots": [{"name":"nav","level":0,"file":"...","jsxPath":"...","preserve":true,"description":"Left-hand vertical navigation with links and user info","aliases":["sidebar","left nav"]}],
   "texts": [{"name":"page-title","file":"...","jsxPath":"..."}],
   "sectionOrder": ["header","main","footer"]
 }`
@@ -80,6 +83,13 @@ function isValidSemanticResult(value: unknown): value is SemanticResult {
       typeof slot.preserve !== 'boolean'
     ) {
       return false
+    }
+    if (slot.description !== undefined && typeof slot.description !== 'string') return false
+    if (slot.aliases !== undefined) {
+      if (!Array.isArray(slot.aliases)) return false
+      for (const a of slot.aliases) {
+        if (typeof a !== 'string') return false
+      }
     }
   }
   for (const t of v.texts) {
@@ -227,6 +237,10 @@ export async function callScannerAgent(input: ScannerAgentInput): Promise<Semant
       file: s.file,
       jsxPath: s.jsxPath,
       preserve: s.preserve,
+      ...(s.description ? { description: s.description } : {}),
+      ...(s.aliases && s.aliases.length > 0
+        ? { aliases: s.aliases.map((a) => a.toLowerCase()) }
+        : {}),
     })),
     texts: parsed.texts,
     sectionOrder: parsed.sectionOrder,

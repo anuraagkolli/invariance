@@ -157,6 +157,26 @@ export async function migrate(opts: MigrateOptions): Promise<ScannerResult> {
     originalTexts.set(sf.getFilePath(), sf.getFullText())
   }
 
+  // Idempotency guard: refuse to re-scan an already-migrated app. Running the
+  // scanner a second time would extract no colors/fonts (all hex literals are
+  // now var(--inv-*) refs), produce a degenerate palette, and silently downgrade
+  // invariants. Detect prior migration by presence of `import { m } from 'invariance'`
+  // or any `var(--inv-` reference in the source tree.
+  {
+    const invarianceImport = /from\s+['"]invariance['"]/
+    const invVarRef = /var\(--inv-/
+    for (const [filePath, text] of originalTexts) {
+      if (invarianceImport.test(text) || invVarRef.test(text)) {
+        throw new Error(
+          `Scanner: ${path.relative(appRoot, filePath)} appears already migrated ` +
+            `(found an invariance import or var(--inv-*) reference). ` +
+            `Re-running the scanner on migrated source is not supported — ` +
+            `use invariance-unlock to adjust levels, or revert source before re-scanning.`,
+        )
+      }
+    }
+  }
+
   // Extract fonts from layout file (fonts applied to <body> are inherited by all pages).
   const layoutFonts = new Set<string>()
   if (discovered.layoutFile) {
@@ -176,6 +196,8 @@ export async function migrate(opts: MigrateOptions): Promise<ScannerResult> {
     file: string
     jsxPath: string
     preserve: boolean
+    description?: string
+    aliases?: string[]
   }
   interface TextLocation {
     name: string
@@ -289,6 +311,8 @@ export async function migrate(opts: MigrateOptions): Promise<ScannerResult> {
         file: slot.file,
         jsxPath: slot.jsxPath,
         preserve: slot.preserve,
+        ...(slot.description ? { description: slot.description } : {}),
+        ...(slot.aliases && slot.aliases.length > 0 ? { aliases: slot.aliases } : {}),
       })
     }
     for (const t of semantic.texts) {
