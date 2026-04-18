@@ -1,4 +1,3 @@
-import { m } from "invariance";
 import type { Metric, ChartData } from '@/lib/types'
 import { BarChart } from './charts/BarChart'
 
@@ -34,13 +33,13 @@ function MetricCard({ metric }: { metric: Metric }) {
         : 'text-gray-600'
 
   return (
-    <div className="bg-[var(--inv-section-5-bg)] rounded-[var(--inv-section-5-radius)] border border-[var(--inv-section-5-border)] p-[var(--inv-section-5-pad)] flex flex-col gap-[var(--inv-section-5-pad-1)]">
-      <p className="text-sm font-medium text-[var(--inv-section-5-text)]">{metric.label}</p>
-      <p className="text-2xl font-bold text-[var(--inv-section-5-text-1)]">{metric.value}</p>
+    <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-2">
+      <p className="text-sm font-medium text-gray-500">{metric.label}</p>
+      <p className="text-2xl font-bold text-gray-900">{metric.value}</p>
       {metric.change && (
         <div className={`flex items-center gap-1 text-sm font-medium ${changeColor}`}>
           <TrendArrow trend={metric.trend} />
-          <span>{metric.change} <m.text name="text-3">from last month</m.text></span>
+          <span>{metric.change} from last month</span>
         </div>
       )}
     </div>
@@ -49,21 +48,21 @@ function MetricCard({ metric }: { metric: Metric }) {
 
 export function Dashboard({ metrics, chartData }: DashboardProps) {
   return (
-    <m.slot name="section-5" level={0} cssVariables={['--inv-section-5-bg', '--inv-section-5-border', '--inv-section-5-text', '--inv-section-5-text-1', '--inv-section-5-bg-1', '--inv-section-5-radius', '--inv-section-5-pad', '--inv-section-5-pad-1', '--inv-section-5-pad-2', '--inv-section-5-margin']}><main className="flex-1 overflow-y-auto p-[var(--inv-section-5-pad-2)] bg-[var(--inv-section-5-bg-1)]">
-            {/* Metric cards */}
-            <section aria-label="Key metrics">
-              <h2 className="sr-only"><m.text name="text-4">Key metrics</m.text></h2>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-[var(--inv-section-5-pad)]">
-                {metrics.map((metric) => (
-                  <MetricCard key={metric.id} metric={metric} />
-                ))}
-              </div>
-            </section>
+    <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
+      {/* Metric cards */}
+      <section aria-label="Key metrics">
+        <h2 className="sr-only">Key metrics</h2>
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
+          {metrics.map((metric) => (
+            <MetricCard key={metric.id} metric={metric} />
+          ))}
+        </div>
+      </section>
 
-            {/* Chart area */}
-            <section aria-label="Chart" className="mt-[var(--inv-section-5-margin)]">
-              <BarChart data={chartData} />
-            </section>
-          </main></m.slot>
+      {/* Chart area */}
+      <section aria-label="Chart" className="mt-6">
+        <BarChart data={chartData} />
+      </section>
+    </main>
   )
 }

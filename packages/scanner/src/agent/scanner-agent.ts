@@ -21,23 +21,48 @@ function buildSystemPrompt(): string {
 
 STRICT RULES:
 1. You receive a list of candidate sections (tag name, jsxPath, snippet, file, line) and a list of observed text literals.
-2. For each section, pick a short, lowercase, kebab-case semantic slot name such as 'sidebar', 'header', 'main', 'footer', 'nav', 'content', 'hero', 'toolbar', 'dashboard'. Choose names from the JSX tag/snippet context.
-3. For each text literal, pick a short readable kebab-case slug such as 'page-title', 'app-name', 'nav-home'. Names must be unique within the texts array.
-4. Compute sectionOrder as the top-to-bottom order of slot names based on the order sections appear in the input (they are already in document order).
+
+2. SLOT NAMING — pick a short, lowercase, kebab-case semantic name that describes what the section IS, not where it sits:
+   - Prefer established UI vocabulary: sidebar, header, footer, nav, main, hero, toolbar, dashboard, card, panel, banner, breadcrumb, search-bar, user-menu, notification-bell, chart-area, stats-grid, activity-feed.
+   - Read the snippet and jsxPath carefully — a <nav> inside a flex layout is almost certainly "nav" or "sidebar", not "section-1".
+   - If a section is a generic wrapper div with no styling of its own (it only positions children), name it after its primary child: a div that wraps <Sidebar /> is "sidebar-wrapper" or just "sidebar" if no inner slot is named that.
+   - Never use generic names like section-1, section-2, block-a, area-b.
+
+3. TEXT NAMING — for each text literal pick a descriptive kebab-case slug:
+   - Reflect the content's purpose: 'app-name', 'page-title', 'nav-dashboard', 'nav-analytics', 'footer-copyright', 'metric-subtitle', 'cta-label'.
+   - Never use generic names like text-1, text-2.
+   - Names must be unique within the texts array.
+
+4. Compute sectionOrder as the top-to-bottom document order of slot names (inputs are already in document order).
+
 5. ALL slots MUST get level: 0 (locked). NEVER assign any other level.
-6. Slots whose tag name or snippet indicate structural chrome (sidebar, header, footer, nav) MUST get preserve: true. All others MUST get preserve: false.
-7. For each slot, ALSO output:
-   - "description": one short sentence (<= 15 words) describing the slot's role and on-screen location. Used by the runtime Gatekeeper to map natural-language requests to slot names.
-   - "aliases": 1-3 lowercase alternate names users might say (e.g. ["sidebar","left nav"] for a slot named "nav", or ["top bar","banner"] for "header"). Omit aliases only if the canonical name already captures every plausible user phrasing.
+
+6. Slots whose tag name or snippet indicate structural chrome (sidebar, header, footer, nav, toolbar) MUST get preserve: true. All others MUST get preserve: false.
+
+7. For each slot output:
+   - "description": one clear sentence (≤ 20 words) describing what the section renders and where it lives on screen. This is used by the runtime Gatekeeper to match natural-language requests like "change the sidebar color" to the correct slot. Be precise: "Left-hand vertical navigation panel containing app logo, nav links, and current user info" beats "Navigation area".
+   - "aliases": 2-4 lowercase phrases a non-technical user might say when referring to this slot (e.g. ["sidebar", "left nav", "side menu", "navigation panel"] for the nav slot). Include both short and long forms. Omit only if the canonical name already covers every plausible phrasing.
+
 8. FORBIDDEN: do not output colors, hex values, font names, spacing, CSS properties, class names, or any mutation. Only names and boundaries.
+
 9. Output STRICT JSON matching the SemanticResult shape. NO markdown fences. NO prose. JSON only.
 
 SHAPE:
 {
   "page": "<the page path>",
-  "slots": [{"name":"nav","level":0,"file":"...","jsxPath":"...","preserve":true,"description":"Left-hand vertical navigation with links and user info","aliases":["sidebar","left nav"]}],
-  "texts": [{"name":"page-title","file":"...","jsxPath":"..."}],
-  "sectionOrder": ["header","main","footer"]
+  "slots": [
+    {
+      "name": "nav",
+      "level": 0,
+      "file": "src/components/Sidebar.tsx",
+      "jsxPath": "nav",
+      "preserve": true,
+      "description": "Left-hand vertical navigation panel with app logo, nav links, and signed-in user info.",
+      "aliases": ["sidebar", "left nav", "side menu", "navigation panel"]
+    }
+  ],
+  "texts": [{"name":"app-name","file":"src/components/Sidebar.tsx","jsxPath":"nav>div>span"}],
+  "sectionOrder": ["nav","header","main","footer"]
 }`
 }
 
@@ -179,7 +204,7 @@ export async function callScannerAgent(input: ScannerAgentInput): Promise<Semant
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-opus-4-7',
         max_tokens: 4096,
         temperature: 0.1,
         system: buildSystemPrompt(),

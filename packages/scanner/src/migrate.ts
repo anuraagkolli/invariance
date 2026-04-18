@@ -354,7 +354,10 @@ export async function migrate(opts: MigrateOptions): Promise<ScannerResult> {
   })
   applyWrapperEdits(project, plan)
 
-  const report = renderReport(plan, extractions)
+  const report = renderReport(plan, extractions, {
+    semanticNaming: !!opts.apiKey,
+    appRoot,
+  })
 
   // Compute diff of every modified file against its original text.
   const diffParts: string[] = []
