@@ -1,5 +1,5 @@
-export { migrate } from './migrate'
-export type { MigrateOptions } from './migrate'
+export { migrate, analyze, writeMigration } from './migrate'
+export type { MigrateOptions, ScannerAgent, AnalyzeResult } from './migrate'
 export type {
   CandidateSection,
   MigrationPlan,

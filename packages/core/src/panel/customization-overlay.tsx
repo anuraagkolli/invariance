@@ -306,7 +306,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
   async function handleReset() {
     if (initialTheme) {
       themeStore.setTheme(initialTheme)
-      applyThemeJson(initialTheme)
+      applyThemeJson(initialTheme, config)
       await storageBackend.saveTheme(userId, appId, initialTheme)
     } else {
       themeStore.clear()

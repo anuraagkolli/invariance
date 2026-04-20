@@ -26,10 +26,15 @@ import type {
   StaticExtraction,
 } from './types'
 
+export type ScannerAgent = typeof callScannerAgent
+
 export interface MigrateOptions {
   appRoot: string
   apiKey: string
   dryRun: boolean
+  /** Optional override for the LLM-backed semantic naming agent. Tests inject
+   *  a stub to run migrate() without an Anthropic API key. */
+  agent?: ScannerAgent
 }
 
 // ---------------------------------------------------------------------------
@@ -144,7 +149,26 @@ function makeDiff(filePath: string, before: string, after: string): string {
   return out.join('\n')
 }
 
-export async function migrate(opts: MigrateOptions): Promise<ScannerResult> {
+/**
+ * Output of {@link analyze}. The ts-morph Project is already mutated with
+ * wrapper + variable-rewrite edits but nothing has been written to disk.
+ * Pass this to {@link writeMigration} to commit, or inspect in tests.
+ */
+export interface AnalyzeResult extends ScannerResult {
+  /** The ts-morph project with in-memory edits applied. */
+  project: import('ts-morph').Project
+  /** Root of the analyzed app, resolved to absolute. */
+  appRoot: string
+  /** Layout file discovered for provider injection, if any. */
+  layoutFile: string | null
+}
+
+/**
+ * Pure analysis pass: runs discover → extract → plan → apply-edits-in-memory.
+ * Does NOT touch disk. Use this when you want to inspect or cache the plan
+ * before committing (future: incremental re-scans, hash-based caching).
+ */
+export async function analyze(opts: MigrateOptions): Promise<AnalyzeResult> {
   const appRoot = path.resolve(opts.appRoot)
 
   const discovered = await discoverApp(appRoot)
@@ -295,7 +319,8 @@ export async function migrate(opts: MigrateOptions): Promise<ScannerResult> {
     }
     extractions.push(extraction)
 
-    const semantic = await callScannerAgent({
+    const agent = opts.agent ?? callScannerAgent
+    const semantic = await agent({
       page: page.route,
       pageFile: page.file,
       sections,
@@ -372,22 +397,38 @@ export async function migrate(opts: MigrateOptions): Promise<ScannerResult> {
   }
   const diff = diffParts.join('\n')
 
-  if (!opts.dryRun) {
-    await project.save()
-    const configYaml = emitConfigYaml(plan.config)
-    const themeJson = emitInitialThemeJson(plan.initialTheme)
-    await fs.writeFile(path.join(appRoot, 'invariance.config.yaml'), configYaml, 'utf-8')
-    await fs.writeFile(
-      path.join(appRoot, 'invariance.theme.initial.json'),
-      themeJson,
-      'utf-8',
-    )
+  return { plan, diff, report, project, appRoot, layoutFile: discovered.layoutFile }
+}
 
-    // Inject InvarianceProvider into the root layout
-    if (discovered.layoutFile) {
-      await injectProvider(discovered.layoutFile, appRoot, plan.config)
-    }
+/**
+ * Commit an analysis result to disk: saves source edits, writes
+ * invariance.config.yaml + invariance.theme.initial.json, and injects the
+ * InvarianceProvider into the root layout. Idempotent wrt provider injection.
+ */
+export async function writeMigration(result: AnalyzeResult): Promise<void> {
+  await result.project.save()
+  const configYaml = emitConfigYaml(result.plan.config)
+  const themeJson = emitInitialThemeJson(result.plan.initialTheme)
+  await fs.writeFile(path.join(result.appRoot, 'invariance.config.yaml'), configYaml, 'utf-8')
+  await fs.writeFile(
+    path.join(result.appRoot, 'invariance.theme.initial.json'),
+    themeJson,
+    'utf-8',
+  )
+  if (result.layoutFile) {
+    await injectProvider(result.layoutFile, result.appRoot, result.plan.config)
   }
+}
 
+/**
+ * Run a full migration: analyze, then (if not dry-run) write to disk.
+ * Equivalent to `analyze()` followed by `writeMigration()`.
+ */
+export async function migrate(opts: MigrateOptions): Promise<ScannerResult> {
+  const result = await analyze(opts)
+  if (!opts.dryRun) {
+    await writeMigration(result)
+  }
+  const { plan, diff, report } = result
   return { plan, diff, report }
 }

@@ -125,7 +125,7 @@ export async function runPipeline(
       onProgress?.('applying')
       await context.storageBackend.saveTheme(context.userId, context.appId, candidateTheme)
       context.themeStore.setTheme(candidateTheme)
-      applyThemeJson(candidateTheme)
+      applyThemeJson(candidateTheme, context.config)
       return {
         type: 'success',
         description: builderResult.explanation,

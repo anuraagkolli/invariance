@@ -20,6 +20,8 @@ The Scanner rewrites hardcoded values to CSS variable references during migratio
 theme.json stores: `{ "theme": { "globals": { "--inv-sidebar-bg": "#1a1a2e" } } }`
 Runtime writes `--inv-sidebar-bg` to `:root`. Component picks it up via `var()`.
 
+The `--inv-` prefix is configurable via `config.theme_prefix` (default `--inv-`). Projects with an existing design-token namespace can alias (e.g. `theme_prefix: "--fl-"`) without touching core code — enables future scale to apps that already ship design tokens.
+
 To customize: Builder outputs `{ "--inv-sidebar-bg": "#1b2a4a" }`. Runtime updates `:root`. Sidebar repaints. No inline-style patching, no code rewriting.
 
 ### How It Works
@@ -81,13 +83,13 @@ invariance/
 │   │       │   ├── text.tsx         # m.text wrapper
 │   │       │   └── error-boundary.tsx
 │   │       ├── config/
-│   │       │   ├── types.ts         # ThemeGlobals accepts --inv-* keys via index sig
-│   │       │   ├── schema.ts        # .catchall(z.string()) for CSS var keys
+│   │       │   ├── types.ts         # InvarianceConfig.theme_prefix, ThemeGlobals via index sig
+│   │       │   ├── schema.ts        # .catchall(z.string()) for CSS var keys; theme_prefix validation
 │   │       │   └── parser.ts        # YAML config parser
 │   │       ├── context/
 │   │       │   ├── provider.tsx     # InvarianceProvider
 │   │       │   ├── theme-store.ts   # In-memory theme.json state
-│   │       │   └── registry.ts      # SlotRegistration has cssVariables?: string[]
+│   │       │   └── registry.ts      # SlotRegistration: cssVariables?, source?: 'page'|'component'
 │   │       ├── storage/
 │   │       │   ├── types.ts, memory.ts, local-storage.ts, api.ts
 │   │       ├── agent/
@@ -98,8 +100,10 @@ invariance/
 │   │       │   ├── engine.ts, types.ts
 │   │       │   ├── theme-tests.ts   # Walks --inv-* entries for palette/font checks
 │   │       │   ├── content-tests.ts, layout-tests.ts, component-tests.ts, utils.ts
+│   │       │   ├── *.test.ts        # Vitest unit tests (84 tests)
+│   │       │   └── __fixtures__/    # mockConfig / mockTheme / mockSlot factories
 │   │       ├── runtime/
-│   │       │   ├── apply-theme.ts   # Writes --inv-* keys to :root
+│   │       │   ├── apply-theme.ts   # Writes themePrefix-keyed vars to :root (default --inv-)
 │   │       │   ├── apply-content.ts, apply-layout.ts, apply.ts
 │   │       ├── panel/
 │   │       │   ├── trigger-button.tsx, customization-overlay.tsx, customization-panel.tsx
@@ -107,15 +111,18 @@ invariance/
 │   │       └── utils/errors.ts
 │   │
 │   ├── scanner/                     # invariance-scanner (CLI, one-time migration)
-│   │   ├── bin/invariance-scan.ts
+│   │   ├── bin/invariance-scan.ts, bin/invariance-unlock.ts
 │   │   └── src/
 │   │       ├── discover.ts          # Find pages/routes, tsconfig, tailwind config
 │   │       ├── ast/                 # ts-morph: parse, extract-structure/colors/fonts/spacing/text
 │   │       ├── tailwind/resolve.ts  # Tailwind class -> value resolution
-│   │       ├── agent/scanner-agent.ts # LLM for semantic naming only
-│   │       ├── plan/                # slot-plan, text-plan
-│   │       ├── emit/               # config-emitter, source-rewriter, variable-rewriter, variable-naming, report
-│   │       └── migrate.ts          # Orchestrator
+│   │       ├── agent/scanner-agent.ts # LLM for semantic naming only (pluggable via MigrateOptions.agent)
+│   │       ├── plan/                # slot-plan, text-plan, build-plan
+│   │       ├── emit/                # config-emitter, source-rewriter, variable-rewriter, variable-naming, report
+│   │       ├── unlock/              # invariance-unlock CLI (adjust levels post-migration)
+│   │       ├── migrate.ts           # Orchestrator: exports migrate / analyze / writeMigration
+│   │       ├── *.test.ts            # Vitest unit + golden-fixture tests (51 tests)
+│   │       └── __fixtures__/        # Minimal Next.js app for end-to-end migrate() tests
 │   │
 │   └── verify/                      # Playwright, CI only (F5+ future)
 │
@@ -200,7 +207,7 @@ Primary primitive. NOT responsible for F1 styles (those work via CSS variables o
 - F4 component swaps from registered library
 - `cssVariables` prop: tells the registry which `--inv-*` vars belong to this slot, so the Builder knows what to target
 
-Props: `name`, `level`, `children`, `props?`, `preserve?`, `cssVariables?`
+Props: `name`, `level`, `children`, `props?`, `preserve?`, `cssVariables?`, `description?`, `aliases?`, `source?` (`'page'` | `'component'`, default `'page'` — reserved for future component-library scans).
 
 ### m.text
 
@@ -288,6 +295,12 @@ Variable naming: `--inv-{slot}-{property}` (e.g., `--inv-sidebar-bg`, `--inv-hea
 
 Dry-run by default. `--apply` to write files. Re-running on an already-migrated app is blocked (scanner detects `from 'invariance'` imports and `var(--inv-*)` references and throws).
 
+**Public API** (packages/scanner/src/index.ts):
+- `migrate(opts)` — full pipeline, writes to disk unless `dryRun: true`.
+- `analyze(opts)` — pure analysis: discover → extract → plan → apply edits in-memory. Returns an `AnalyzeResult` with the mutated ts-morph Project. No disk writes. Use for inspection, caching, or incremental re-scans.
+- `writeMigration(result)` — commits an `AnalyzeResult` to disk (source edits, config, initial theme, provider injection).
+- `ScannerAgent` — the semantic-naming function type. `MigrateOptions.agent` overrides the default LLM agent; tests inject a stub to run end-to-end without an API key.
+
 ---
 
 ## Invariant Config
@@ -356,6 +369,21 @@ After scanner migration: all pages level 0, palette = exact observed colors, all
 7. **No SDK dependency for Anthropic.** Raw fetch.
 
 8. **Panel uses inline styles only.** Works in any React app.
+
+9. **Seams for scale, not features for scale.** The MVP is page-scoped with LLM naming, but four seams keep the door open for enterprise-sized apps: (a) `ScannerAgent` is pluggable, (b) `SlotRegistration.source` distinguishes page vs component slots, (c) `config.theme_prefix` aliases the CSS-var namespace, (d) `analyze()` / `writeMigration()` split lets plans be cached and re-applied. None of these add complexity today; they prevent painful retrofits later.
+
+---
+
+## Testing
+
+Both packages use vitest. Tests colocated as `*.test.ts` next to source files.
+
+- `pnpm test` at repo root runs both suites via turbo.
+- `pnpm --filter invariance test` — 84 tests covering verify engine (F1-F4) and pure helpers.
+- `pnpm --filter invariance-scanner test` — 51 tests covering pure planning, AST extractors, rewriters, and a golden-fixture end-to-end `migrate()` run.
+- **All tests run without `ANTHROPIC_API_KEY`.** The scanner E2E test uses `MigrateOptions.agent` to inject a deterministic stub in place of the LLM.
+
+Known rough edge (flagged, not fixed yet): the scanner attaches every file-level observed value to every candidate section, so values can leak across sibling slots. The golden test currently relaxes its initial-value assertion because of this; see the variable-rewriter warnings in test output. Fix is tracked as a follow-up task.
 
 ---
 

@@ -55,6 +55,10 @@ const FrontendConfigSchema = z.object({
 
 export const InvarianceConfigSchema = z.object({
   app: z.string().min(1),
+  theme_prefix: z
+    .string()
+    .regex(/^--[a-z][a-z0-9-]*-$/, 'theme_prefix must look like "--prefix-"')
+    .optional(),
   frontend: FrontendConfigSchema.optional(),
 })
 

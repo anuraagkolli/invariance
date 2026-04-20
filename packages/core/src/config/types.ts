@@ -4,6 +4,10 @@
 
 export interface InvarianceConfig {
   app: string
+  /** CSS custom-property prefix the runtime writes to :root. Defaults to '--inv-'.
+   *  Lets projects alias invariance variables to an existing design-token
+   *  namespace (e.g. '--fl-' for a Foot Locker-style app). */
+  theme_prefix?: string
   frontend?: {
     design?: {
       colors?: { mode: 'any' } | { mode: 'palette'; palette: string[] }

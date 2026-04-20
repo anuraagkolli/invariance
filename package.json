@@ -4,6 +4,7 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "cd apps/demo && next dev",
+    "demo:reset": "rm -rf apps/demo && git checkout demo-clean -- apps/demo && pnpm install",
     "build": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run lint",

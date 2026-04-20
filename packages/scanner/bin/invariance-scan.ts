@@ -87,10 +87,15 @@ async function main(): Promise<void> {
   loadEnvFile(appRoot)
   loadEnvFile(path.resolve(appRoot, '../..'))
 
-  const apiKey = parsed.apiKey ?? process.env.NEXT_PUBLIC_ANTHROPIC_DEV_API_KEY ?? ''
+  const apiKey =
+    parsed.apiKey ??
+    process.env.ANTHROPIC_API_KEY ??
+    process.env.NEXT_PUBLIC_ANTHROPIC_DEV_API_KEY ??
+    ''
   if (!apiKey) {
     process.stderr.write(
-      'warning: no Anthropic API key provided; the scanner will use deterministic fallback naming\n',
+      'warning: no Anthropic API key provided; the scanner will use deterministic fallback naming\n' +
+      '         Set ANTHROPIC_API_KEY in your shell or pass --api-key <key>\n',
     )
   }
 

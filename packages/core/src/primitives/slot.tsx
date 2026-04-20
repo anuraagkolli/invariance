@@ -21,6 +21,9 @@ interface SlotProps {
   // Optional alternate names the user may use to refer to this slot
   // (e.g. ['sidebar', 'left nav'] for a slot whose canonical name is 'nav').
   aliases?: string[]
+  // Declares whether this slot lives on a page or inside a shared component.
+  // Defaults to 'page'. Used by future component-library scans.
+  source?: 'page' | 'component'
 }
 
 // Convert camelCase CSS property name to kebab-case
@@ -45,6 +48,7 @@ export function Slot({
   cssVariables,
   description,
   aliases,
+  source,
 }: SlotProps) {
   const { themeJson, componentLibrary, registry, themeStore } = useInvariance()
 
@@ -56,6 +60,7 @@ export function Slot({
       preserve: preserve ?? false,
       alternativesCount: 0,
       type: 'slot',
+      source: source ?? 'page',
       ...(cssVariables && cssVariables.length > 0 ? { cssVariables } : {}),
       ...(description ? { description } : {}),
       ...(aliases && aliases.length > 0 ? { aliases } : {}),

@@ -20,6 +20,10 @@ export interface SlotRegistration {
   // Alternative names a user might use to refer to this slot
   // (e.g. ['sidebar', 'left nav'] for a slot whose canonical name is 'nav').
   aliases?: string[]
+  // Where the slot was declared: on a page file (default) or inside a shared
+  // component in the design system. Lets future component-library scans
+  // distinguish instance overrides from template-level slots without migration.
+  source?: 'page' | 'component'
 }
 
 export interface SlotRegistry {

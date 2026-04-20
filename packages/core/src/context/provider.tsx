@@ -85,14 +85,14 @@ export function InvarianceProvider({
         const theme = stored ?? initialTheme ?? null
         if (theme) {
           themeStore.setTheme(theme)
-          applyThemeJson(theme)
+          applyThemeJson(theme, config)
         }
       } catch (e) {
         console.warn('Failed to load theme.json:', e)
         // Still try to apply initialTheme on storage failure
         if (!cancelled && initialTheme) {
           themeStore.setTheme(initialTheme)
-          applyThemeJson(initialTheme)
+          applyThemeJson(initialTheme, config)
         }
       }
     }
