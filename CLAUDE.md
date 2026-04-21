@@ -110,19 +110,19 @@ invariance/
 │   │       ├── levels/index.ts
 │   │       └── utils/errors.ts
 │   │
-│   ├── scanner/                     # invariance-scanner (CLI, one-time migration)
-│   │   ├── bin/invariance-scan.ts, bin/invariance-unlock.ts
-│   │   └── src/
-│   │       ├── discover.ts          # Find pages/routes, tsconfig, tailwind config
-│   │       ├── ast/                 # ts-morph: parse, extract-structure/colors/fonts/spacing/text
-│   │       ├── tailwind/resolve.ts  # Tailwind class -> value resolution
-│   │       ├── agent/scanner-agent.ts # LLM for semantic naming only (pluggable via MigrateOptions.agent)
-│   │       ├── plan/                # slot-plan, text-plan, build-plan
-│   │       ├── emit/                # config-emitter, source-rewriter, variable-rewriter, variable-naming, report
-│   │       ├── unlock/              # invariance-unlock CLI (adjust levels post-migration)
-│   │       ├── migrate.ts           # Orchestrator: exports migrate / analyze / writeMigration
-│   │       ├── *.test.ts            # Vitest unit + golden-fixture tests (51 tests)
-│   │       └── __fixtures__/        # Minimal Next.js app for end-to-end migrate() tests
+│   │       ├── scanner/             # Migration CLI code, shipped in the same npm package
+│   │       │   ├── discover.ts      # Find pages/routes, tsconfig, tailwind config
+│   │       │   ├── ast/             # ts-morph: parse, extract-structure/colors/fonts/spacing/text
+│   │       │   ├── tailwind/resolve.ts
+│   │       │   ├── agent/scanner-agent.ts # LLM for semantic naming only (pluggable)
+│   │       │   ├── plan/            # slot-plan, text-plan, build-plan
+│   │       │   ├── emit/            # config-emitter, source-rewriter, variable-rewriter, provider-injector
+│   │       │   ├── unlock/          # Level adjustment logic used by `invariance unlock`
+│   │       │   ├── cli/             # scan.ts, unlock.ts, init.ts, dispatch.ts (run(argv) helpers)
+│   │       │   ├── migrate.ts       # Orchestrator: exports migrate / analyze / writeMigration
+│   │       │   └── __fixtures__/    # simple-app + already-migrated for e2e migrate() tests
+│   │       ├── primitives/, config/, context/, storage/, agent/, verify/, runtime/, panel/, levels/, utils/
+│   │   └── bin/invariance.ts        # Single CLI entrypoint: `invariance {init|scan|unlock}`
 │   │
 │   └── verify/                      # Playwright, CI only (F5+ future)
 │
@@ -272,13 +272,18 @@ Backends: memory, localStorage, api (REST to developer endpoint).
 
 ## Scanner (Migration Tool)
 
-One-time CLI. Run from monorepo root with an absolute path (the scanner script runs from `packages/scanner/`, so relative paths resolve there):
+One-time CLI. Ships as the `invariance` bin from the single `invariance` package.
 
 ```bash
-pnpm --filter invariance-scanner scan /absolute/path/to/apps/demo
-pnpm --filter invariance-scanner scan /absolute/path/to/apps/demo --apply
-# or
-pnpm --filter invariance-scanner scan "$(pwd)/apps/demo" --apply
+# For end users (after `npm install invariance`):
+npx invariance init ./my-next-app                 # migrate + wire providers
+npx invariance scan ./my-next-app                 # dry-run only
+npx invariance scan ./my-next-app --apply         # same as init but without idempotency check
+npx invariance unlock --status                    # inspect current lock state
+
+# From this monorepo during dev:
+pnpm --filter invariance run build
+node packages/core/dist/bin/invariance.js init ./apps/demo
 ```
 
 Pipeline: Discover -> Extract (AST/ts-morph) -> Semantic Analysis (LLM, 1/page, naming only) -> Plan -> Validate -> Emit
@@ -295,10 +300,10 @@ Variable naming: `--inv-{slot}-{property}` (e.g., `--inv-sidebar-bg`, `--inv-hea
 
 Dry-run by default. `--apply` to write files. Re-running on an already-migrated app is blocked (scanner detects `from 'invariance'` imports and `var(--inv-*)` references and throws).
 
-**Public API** (packages/scanner/src/index.ts):
+**Public API** — subpath export `invariance/scanner` (source at [packages/core/src/scanner/index.ts](packages/core/src/scanner/index.ts)):
 - `migrate(opts)` — full pipeline, writes to disk unless `dryRun: true`.
 - `analyze(opts)` — pure analysis: discover → extract → plan → apply edits in-memory. Returns an `AnalyzeResult` with the mutated ts-morph Project. No disk writes. Use for inspection, caching, or incremental re-scans.
-- `writeMigration(result)` — commits an `AnalyzeResult` to disk (source edits, config, initial theme, provider injection).
+- `writeMigration(result)` — commits an `AnalyzeResult` to disk (source edits, config, initial theme, provider injection, `.env.example`).
 - `ScannerAgent` — the semantic-naming function type. `MigrateOptions.agent` overrides the default LLM agent; tests inject a stub to run end-to-end without an API key.
 
 ---
@@ -335,16 +340,11 @@ After scanner migration: all pages level 0, palette = exact observed colors, all
 
 ## Dependencies by Package
 
-### packages/core
-- `react`, `react-dom` (peer dep, >=18)
-- `zod`, `js-yaml`
-- `typescript`, `vitest` (dev)
-
-### packages/scanner
-- `ts-morph`, `js-yaml`
-- `tailwindcss` (peer dep)
-- `invariance` (workspace dep)
-- `typescript`, `vitest` (dev)
+### packages/core (`invariance` on npm)
+- `react`, `react-dom` (peer dep, optional — runtime only)
+- `tailwindcss` (peer dep, optional)
+- `ts-morph`, `zod`, `js-yaml` (dependencies — CLI needs ts-morph; runtime tree-shakes it out)
+- `typescript`, `vitest`, `tsx` (dev)
 
 ### apps/demo
 - `next` (14+), `react`, `react-dom`, `tailwindcss`
@@ -380,10 +380,10 @@ Both packages use vitest. Tests colocated as `*.test.ts` next to source files.
 
 - `pnpm test` at repo root runs both suites via turbo.
 - `pnpm --filter invariance test` — 84 tests covering verify engine (F1-F4) and pure helpers.
-- `pnpm --filter invariance-scanner test` — 51 tests covering pure planning, AST extractors, rewriters, and a golden-fixture end-to-end `migrate()` run.
+- Scanner tests live under `packages/core/src/scanner/**/*.test.ts` and ship as part of the same vitest run. They cover pure planning, AST extractors, rewriters, the provider-injector, and a golden-fixture end-to-end `migrate()` run.
 - **All tests run without `ANTHROPIC_API_KEY`.** The scanner E2E test uses `MigrateOptions.agent` to inject a deterministic stub in place of the LLM.
 
-Known rough edge (flagged, not fixed yet): the scanner attaches every file-level observed value to every candidate section, so values can leak across sibling slots. The golden test currently relaxes its initial-value assertion because of this; see the variable-rewriter warnings in test output. Fix is tracked as a follow-up task.
+Every `ObservedValue` carries the jsxPath of the JSX element it was observed on. Slot-plan attaches each value to the smallest enclosing slot by prefix match, so sibling values stay isolated (the sidebar's bg does not leak to main and vice versa).
 
 ---
 

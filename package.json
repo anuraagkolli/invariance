@@ -1,14 +1,15 @@
 {
-  "name": "invariance",
+  "name": "invariance-monorepo",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.1.0",
   "scripts": {
     "dev": "cd apps/demo && next dev",
     "demo:reset": "rm -rf apps/demo && git checkout demo-clean -- apps/demo && pnpm install",
     "build": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run lint",
-    "validate": "turbo run validate"
+    "validate": "turbo run validate",
+    "release": "pnpm --filter invariance run build && cd packages/core && npm publish --access public"
   },
   "devDependencies": {
     "turbo": "^2.0.0",
