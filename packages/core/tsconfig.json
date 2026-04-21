@@ -13,11 +13,19 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "declaration": true,
-    "rootDir": "src",
+    "rootDir": ".",
     "outDir": "dist",
     "sourceMap": false,
-    "declarationMap": false
+    "declarationMap": false,
+    "resolveJsonModule": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx"]
+  "include": ["src/**/*", "bin/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "scripts",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "src/scanner/__fixtures__/**"
+  ]
 }

@@ -1,27 +1,65 @@
 {
   "name": "invariance",
-  "version": "0.0.1",
-  "private": true,
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "version": "0.1.0",
+  "description": "Make your existing React/Next.js app customizable by end-users. One CLI to migrate, a small runtime to apply changes via CSS variables, and a two-agent pipeline that enforces invariants.",
+  "keywords": [
+    "react",
+    "nextjs",
+    "customization",
+    "theming",
+    "llm",
+    "anthropic",
+    "claude",
+    "css-variables"
+  ],
+  "license": "MIT",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "bin": {
+    "invariance": "./dist/bin/invariance.js"
+  },
   "exports": {
     ".": {
-      "require": "./dist/index.js",
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "require": "./dist/src/index.js"
+    },
+    "./scanner": {
+      "types": "./dist/src/scanner/index.d.ts",
+      "import": "./dist/src/scanner/index.js",
+      "require": "./dist/src/scanner/index.js"
     }
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "tsc --project tsconfig.json",
+    "build": "tsc --project tsconfig.json && node scripts/finalize-bin.mjs",
     "test": "vitest run",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
   },
   "peerDependencies": {
     "react": ">=18",
-    "react-dom": ">=18"
+    "react-dom": ">=18",
+    "tailwindcss": ">=3"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "tailwindcss": {
+      "optional": true
+    }
   },
   "dependencies": {
     "js-yaml": "^4.1.0",
+    "ts-morph": "^22.0.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
@@ -29,7 +67,11 @@
     "@types/node": "^20.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
+    "tsx": "^4.7.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
