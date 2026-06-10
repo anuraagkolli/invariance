@@ -43,9 +43,9 @@ export interface DesignConstraints {
   font_registry?: string[]
 }
 
-export const ACCENT_CHROMA = { muted: 0.08, medium: 0.15, vivid: 0.22 } as const
-export const NEUTRAL_TINT_CHROMA = { none: 0, subtle: 0.02, strong: 0.04 } as const
+export const ACCENT_CHROMA: Record<StyleSpec['accentChroma'], number> = { muted: 0.08, medium: 0.15, vivid: 0.22 }
+export const NEUTRAL_TINT_CHROMA: Record<StyleSpec['neutralTintStrength'], number> = { none: 0, subtle: 0.02, strong: 0.04 }
 // Per-level body-text target. 'soft' equals 'standard' numerically: the 3.0
 // large-text floor only applies to tokens explicitly marked large-text, and
 // no Phase 1 token is.
-export const CONTRAST_TARGETS = { soft: 4.5, standard: 4.5, high: 7.0 } as const
+export const CONTRAST_TARGETS: Record<StyleSpec['contrast'], number> = { soft: 4.5, standard: 4.5, high: 7.0 }
