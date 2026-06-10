@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { StyleSpecSchema } from '../compiler/style-spec'
 
 // ---------------------------------------------------------------------------
 // Invariant config schema (parsed from YAML)
@@ -141,6 +142,28 @@ export const ThemeJsonSchema = z.object({
   version: z.number().int().positive(),
   base_app_version: z.string(),
   theme: ThemeSectionSchema.optional(),
+  content: ContentSectionSchema.optional(),
+  layout: LayoutSectionSchema.optional(),
+  components: ComponentsSectionSchema.optional(),
+})
+
+// --- theme.json v2 -----------------------------------------------------------
+
+const CssVarRecordSchema = z.record(
+  z.string().regex(CSS_VAR_KEY, 'keys must be --inv-* CSS variables'),
+  z.string().min(1),
+)
+
+const ThemeSectionV2Schema = z.object({
+  roles: CssVarRecordSchema.optional(),
+  slots: CssVarRecordSchema.optional(),
+  styleSpec: StyleSpecSchema.optional(),
+})
+
+export const ThemeJsonV2Schema = z.object({
+  version: z.literal(2),
+  base_app_version: z.string(),
+  theme: ThemeSectionV2Schema.optional(),
   content: ContentSectionSchema.optional(),
   layout: LayoutSectionSchema.optional(),
   components: ComponentsSectionSchema.optional(),

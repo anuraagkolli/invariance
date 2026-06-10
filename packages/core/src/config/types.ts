@@ -1,3 +1,5 @@
+import type { StyleSpec } from '../compiler/style-spec'
+
 // ---------------------------------------------------------------------------
 // Invariant Config (parsed from YAML)
 // ---------------------------------------------------------------------------
@@ -81,6 +83,26 @@ export interface ThemeJson {
   version: number
   base_app_version: string
   theme?: ThemeSection
+  content?: ContentSection
+  layout?: LayoutSection
+  components?: ComponentsSection
+}
+
+// ---------------------------------------------------------------------------
+// theme.json v2 (roles + slots + styleSpec). v1 types above are unchanged;
+// the runtime keeps consuming v1 until the render-driven phase lands.
+// ---------------------------------------------------------------------------
+
+export interface ThemeSectionV2 {
+  roles?: Record<string, string>
+  slots?: Record<string, string>
+  styleSpec?: StyleSpec
+}
+
+export interface ThemeJsonV2 {
+  version: 2
+  base_app_version: string
+  theme?: ThemeSectionV2
   content?: ContentSection
   layout?: LayoutSection
   components?: ComponentsSection
