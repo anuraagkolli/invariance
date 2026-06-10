@@ -1,401 +1,147 @@
-# CLAUDE.md -- Invariance v4
+# CLAUDE.md -- Invariance v6
 
 ## Project Overview
 
-Invariance is a developer framework that makes existing React/Next.js apps customizable by end-users. Developers migrate their existing app using the Scanner CLI (one-time), which wraps components with `m.page`/`m.slot`/`m.text` primitives and rewrites hardcoded style values to CSS variable references. The framework then provides a natural language customization interface backed by a two-agent pipeline (Gatekeeper -> Builder), deterministic verification tests, per-user storage, and runtime application of changes via CSS variables.
+Invariance is a developer framework that makes existing React/Next.js apps customizable by end-users through natural language, with developer-defined invariants that can never be violated. v6's defining requirement: **every output must look professionally designed.** Aesthetic coherence and WCAG contrast are guaranteed by deterministic code (the Theme Compiler), never requested from a model.
 
-F1-F4 changes (style, content, layout, component swap) are stored as a `theme.json` config file per user. F1 styles work through `--inv-*` CSS variables on `:root`, not inline styles on wrapper divs. No code rewriting or transpilation at runtime.
+Two adoption modes share one brain:
+- **Trial Mode**: a script snippet (`invariance.js`) that demos themes on the rendered DOM of any staging site. Fragile by design, exists to sell Product Mode. F1 + hide only.
+- **Product Mode**: SDK + Scanner. Wrappers and `var(--inv-*)` references live in the developer's source. Governed, render-driven, F1-F4, shipped to all users.
 
-### Core Thesis
-
-Developers define **invariants** (constraints that must always hold) and **unlock levels** (what's customizable). Users describe changes in natural language. Two agents always run on every request: the Gatekeeper classifies intent and enforces level boundaries, the Builder produces the actual change (theme.json mutation targeting `--inv-*` CSS variables for F1-F4). Deterministic tests verify invariants before changes are applied. Every user gets their own versioned config.
-
-### How F1 Styles Work
-
-The Scanner rewrites hardcoded values to CSS variable references during migration:
-```tsx
-// Before:  <aside className="bg-[#1a1a2e]">
-// After:   <aside className="bg-[var(--inv-sidebar-bg)]">
-```
-theme.json stores: `{ "theme": { "globals": { "--inv-sidebar-bg": "#1a1a2e" } } }`
-Runtime writes `--inv-sidebar-bg` to `:root`. Component picks it up via `var()`.
-
-The `--inv-` prefix is configurable via `config.theme_prefix` (default `--inv-`). Projects with an existing design-token namespace can alias (e.g. `theme_prefix: "--fl-"`) without touching core code — enables future scale to apps that already ship design tokens.
-
-To customize: Builder outputs `{ "--inv-sidebar-bg": "#1b2a4a" }`. Runtime updates `:root`. Sidebar repaints. No inline-style patching, no code rewriting.
-
-### How It Works
+### The Quality Pipeline (the heart of v6)
 
 ```
-Migration (one-time):
-  npx invariance scan ./apps/my-app --apply
-  -> Wrappers inserted, hardcoded values -> var(--inv-*), config generated locked
-
-Runtime (per user request):
-  User: "make the sidebar dark blue"
-      |
-      v
-  Gatekeeper (LLM) -- classifies intent, validates level
-      |
-      v
-  Builder (LLM) -- produces theme.json mutation targeting --inv-* vars
-      |
-      v
-  Verification (deterministic tests) -- no LLM
-      |  fail? -> retry Builder (max 2)
-      v
-  Store + Apply -- save theme.json, write --inv-* to :root
+User: "make it more retro"
+  -> Gatekeeper (LLM, Haiku-class, temp 0.1): classify THEME | SLOT_F1 | F2 | F3 | F4 | CLARIFY | REJECT, validate levels
+  -> Designer  (LLM, Sonnet-class, temp 0.7): output a StyleSpec (structured design intent, ~12 enum/number fields). NEVER raw hex/px values.
+  -> Theme Compiler (pure TS + culori, NO LLM): expand StyleSpec into the full semantic token set.
+       OKLCH ramps, contrast solved by binary search on lightness, gamut-mapped to sRGB.
+       Harmony and AA contrast hold by construction.
+  -> Verification (deterministic, safety net)
+  -> Store theme.json, write tokens to :root (and SSR-inline them)
 ```
+
+Slot-level F1 ("make the sidebar blue") skips the Designer: constrained value pick + contrast solve for that slot's dependent tokens.
+F2/F3/F4 use the Builder as before, with structured outputs.
+
+### Two-tier tokens
+
+- **Roles** (15-25 app-wide): `--inv-surface-0/1/2`, `--inv-text-primary/secondary`, `--inv-accent`, `--inv-accent-contrast`, `--inv-border`, `--inv-font-display/body`, `--inv-radius-base`, `--inv-shadow-1`, density/border-weight tokens.
+- **Slot tokens** default to role references: `--inv-sidebar-bg: var(--inv-surface-1)`. Whole-app themes rewrite roles; precision edits override one slot token with a literal; reset restores the var() reference.
+
+The Scanner assigns roles during semantic analysis: deterministic clustering of observed values first, LLM only resolves ambiguity and names. LLM never picks values.
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology | Reason |
-|-------|-----------|--------|
-| Language | TypeScript (strict mode) | Type safety |
-| Target apps | React 18+ / Next.js 14+ | Most common frontend stack |
-| Package manager | pnpm only | Do not use npm or yarn |
-| Monorepo | pnpm workspaces + turborepo | Multi-package project |
-| Config format | YAML parsed with `js-yaml`, validated with `zod` | Human-readable |
-| LLM | Anthropic API via raw fetch (no SDK) | Gatekeeper + Builder: `claude-sonnet-4-6`. Scanner naming: `claude-opus-4-7`. |
-| Verification | Deterministic test functions (pure TS) | No LLM in verification |
-| Scanner | ts-morph (AST), tailwindcss/resolveConfig | Source analysis + rewriting |
-| Testing | vitest (unit) | Fast unit tests |
+| Layer | Technology | Notes |
+|-------|-----------|-------|
+| Language | TypeScript strict | everywhere |
+| Target apps | React 18+ / Next.js 14+ | |
+| Package manager | pnpm only | never npm/yarn |
+| Monorepo | pnpm workspaces + turborepo | test depends on ^build |
+| Color math | culori | OKLCH ramps, gamut mapping, WCAG contrast in compiler |
+| Config | js-yaml + zod | |
+| LLM | Anthropic API via raw fetch, native structured outputs (json_schema output format, beta header) | no SDK, no prompt-and-parse |
+| Models | Gatekeeper: Haiku-class. Designer/Builder: Sonnet-class. | model ids in one constants file |
+| Scanner | ts-morph, tailwindcss resolveConfig | |
+| Trial snippet | vanilla TS bundle, no React dep, <35KB gz | esbuild |
+| Testing | vitest; Playwright + screenshots for visual QA (CI only) | |
 
----
-
-## Directory Structure
+## Directory Structure (delta from v5)
 
 ```
-invariance/
-├── CLAUDE.md
-├── DESIGN.md
-├── package.json, pnpm-workspace.yaml, turbo.json, tsconfig.base.json
-│
-├── packages/
-│   ├── core/                        # invariance (main package)
-│   │   └── src/
-│   │       ├── index.ts
-│   │       ├── primitives/
-│   │       │   ├── page.tsx         # m.page wrapper
-│   │       │   ├── slot.tsx         # m.slot: F3 layout + F4 swap + cssVariables prop
-│   │       │   ├── text.tsx         # m.text wrapper
-│   │       │   └── error-boundary.tsx
-│   │       ├── config/
-│   │       │   ├── types.ts         # InvarianceConfig.theme_prefix, ThemeGlobals via index sig
-│   │       │   ├── schema.ts        # .catchall(z.string()) for CSS var keys; theme_prefix validation
-│   │       │   └── parser.ts        # YAML config parser
-│   │       ├── context/
-│   │       │   ├── provider.tsx     # InvarianceProvider
-│   │       │   ├── theme-store.ts   # In-memory theme.json state
-│   │       │   └── registry.ts      # SlotRegistration: cssVariables?, source?: 'page'|'component'
-│   │       ├── storage/
-│   │       │   ├── types.ts, memory.ts, local-storage.ts, api.ts
-│   │       ├── agent/
-│   │       │   ├── gatekeeper.ts    # Classifies intent, validates level
-│   │       │   ├── builder.ts       # Produces --inv-* mutations from slot's cssVariables
-│   │       │   └── pipeline.ts      # Gatekeeper -> Builder -> Verify -> Store
-│   │       ├── verify/
-│   │       │   ├── engine.ts, types.ts
-│   │       │   ├── theme-tests.ts   # Walks --inv-* entries for palette/font checks
-│   │       │   ├── content-tests.ts, layout-tests.ts, component-tests.ts, utils.ts
-│   │       │   ├── *.test.ts        # Vitest unit tests (84 tests)
-│   │       │   └── __fixtures__/    # mockConfig / mockTheme / mockSlot factories
-│   │       ├── runtime/
-│   │       │   ├── apply-theme.ts   # Writes themePrefix-keyed vars to :root (default --inv-)
-│   │       │   ├── apply-content.ts, apply-layout.ts, apply.ts
-│   │       ├── panel/
-│   │       │   ├── trigger-button.tsx, customization-overlay.tsx, customization-panel.tsx
-│   │       ├── levels/index.ts
-│   │       └── utils/errors.ts
-│   │
-│   ├── scanner/                     # invariance-scanner (CLI, one-time migration)
-│   │   ├── bin/invariance-scan.ts, bin/invariance-unlock.ts
-│   │   └── src/
-│   │       ├── discover.ts          # Find pages/routes, tsconfig, tailwind config
-│   │       ├── ast/                 # ts-morph: parse, extract-structure/colors/fonts/spacing/text
-│   │       ├── tailwind/resolve.ts  # Tailwind class -> value resolution
-│   │       ├── agent/scanner-agent.ts # LLM for semantic naming only (pluggable via MigrateOptions.agent)
-│   │       ├── plan/                # slot-plan, text-plan, build-plan
-│   │       ├── emit/                # config-emitter, source-rewriter, variable-rewriter, variable-naming, report
-│   │       ├── unlock/              # invariance-unlock CLI (adjust levels post-migration)
-│   │       ├── migrate.ts           # Orchestrator: exports migrate / analyze / writeMigration
-│   │       ├── *.test.ts            # Vitest unit + golden-fixture tests (51 tests)
-│   │       └── __fixtures__/        # Minimal Next.js app for end-to-end migrate() tests
-│   │
-│   └── verify/                      # Playwright, CI only (F5+ future)
-│
-├── apps/demo/
-│   ├── invariance.config.yaml       # Invariant definitions (generated by scanner)
-│   ├── invariance.theme.initial.json # Scanner-generated initial theme (original values)
-│   └── src/ ...
-│       ├── app/providers.tsx        # InvarianceProvider + CustomizationPanel (generated)
-│       └── ...
-│
-│   NOTE: branch `demo-clean` holds the unintegrated React app (no Invariance).
-│         Run the scanner against it to test migration end-to-end.
+packages/
+├── core/src/
+│   ├── compiler/                # NEW: the Theme Compiler
+│   │   ├── style-spec.ts        # StyleSpec type + zod schema
+│   │   ├── ramps.ts             # OKLCH neutral/accent ramp generation (culori)
+│   │   ├── contrast.ts          # binary-search lightness solver, WCAG math
+│   │   ├── roles.ts             # ramp -> role assignment, brand-lock pass-through
+│   │   ├── tokens.ts            # radius/shadow/density token tables
+│   │   └── compile.ts           # compileTheme(spec, constraints, locks) -> roles map
+│   ├── registries/              # NEW: taste as data
+│   │   ├── font-pairings.ts     # ~30 curated Google Fonts pairings with tags
+│   │   └── theme-packs.ts       # ~15 named StyleSpec presets (few-shot + one-tap)
+│   ├── agent/
+│   │   ├── gatekeeper.ts        # adds THEME vs SLOT_F1 routing
+│   │   ├── designer.ts          # NEW: StyleSpec via structured outputs
+│   │   ├── builder.ts           # F2/F3/F4 only; theme.slots fallback REMOVED
+│   │   ├── slot-edit.ts         # NEW: micro-mutation path for slot-level F1
+│   │   ├── api.ts               # NEW: shared raw-fetch client, structured-output helper
+│   │   └── pipeline.ts          # routing per DESIGN Part 3
+│   ├── runtime/
+│   │   ├── apply-theme.ts       # roles + slots to :root; v1 globals accepted+upgraded
+│   │   ├── ssr.ts               # NEW: render :root style block server-side
+│   │   └── (apply-content.ts, apply-layout.ts DELETED -> render-driven)
+│   ├── primitives/
+│   │   ├── slot.tsx             # childCss/!important + inline theme.slots REMOVED
+│   │   ├── text.tsx             # renders override from context
+│   │   └── sections.tsx         # NEW: renders section order/visibility from context
+│   └── fonts/loader.ts          # NEW: inject <link> for registry fonts on demand
+├── scanner/src/
+│   ├── roles/cluster.ts         # NEW: deterministic value clustering into roles
+│   └── emit/                    # emits role tier + slot var() references
+├── snippet/                     # NEW: Trial Mode bundle
+│   └── src/ (mini-scan.ts, virtual-tokens.ts, observe.ts, persist.ts, export.ts)
+└── cli additions: invariance check (CI guard), invariance migrate-theme (version bumps)
 ```
 
----
+## theme.json v2
+
+`theme.roles` + `theme.slots` (CSS-var keys, values are literals or `var(...)` refs) + `theme.styleSpec` (provenance). Loader accepts v1 `theme.globals` and partitions it. The old inline-style slots object is gone.
+
+## Verification (additions to the v5 suite)
+
+`styleSpecValid`, `compilerOutputComplete`, `lockedTokensUntouched`, `contrastPairs` (independent recompute, the safety net), `fontInRegistry`, `varRefsResolve` (slot var() targets exist). All v5 F2/F3/F4 tests unchanged.
+
+## Invariant Config (v6 defaults)
+
+Relational constraints replace exact-hex allowlists as the default:
+
+```yaml
+design:
+  constraints:
+    contrast: ">= 4.5"
+    accent_chroma_max: 0.25
+    locked_tokens: { --inv-accent: "#e94560" }
+    allowed_modes: [light, dark]
+    font_registry: default
+  legacy_palette: []   # optional hard allowlist, still supported
+```
+
+After scan: pages level 0 as before, but constraints are relational so unlocking F1 immediately enables high-quality theming.
 
 ## Coding Conventions
 
-- TypeScript `strict: true`, named exports only
-- `interface` for extendable shapes, `type` for unions/computed
-- `async/await` only, no `.then()` chains
-- No `any` (use `unknown` + type guards), no semicolons, single quotes
-- `kebab-case.ts` files, colocated tests (`thing.test.ts`)
-- Comments explain *why*, not *what*
-- Import order: node builtins > external > internal > relative (blank line between groups)
+Unchanged from v5: strict TS, named exports, no `any`, async/await only, single quotes, no semicolons, kebab-case files, colocated tests, comments explain why. New: every compiler function is pure and unit-tested against golden token snapshots; agent prompts live in template files next to their agent, not inline strings scattered around.
 
----
+## Build/Test Discipline
 
-## Customization Levels
+- `pnpm build` then `pnpm test` must pass at every commit; turbo `test.dependsOn: ["^build"]` so fresh clones work.
+- Do not regress the existing suite (136 tests at v5 baseline). Deleted features (DOM appliers, theme.slots fallback) take their tests with them; everything else stays green.
+- Compiler determinism test: same StyleSpec in, byte-identical roles out.
 
-```
-Level 0: Locked (no customization)
-Level F1: Style (colors, fonts, spacing) -- theme.json globals --inv-* CSS vars
-Level F2: Content (text, labels, images) -- theme.json content key
-Level F3: Layout (reorder, show/hide) -- theme.json layout key
-Level F4: Components (swap from approved library) -- theme.json components key
-Level F5+: Pages, behavior, data (future, source code modification)
-```
+## Phase Scope (v6 rework)
 
-F1-F4 are config-only. No code rewriting at runtime.
+1. Theme Compiler + registries (pure, no UI) with golden tests
+2. theme.json v2 + v1 upgrade path
+3. Designer agent + structured-outputs client; Gatekeeper routing update
+4. Slot-edit micro-mutation path; Builder cleanup (remove theme.slots)
+5. Render-driven F2/F3 (m.text from context, m.sections); delete DOM appliers
+6. Scanner: role clustering + role-tier emission
+7. SSR theme inlining + font loader
+8. `invariance check` + `migrate-theme` CLIs
+9. Trial Mode snippet
+10. Demo: theme packs in panel, ten-vibe gauntlet, visual QA harness
 
----
+> **Note:** `apps/` is currently empty — the v5 demo app was dropped (recoverable from git history). A fresh demo app is built at phase 10; until then, phases 1-9 stay demo-independent (compiler-level gauntlet via golden tests, not visual QA). The v5-era scanner spec is archived at `docs/scanner-v5.md` and predates the role-tier model.
 
-## theme.json
+### Success criteria
 
-Single file per user. `theme.globals` holds `--inv-*` CSS variable keys (generated by scanner) plus optional structured tokens.
+Ten consecutive vibe prompts (retro, brutalist, pastel, terminal, glassy, editorial, ocean, sunset, mono, corporate) each produce a distinct, coherent, AA-compliant theme with zero verification failures; "make the sidebar blue" adjusts contrast automatically; snippet-exported theme round-trips into the SDK post-scan; `invariance check` blocks a removed slot in CI.
 
-```json
-{
-  "version": 1,
-  "base_app_version": "v1",
-  "theme": {
-    "globals": {
-      "--inv-sidebar-bg": "#1a1a2e",
-      "--inv-sidebar-text": "#ffffff",
-      "--inv-header-bg": "#ffffff",
-      "--inv-header-border": "#e5e7eb"
-    }
-  },
-  "content": { "pages": { "/dashboard": { "el_003": { "text": "My Pipeline" } } } },
-  "layout": { "pages": { "/dashboard": { "sections": ["hero", "deals-grid", "footer"], "hidden": ["announcements-banner"] } } },
-  "components": { "pages": { "/dashboard": { "chart-area": { "component": "LineChart" } } } }
-}
-```
+## Deferred
 
-When no saved theme exists for a user, the runtime loads `invariance.theme.initial.json` (the scanner-generated default with original values).
-
-`initialTheme` is exposed in the `InvarianceContext` so the customization panel's "Reset all" handler re-applies it (restoring all `--inv-*` CSS variables to their original values) rather than wiping variables and leaving the page unstyled.
-
----
-
-## The Wrapper Primitives
-
-### m.page
-
-Registers a page. Renders: `<div data-inv-page={name}>{children}</div>`
-
-### m.slot
-
-Primary primitive. NOT responsible for F1 styles (those work via CSS variables on `:root`). Responsible for:
-- `data-inv-slot`, `data-inv-section`, `data-inv-level` attributes for F3 layout
-- F4 component swaps from registered library
-- `cssVariables` prop: tells the registry which `--inv-*` vars belong to this slot, so the Builder knows what to target
-
-Props: `name`, `level`, `children`, `props?`, `preserve?`, `cssVariables?`, `description?`, `aliases?`, `source?` (`'page'` | `'component'`, default `'page'` — reserved for future component-library scans).
-
-### m.text
-
-Content replacement hook. Renders: `<span data-inv-text={name} data-inv-id={name}>{text}</span>`
-
----
-
-## Agent Pipeline
-
-### Gatekeeper
-
-Classifies intent, validates level. Never produces mutations.
-Output: `{ type: 'intent', slotName, level, description, requirements }` | clarification | error
-API: `claude-sonnet-4-6`, temp 0.2, max_tokens 1024, JSON-only.
-
-### Builder
-
-Produces the actual change. For F1: mutations targeting `--inv-*` keys from the slot's `cssVariables` list. Receives slot registry so it knows valid variable names.
-Output: `{ mutation: Partial<ThemeJson>, explanation: string }`
-API: `claude-sonnet-4-6`, temp 0.2, max_tokens 4096, JSON-only.
-
-### Pipeline
-
-Gatekeeper -> Builder -> merge -> verify -> (retry Builder if fail, max 2) -> store + apply.
-2-4 LLM calls per request. Retries go to Builder only (intent doesn't change).
-
----
-
-## Verification Engine
-
-Deterministic test functions. No LLM.
-
-**F1:** `colorInPalette` (walks --inv-* hex values), `contrastRatio`, `fontInAllowlist`, `validHexColors`, `cssVarExists`
-**F2:** `textNonEmpty`, `noXssVectors`, `imagesHaveAlt`
-**F3:** `requiredElementsPresent`, `orderConstraints`, `lockedSectionsUntouched`
-**F4:** `componentInLibrary`, `propsCompatible`, `preservedSlotsNotSwapped`
-
----
-
-## Runtime
-
-- **F1:** `apply-theme.ts` writes `--inv-*` entries from `theme.globals` to `:root`. Components pick up via `var()`.
-- **F2:** Elements with `data-inv-id` get text/image replaced.
-- **F3:** Sections with `data-inv-section` get reordered/hidden.
-- **F4:** `m.slot` resolves component swap from library.
-
----
-
-## Storage
-
-```typescript
-interface StorageBackend {
-  loadTheme(userId: string, appId: string): Promise<ThemeJson | null>
-  saveTheme(userId: string, appId: string, theme: ThemeJson): Promise<void>
-  getVersion(userId: string, appId: string): Promise<number>
-}
-```
-
-Backends: memory, localStorage, api (REST to developer endpoint).
-
----
-
-## Scanner (Migration Tool)
-
-One-time CLI. Run from monorepo root with an absolute path (the scanner script runs from `packages/scanner/`, so relative paths resolve there):
-
-```bash
-pnpm --filter invariance-scanner scan /absolute/path/to/apps/demo
-pnpm --filter invariance-scanner scan /absolute/path/to/apps/demo --apply
-# or
-pnpm --filter invariance-scanner scan "$(pwd)/apps/demo" --apply
-```
-
-Pipeline: Discover -> Extract (AST/ts-morph) -> Semantic Analysis (LLM, 1/page, naming only) -> Plan -> Validate -> Emit
-
-Two-pass source rewriting:
-1. Insert `m.page`/`m.slot`/`m.text` wrappers
-2. Replace hardcoded colors/fonts/spacing with `var(--inv-{slot}-{property})`
-
-Output: `invariance.config.yaml` (locked), `invariance.theme.initial.json` (original values), modified source, `.invariance-migration-report.md`.
-
-**Semantic naming** requires `ANTHROPIC_API_KEY` in env — uses `claude-opus-4-7` (no extended thinking). Without it, falls back to generic `section-1`, `text-1` names. Set `NEXT_PUBLIC_ANTHROPIC_DEV_API_KEY` or `ANTHROPIC_API_KEY` before running.
-
-Variable naming: `--inv-{slot}-{property}` (e.g., `--inv-sidebar-bg`, `--inv-header-border`). Short role aliases: bg, text, border, font, pad, radius. Collision suffix (-1, -2) applied when a slot has multiple values for the same role.
-
-Dry-run by default. `--apply` to write files. Re-running on an already-migrated app is blocked (scanner detects `from 'invariance'` imports and `var(--inv-*)` references and throws).
-
-**Public API** (packages/scanner/src/index.ts):
-- `migrate(opts)` — full pipeline, writes to disk unless `dryRun: true`.
-- `analyze(opts)` — pure analysis: discover → extract → plan → apply edits in-memory. Returns an `AnalyzeResult` with the mutated ts-morph Project. No disk writes. Use for inspection, caching, or incremental re-scans.
-- `writeMigration(result)` — commits an `AnalyzeResult` to disk (source edits, config, initial theme, provider injection).
-- `ScannerAgent` — the semantic-naming function type. `MigrateOptions.agent` overrides the default LLM agent; tests inject a stub to run end-to-end without an API key.
-
----
-
-## Invariant Config
-
-```yaml
-app: "acme-crm"
-frontend:
-  design:
-    colors:
-      mode: "palette"
-      palette: ["#e94560", "#0078d4", "#1a1a2e", "#ffffff"]
-    fonts:
-      allowed: ["Inter", "system-ui"]
-    spacing:
-      scale: [0, 4, 8, 12, 16, 24, 32, 48, 64]
-  structure:
-    required_sections: ["header", "main-content", "footer"]
-    locked_sections: ["auth-gate"]
-    section_order: { first: "header", last: "footer" }
-  accessibility:
-    wcag_level: "AA"
-    color_contrast: ">= 4.5"
-    all_images: "must have alt text"
-  pages:
-    "/dashboard": { level: 4, required: ["deals-view", "activity-feed"] }
-    "/settings": { level: 1 }
-```
-
-After scanner migration: all pages level 0, palette = exact observed colors, all sections locked. Developer unlocks by editing.
-
----
-
-## Dependencies by Package
-
-### packages/core
-- `react`, `react-dom` (peer dep, >=18)
-- `zod`, `js-yaml`
-- `typescript`, `vitest` (dev)
-
-### packages/scanner
-- `ts-morph`, `js-yaml`
-- `tailwindcss` (peer dep)
-- `invariance` (workspace dep)
-- `typescript`, `vitest` (dev)
-
-### apps/demo
-- `next` (14+), `react`, `react-dom`, `tailwindcss`
-- `invariance` (workspace dep)
-
----
-
-## Key Design Decisions
-
-1. **CSS variables, not inline styles on wrapper divs.** Scanner rewrites source to use `var(--inv-*)`. Runtime sets values on `:root`. This means F1 changes actually reach the component's own elements, not just a wrapper.
-
-2. **Both agents on every request.** Gatekeeper classifies. Builder produces. Clean separation even for tiny changes.
-
-3. **No Judge agent.** Verification is deterministic test functions. No LLM in verification.
-
-4. **Scanner as one-time migration.** Reads AST, LLM only names slots, outputs locked config + CSS-variable-wired source. App looks identical after migration.
-
-5. **theme.json globals with --inv-* keys.** Builder targets named CSS variables from the slot's `cssVariables` list. No arbitrary CSS property injection.
-
-6. **Store config, not compiled output.** theme.json is source of truth. Simple, serializable, diffable.
-
-7. **No SDK dependency for Anthropic.** Raw fetch.
-
-8. **Panel uses inline styles only.** Works in any React app.
-
-9. **Seams for scale, not features for scale.** The MVP is page-scoped with LLM naming, but four seams keep the door open for enterprise-sized apps: (a) `ScannerAgent` is pluggable, (b) `SlotRegistration.source` distinguishes page vs component slots, (c) `config.theme_prefix` aliases the CSS-var namespace, (d) `analyze()` / `writeMigration()` split lets plans be cached and re-applied. None of these add complexity today; they prevent painful retrofits later.
-
----
-
-## Testing
-
-Both packages use vitest. Tests colocated as `*.test.ts` next to source files.
-
-- `pnpm test` at repo root runs both suites via turbo.
-- `pnpm --filter invariance test` — 84 tests covering verify engine (F1-F4) and pure helpers.
-- `pnpm --filter invariance-scanner test` — 51 tests covering pure planning, AST extractors, rewriters, and a golden-fixture end-to-end `migrate()` run.
-- **All tests run without `ANTHROPIC_API_KEY`.** The scanner E2E test uses `MigrateOptions.agent` to inject a deterministic stub in place of the LLM.
-
-Known rough edge (flagged, not fixed yet): the scanner attaches every file-level observed value to every candidate section, so values can leak across sibling slots. The golden test currently relaxes its initial-value assertion because of this; see the variable-rewriter warnings in test output. Fix is tracked as a follow-up task.
-
----
-
-## Phase 1 Scope
-
-Build: config parser, theme.json schema, verification engine, Gatekeeper, Builder, pipeline, runtime appliers, m.slot/m.page/m.text, storage backends, customization panel, scanner CLI, demo app.
-
-### What's Deferred
-
-- Review UI (developer overlay for unlocking)
-- F5+ code path (Builder writing source, Sucrase)
-- Content-addressed blob storage
-- Invariant change pipeline
-- Backend levels (B1-B6)
-- Per-slot palette constraints
+Review UI, F5+ source path, blob storage, B-levels, theme sharing links, runtime vision QA.
