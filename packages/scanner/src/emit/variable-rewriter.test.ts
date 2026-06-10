@@ -24,6 +24,7 @@ describe('applyVariableRewrites — inline style', () => {
       source: { kind: 'inline-style', property: 'backgroundColor' },
       file: '/page.tsx',
       line: 2,
+      jsxPath: 'div',
     }
     applyVariableRewrites(project, {
       valuesBySlot: new Map([['sidebar', [observed]]]),
@@ -48,6 +49,7 @@ describe('applyVariableRewrites — tailwind arbitrary value', () => {
       source: { kind: 'tailwind-arbitrary', prefix: 'bg', raw: '#1a1a2e' },
       file: '/page.tsx',
       line: 2,
+      jsxPath: 'div',
     }
     applyVariableRewrites(project, {
       valuesBySlot: new Map([['sidebar', [observed]]]),
@@ -73,6 +75,7 @@ describe('applyVariableRewrites — collision suffix picks right variable', () =
       source: { kind: 'inline-style', property: 'backgroundColor' },
       file: '/page.tsx',
       line: 2,
+      jsxPath: 'div',
     }
     applyVariableRewrites(project, {
       valuesBySlot: new Map([['sidebar', [observed]]]),
@@ -104,6 +107,7 @@ describe('applyVariableRewrites — misses are non-fatal', () => {
       source: { kind: 'inline-style', property: 'backgroundColor' },
       file: '/page.tsx',
       line: 2,
+      jsxPath: 'div',
     }
     applyVariableRewrites(project, {
       valuesBySlot: new Map([['sidebar', [observed]]]),

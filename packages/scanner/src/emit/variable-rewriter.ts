@@ -1,6 +1,7 @@
 import { Node, Project, SourceFile, SyntaxKind } from 'ts-morph'
 
 import type { ObservedValue } from '../types'
+import { jsxPathOf } from '../ast/parse'
 import { roleForCssProperty } from './variable-naming'
 
 // ---------------------------------------------------------------------------
@@ -92,6 +93,9 @@ function rewriteInlineStyle(
     if (init.getKind() !== SyntaxKind.StringLiteral) return
     const literal = init.asKindOrThrow(SyntaxKind.StringLiteral)
     if (literal.getLiteralText() !== observed.value) return
+    // Position guard: only rewrite the element this value was observed on, so
+    // two elements sharing a value (e.g. two #fff backgrounds) don't collide.
+    if (jsxPathOf(pa.compilerNode) !== observed.jsxPath) return
     replaceStringLiteralValue(literal, `var(${varName})`)
     changed = true
   })
@@ -102,6 +106,7 @@ function rewriteClassNameToken(
   sourceFile: SourceFile,
   oldToken: string,
   newToken: string,
+  targetPath: string,
 ): boolean {
   let changed = false
   sourceFile.forEachDescendant((node) => {
@@ -109,6 +114,9 @@ function rewriteClassNameToken(
     if (node.getKind() !== SyntaxKind.JsxAttribute) return
     const attr = node.asKindOrThrow(SyntaxKind.JsxAttribute)
     if (attr.getNameNode().getText() !== 'className') return
+    // Position guard: only the element this token was observed on, so identical
+    // utility classes on sibling elements aren't rewritten by accident.
+    if (jsxPathOf(attr.compilerNode) !== targetPath) return
     const init = attr.getInitializer()
     if (!init) return
     // className="..." (StringLiteral)
@@ -187,7 +195,7 @@ export function applyVariableRewrites(
         // source.raw is the inner bracket content (e.g. "#1a1a2e"); rebuild full token.
         const oldToken = `${prefix}-[${observed.source.raw}]`
         const newToken = `${prefix}-[var(${varName})]`
-        if (!rewriteClassNameToken(sourceFile, oldToken, newToken)) {
+        if (!rewriteClassNameToken(sourceFile, oldToken, newToken, observed.jsxPath)) {
           warn(`could not rewrite tailwind-arbitrary ${oldToken} in ${observed.file}`)
         }
         continue
@@ -197,7 +205,7 @@ export function applyVariableRewrites(
         const prefix = tailwindPrefixForRole(role) ?? observed.source.prefix
         const oldToken = observed.source.className
         const newToken = `${prefix}-[var(${varName})]`
-        if (!rewriteClassNameToken(sourceFile, oldToken, newToken)) {
+        if (!rewriteClassNameToken(sourceFile, oldToken, newToken, observed.jsxPath)) {
           warn(`could not rewrite tailwind-named ${oldToken} in ${observed.file}`)
         }
       }

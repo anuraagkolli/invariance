@@ -7,6 +7,8 @@ import type {
 
 import type { ObservedValue, TailwindMaps } from '../types'
 
+import { jsxPathOf } from './parse'
+
 type OpeningLike = JsxOpeningElement | JsxSelfClosingElement
 
 const COLOR_STYLE_PROPS = new Set<string>([
@@ -142,6 +144,7 @@ export function extractColors(
 
   for (const opening of getOpeningElements(sourceFile)) {
     const line = sourceFile.getLineAndColumnAtPos(opening.getStart()).line
+    const jsxPath = jsxPathOf(opening.compilerNode)
 
     // 1. Inline style={{ ... }}
     const styleAttr = getNamedAttribute(opening, 'style')
@@ -156,6 +159,7 @@ export function extractColors(
           source: { kind: 'inline-style', property },
           file: filePath,
           line,
+          jsxPath,
         })
       }
     }
@@ -181,6 +185,7 @@ export function extractColors(
                   source: { kind: 'tailwind-arbitrary', prefix, raw },
                   file: filePath,
                   line,
+                  jsxPath,
                 })
               }
             }
@@ -204,6 +209,7 @@ export function extractColors(
             source: { kind: 'tailwind-named', prefix, className: token },
             file: filePath,
             line,
+            jsxPath,
           })
         }
       }

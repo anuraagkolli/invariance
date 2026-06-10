@@ -3,6 +3,8 @@ import type { JsxAttribute, JsxOpeningElement, JsxSelfClosingElement } from 'ts-
 
 import type { ObservedValue, TailwindMaps } from '../types'
 
+import { jsxPathOf } from './parse'
+
 type OpeningLike = JsxOpeningElement | JsxSelfClosingElement
 
 function getOpeningElements(sourceFile: SourceFile): OpeningLike[] {
@@ -64,12 +66,15 @@ export function extractFonts(sourceFile: SourceFile, tw: TailwindMaps): Observed
       source: { kind: 'inline-style', property: 'fontFamily' },
       file: filePath,
       line: 1,
+      // Font imports have no single JSX position; fonts are aggregated globally.
+      jsxPath: '',
     })
   }
 
   // 2. Tailwind font-* classes.
   for (const opening of getOpeningElements(sourceFile)) {
     const line = sourceFile.getLineAndColumnAtPos(opening.getStart()).line
+    const jsxPath = jsxPathOf(opening.compilerNode)
     const classAttr = getNamedAttribute(opening, 'className')
     if (!classAttr) continue
     const classString = getClassNameString(classAttr)
@@ -89,6 +94,7 @@ export function extractFonts(sourceFile: SourceFile, tw: TailwindMaps): Observed
           source: { kind: 'tailwind-named', prefix: 'font', className: token },
           file: filePath,
           line,
+          jsxPath,
         })
       }
     }

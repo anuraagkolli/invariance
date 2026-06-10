@@ -18,6 +18,15 @@ export interface ObservedValue {
   /** Source file and JSX element location. */
   file: string
   line: number
+  /**
+   * Dotted jsxPath of the JSX element the value sits on, relative to the
+   * containing component's root (e.g. "nav>ul>li>a"). Computed by jsxPathOf so
+   * it matches the jsxPath stored on semantic slots, letting slot-plan attribute
+   * each value to the slot whose subtree actually contains it — instead of
+   * smearing every file-level value across sibling slots. Empty string for
+   * values with no JSX position (e.g. Next.js font imports).
+   */
+  jsxPath: string
 }
 
 /** A JSX text literal that could become an m.text node. */

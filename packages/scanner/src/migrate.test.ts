@@ -73,18 +73,22 @@ describe('migrate — end-to-end on fixture', () => {
     const required = result.plan.config.frontend?.structure?.required_sections ?? []
     expect(required).toEqual(expect.arrayContaining(['sidebar', 'main-content']))
 
-    // Initial theme stores fixture colors under sidebar's --inv-* keys. Values
-    // are aggregated across child/ancestor sections today (see scanner todo),
-    // so assert the sidebar's set of observed colors is a subset of the palette
-    // rather than pinning specific keys.
+    // Per-value attribution (no more cross-sibling smearing): the sidebar's
+    // background variable must hold the <aside>'s own color (#1A1A2E) — NOT the
+    // root <div>'s or <main>'s #FFFFFF, which sit in sibling subtrees. This is
+    // the assertion the old file-level value dump could not make.
     const globals = result.plan.initialTheme.theme?.globals ?? {}
-    const sidebarValues = (result.plan.slotCssVariables['sidebar'] ?? []).map(
-      (v) => globals[v as `--inv-${string}`],
-    )
-    expect(sidebarValues.length).toBeGreaterThan(0)
-    // At least one of sidebar's rewired vars holds an observed color (hex value).
-    const hasHex = sidebarValues.some((v) => typeof v === 'string' && /^#[0-9A-F]{6}$/.test(v))
-    expect(hasHex).toBe(true)
+    expect(globals['--inv-sidebar-bg']).toBe('#1A1A2E')
+    // The sidebar's text color is its own #FFFFFF (aside's `color`), kept on the
+    // -text key, distinct from its background.
+    expect(globals['--inv-sidebar-text']).toBe('#FFFFFF')
+
+    // And main-content's background is the <main>'s #FFFFFF, attributed to its
+    // own slot rather than leaking the sidebar's dark color.
+    const mainVars = result.plan.slotCssVariables['main-content'] ?? []
+    const mainBg = mainVars.find((v) => /-bg(-\d+)?$/.test(v))
+    expect(mainBg).toBeDefined()
+    expect(globals[mainBg as `--inv-${string}`]).toBe('#FFFFFF')
   })
 
   it('refuses to re-scan a source that already imports from invariance', async () => {

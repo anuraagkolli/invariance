@@ -1,3 +1,4 @@
+import { m } from "invariance";
 import type { Metric, ChartData } from '@/lib/types'
 import { BarChart } from './charts/BarChart'
 
@@ -39,7 +40,7 @@ function MetricCard({ metric }: { metric: Metric }) {
       {metric.change && (
         <div className={`flex items-center gap-1 text-sm font-medium ${changeColor}`}>
           <TrendArrow trend={metric.trend} />
-          <span>{metric.change} from last month</span>
+          <span>{metric.change} <m.text name="text-4">from last month</m.text></span>
         </div>
       )}
     </div>
@@ -48,21 +49,21 @@ function MetricCard({ metric }: { metric: Metric }) {
 
 export function Dashboard({ metrics, chartData }: DashboardProps) {
   return (
-    <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
-      {/* Metric cards */}
-      <section aria-label="Key metrics">
-        <h2 className="sr-only">Key metrics</h2>
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
-          {metrics.map((metric) => (
-            <MetricCard key={metric.id} metric={metric} />
-          ))}
-        </div>
-      </section>
+    <m.slot name="section-5" level={0} preserve={true} cssVariables={['--inv-section-5-bg', '--inv-section-5-pad', '--inv-section-5-pad-1', '--inv-section-5-margin']}><main className="flex-1 overflow-y-auto p-[var(--inv-section-5-pad)] bg-[var(--inv-section-5-bg)]">
+            {/* Metric cards */}
+            <section aria-label="Key metrics">
+              <h2 className="sr-only"><m.text name="text-5">Key metrics</m.text></h2>
+              <div className="grid grid-cols-2 xl:grid-cols-4 gap-[var(--inv-section-5-pad-1)]">
+                {metrics.map((metric) => (
+                  <MetricCard key={metric.id} metric={metric} />
+                ))}
+              </div>
+            </section>
 
-      {/* Chart area */}
-      <section aria-label="Chart" className="mt-6">
-        <BarChart data={chartData} />
-      </section>
-    </main>
+            {/* Chart area */}
+            <section aria-label="Chart" className="mt-[var(--inv-section-5-margin)]">
+              <BarChart data={chartData} />
+            </section>
+          </main></m.slot>
   )
 }

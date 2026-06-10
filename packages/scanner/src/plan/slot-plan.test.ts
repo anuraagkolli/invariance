@@ -9,6 +9,8 @@ function value(role: string, val: string, file = 'page.tsx'): ObservedValue {
     source: { kind: 'inline-style', property: role },
     file,
     line: 1,
+    // Filled in by extraction() from the containing section's path.
+    jsxPath: '',
   }
 }
 
@@ -24,7 +26,8 @@ function extraction(
       jsxPath: s.jsxPath,
       tagName: 'div',
       snippet: '',
-      values: s.values,
+      // Each value sits at its section's path; attribution is now per-value.
+      values: s.values.map((v) => ({ ...v, jsxPath: s.jsxPath })),
     })),
     texts: [],
     allColors: new Set(),
