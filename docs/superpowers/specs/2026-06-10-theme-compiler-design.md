@@ -33,7 +33,7 @@ Chosen over a joint constraint solver (harder to keep deterministic and debug, u
 
 Exactly the 12-field shape in DESIGN.md §1.4 — `mode`, `accentHue`, `accentChroma`, `secondaryHue?`, `neutralTint`, `neutralTintStrength`, `contrast`, `fontPairing`, `radius`, `shadow`, `density`, `borderWeight`, `rationale`. Defined once in `compiler/style-spec.ts` as the TS interface plus a zod schema (the same schema later drives the Designer's structured output). Field semantics and taste rules live in the design-taste skill and are not duplicated here.
 
-`secondaryHue` is accepted and validated in Phase 1 but only feeds `accent-subtle` tinting when present; full duotone treatment is a compiler extension that can land later without a schema change.
+`secondaryHue` is accepted and validated in Phase 1 but intentionally inert — carried for schema stability so packs (e.g. sunset) can declare duotone intent today; the duotone compiler extension lands later without a schema change.
 
 ## Role vocabulary v1 (canonical — from the design-taste skill, kept in sync with `compiler/roles.ts`)
 
@@ -71,8 +71,9 @@ solveTextL(surfaceHex, hue, chroma, targetRatio):
              (dark text) iff wcagContrast(black, surface) >= wcagContrast(white, surface).
              (NOT luminance > 0.5: the black/white crossover is at luminance
              ~0.179, so mid-tones like #e94560 at 0.224 need dark text)
-  return the first candidate meeting targetRatio with minimal distance
-  from the ramp's nearest step (keeps solved text harmonious with the ramp)
+  return the boundary candidate, snapped to the passing ramp step with the
+  LOWEST passing ratio (minimum sufficient contrast = closest to the boundary
+  = most harmonious with the ramp)
 ```
 
 Two non-negotiables, both verified against culori 4.0.2 behavior:
@@ -88,10 +89,10 @@ Maps ramp steps to roles plus the lock pass:
 | Role | Light mode | Dark mode |
 |---|---|---|
 | surface-0/1/2 | L_SCALE steps 0/1/2 | reversed steps 0/1/2 (0.15/0.25/0.36) |
-| border / border-strong | steps 3 / 4 | reversed steps 3 / 4 |
+| border / border-strong | steps 4 / 6 | reversed steps 4 / 6 (step 4 keeps borders decorative; step 6 is the shallowest step that clears 3.0 vs a near-white surface-1 for input affordance) |
 | text-primary/secondary/disabled | solved (see pair matrix) | solved |
 | accent | accent ramp center | center, chroma ×0.9 |
-| accent-hover | one accent step toward surface contrast (darker in light mode, lighter in dark) | same rule |
+| accent-hover | one accent step in the direction that keeps accent-contrast readable: lighter when the accent takes dark text, darker when it takes light text (mode-based direction fails near the WCAG crossover) | same rule |
 | accent-subtle | lightest accent step blended toward surface-1, chroma ≤ 0.06 | darkest accent step blended toward surface-1 |
 | ring | accent, L-adjusted until ≥ 3.0 vs surface-0 and surface-1 | same |
 
@@ -119,13 +120,15 @@ Dark-mode shadows raise alpha ×1.6 (shadows need more presence on dark surfaces
 ### compile.ts
 
 ```ts
-compileTheme(spec: StyleSpec, constraints: DesignConstraints, locks: Record<string, string>)
+compileTheme(spec: StyleSpec, constraints: DesignConstraints = {})
   -> { roles: Record<string, string>, warnings: string[] }
+// locks ride in constraints.locked_tokens — one constraints object, no third param
 ```
 
 Orchestrates the stages. Behavior contract:
 - Never throws on a schema-valid spec. Unsatisfiable inputs (e.g., a locked surface and locked text that cannot reach the contrast floor together) produce the closest-achievable result plus a warning — never a broken page, never an exception at runtime.
-- `constraints.accent_chroma_max` caps the chroma table value before ramp generation; `constraints.contrast` overrides the per-level targets; `allowed_modes` rejects a disallowed `mode` at validation (that one *is* a zod failure, surfaced to the Designer's retry path in phase 3).
+- `constraints.accent_chroma_max` caps the chroma table value before ramp generation; `constraints.contrast` is a *floor* — `max(level target, constraint)` on text-primary and text-secondary; floors only raise targets, never lower them. `allowed_modes` rejects a disallowed `mode` at validation (that one *is* a zod failure, surfaced to the Designer's retry path in phase 3).
+- A missing role token after assembly throws a plain `Error` (compiler invariant violation — a bug signal, distinct from `InvalidStyleSpecError`); empty locked values are skipped with a warning rather than blanking a token.
 - All emitted color values are lowercase 6-digit hex, post gamut-mapping.
 
 ## Contrast pair matrix
@@ -140,6 +143,9 @@ Targets by `contrast` level: soft → 4.5 body (3.0 permitted only for tokens ex
 | accent-contrast vs accent, accent-hover | ≥ 4.5 |
 | text-disabled vs surface-1 | ≥ 3.0 (quality floor; WCAG exempts disabled UI, we don't ship illegible) |
 | ring vs surface-0, surface-1 | ≥ 3.0 (WCAG 2.2 focus appearance) |
+| accent vs surface-0 | ≥ 3.0 (WCAG 1.4.11 non-text contrast: the accent must read as a UI color on the page background; an unlocked accent re-solves its L, a locked one warns) |
+
+Two role-assignment refinements proven during implementation: **text hierarchy** — if text-primary snaps to the same ramp step as text-secondary (zero hierarchy), primary takes the next deeper step (contrast only increases, so all pairs keep holding); and the ramp snap selects the *minimum-sufficient* passing step (lowest passing ratio = closest to the boundary), which is what keeps solved text harmonious.
 
 Border tokens are not contrast-enforced in Phase 1 (decorative); `border-strong` vs surface-1 ≥ 3.0 is emitted as a *warning* when missed, not a failure, since it affects input affordance.
 
@@ -160,7 +166,7 @@ Border tokens are not contrast-enforced in Phase 1 (decorative); `border-strong`
 
 - Types in `config/types.ts`: `ThemeSection` gains `roles?: Record<string,string>` and `styleSpec?: StyleSpec`; `slots` becomes `Record<string,string>` (CSS-var key → literal or `var()` reference). The v5 inline-style slots shape (`Record<string, Record<string,string>>`) is **not** carried into v2 — its deletion from the runtime is phase 4/5; in Phase 1 the v2 type simply doesn't admit it.
 - Zod schema in `config/schema.ts`: discriminate on `version`; v1 documents continue validating against the existing schema.
-- **Upgrade** (`config/upgrade.ts`, pure function `upgradeThemeJson(v1) -> v2`): every `--inv-*` key in v1 `theme.globals` copies to `slots` verbatim (they are slot-shaped literals like `--inv-sidebar-bg: "#1a1a2e"`); the v1 structured groups (`colors`/`fonts`/`radii`) convert to the same prefixed CSS-var names the v1 `apply-theme.ts` generated for them, also into `slots`; `roles` starts empty and is populated by the first compile. `version` becomes 2. Old inline-style slot objects are dropped with a warning (they were never user-durable). Loader (`parser.ts` / theme load path) accepts both versions and upgrades v1 in memory.
+- **Upgrade** (`config/upgrade.ts`, pure function `upgradeThemeJson(v1) -> v2`): every `--inv-*` key in v1 `theme.globals` copies to `slots` verbatim (they are slot-shaped literals like `--inv-sidebar-bg: "#1a1a2e"`); the v1 structured groups (`colors`/`fonts`/`radii`) convert to the same prefixed CSS-var names the v1 `apply-theme.ts` generated for them, also into `slots`; `roles` starts empty and is populated by the first compile. `version` becomes 2. Old inline-style slot objects are dropped with a warning (they were never user-durable). `upgradeThemeJson` is a pure exported function in Phase 1; wiring it into the loader/provider happens with the render-driven runtime phase — until then v1 remains the runtime's in-memory shape.
 
 ## Registries (starter set)
 
@@ -176,11 +182,11 @@ All demo-independent, colocated `*.test.ts`, vitest:
 
 1. **Golden snapshots** — all 10 packs compile to checked-in token maps; byte-identical (CLAUDE.md determinism requirement).
 2. **Compiler invariants** (each its own test): determinism (same spec → identical output), completeness (all 22 roles present), contrast (every matrix pair meets target — recomputed with `wcagContrast` directly, independent of solver internals), gamut (every emitted hex round-trips `parse → formatHex` unchanged), locks (locked tokens byte-identical in output; dependent tokens adapt).
-3. **Spec-grid sweep** — every enum combination × 12 hues (0°–330° step 30°) × both modes compiles with zero contrast violations and zero exceptions. (~4k specs; pure functions, fast.)
+3. **Spec-grid sweep** — the full color-relevant cross (both modes × 3 chroma × 3 tint strengths × 3 contrast levels × 12 hues × 4 tints = 2,592 compiles) with zero warnings and zero contrast violations; the non-color enums are exhausted separately in the tokens table test (pure lookups). Together: every enum combination.
 4. **Edge cases** — achromatic locked tokens (`h` undefined), vivid-yellow-on-white solver fallback (chroma halve → 0), `accent_chroma_max` capping, unsatisfiable lock pair → warning not throw.
 5. **theme.json v2** — zod round-trips for v1 and v2 fixtures; `upgradeThemeJson` golden fixtures (v5 scanner-shaped globals in → v2 slots out); loader accepts both.
 6. **Registry validation tests** — every pack passes the StyleSpec schema; every pack's `fontPairing` id exists; pack distinctness rule enforced as a test.
-7. **Contrast script** — `node .claude/skills/oklch-compiler/check-contrast.mjs <tokens.json>` runs against every pack's compiled output in a test (or CI step); exits nonzero on any failing pair.
+7. **Contrast script parity** — the golden matrix test mirrors every pair `.claude/skills/oklch-compiler/check-contrast.mjs` checks (including accent vs surface-0), so the gate runs on every `pnpm test`; the script itself remains the ad-hoc debugging tool (verified passing on all 10 packs).
 
 Existing 136 tests untouched and green.
 
@@ -193,7 +199,7 @@ Existing 136 tests untouched and green.
 | Contrast unreachable at hue/chroma | solver degrades chroma (½, then 0), succeeds |
 | Unsatisfiable lock combination | closest-achievable output + warning, no throw |
 | Out-of-gamut anything | clamped before hex emission, silent (by design) |
-| Unknown `fontPairing` id | compile error at validation (registry membership is part of the schema refinement) |
+| Unknown `fontPairing` id | compile error at validation — checked in `compileTheme` (same `InvalidStyleSpecError` surface; the Designer's structured-output schema gets its own enum constraint in phase 3) |
 
 ## Dependencies
 
