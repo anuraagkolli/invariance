@@ -28,6 +28,10 @@ describe('compiler sweep: every color combination compiles accessibly', () => {
                 for (const s of ['--inv-surface-0', '--inv-surface-1', '--inv-surface-2'])
                   expect(wcagContrast(roles['--inv-text-primary'], roles[s])).toBeGreaterThanOrEqual(target)
                 expect(wcagContrast(roles['--inv-accent-contrast'], roles['--inv-accent'])).toBeGreaterThanOrEqual(4.5)
+                expect(
+                  wcagContrast(roles['--inv-accent'], roles['--inv-surface-0']),
+                  `${accentHue}/${neutralTint}: accent vs surface-0 non-text contrast`,
+                ).toBeGreaterThanOrEqual(3.0)
               }
             }
           })

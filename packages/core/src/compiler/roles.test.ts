@@ -79,6 +79,16 @@ describe('assignColorRoles', () => {
     expect(warnings.some((w) => w.includes('locked text-secondary'))).toBe(true)
   })
 
+  it('text-primary is darker (more contrast) than text-secondary', () => {
+    const { roles } = assignColorRoles(base, {})
+    // Primary must not equal secondary: hierarchy beats minimum-sufficiency.
+    expect(roles['--inv-text-primary']).not.toBe(roles['--inv-text-secondary'])
+    // Primary must have higher contrast against at least one shared surface than secondary.
+    const s0 = roles['--inv-surface-0']
+    expect(wcagContrast(roles['--inv-text-primary'], s0))
+      .toBeGreaterThan(wcagContrast(roles['--inv-text-secondary'], s0))
+  })
+
   it('is deterministic', () => {
     expect(assignColorRoles(base, {})).toEqual(assignColorRoles(base, {}))
   })

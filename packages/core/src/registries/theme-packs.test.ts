@@ -24,6 +24,19 @@ describe('THEME_PACKS', () => {
     }
   })
 
+  it('every pack has 2-4 tags', () => {
+    for (const pack of THEME_PACKS) {
+      expect(pack.tags.length, `${pack.id} tags`).toBeGreaterThanOrEqual(2)
+      expect(pack.tags.length, `${pack.id} tags`).toBeLessThanOrEqual(4)
+    }
+  })
+
+  it('tags are unique per pack (no duplicates within a pack)', () => {
+    for (const pack of THEME_PACKS) {
+      expect(new Set(pack.tags).size, `${pack.id} has duplicate tags`).toBe(pack.tags.length)
+    }
+  })
+
   it('distinctness: no two packs share fontPairing AND hue within 30 degrees', () => {
     for (const a of THEME_PACKS) for (const b of THEME_PACKS) {
       if (a.id >= b.id) continue

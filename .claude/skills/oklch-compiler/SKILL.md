@@ -15,7 +15,7 @@ The Theme Compiler is the quality guarantee of this product. It must be pure,
 deterministic, and unable to emit an inaccessible or incoherent theme. The LLM
 (Designer) picks intent; this code picks every actual value. If you find
 yourself wanting the Designer to emit a hex value, stop: that is an
-architecture violation (DESIGN_v6 section 1.2).
+architecture violation (DESIGN.md section 1.2).
 
 ## culori v4 API (verified against 4.0.2, do not guess beyond this)
 
@@ -68,8 +68,8 @@ solveTextL(surfaceHex, hue, chroma, targetRatio):
   binary search l in [0,1], 24 iterations
   candidate = clampChroma({ mode:'oklch', l, c: chroma, h: hue }, 'oklch')
   ratio = wcagContrast(formatHex(candidate), surfaceHex)
-  search direction: if surface is light (wcag luminance > 0.5), lower l raises
-  ratio; if dark, higher l raises it. Compute surface luminance once, branch once.
+  search direction: dark text iff wcagContrast(black, surface) >= wcagContrast(white, surface).
+  Do NOT use a luminance>0.5 threshold: the black/white crossover is at luminance ~0.179.
   return the first candidate meeting targetRatio with minimal distance from
   the ramp's nearest step (keeps solved text colors harmonious with the ramp).
 ```
@@ -99,10 +99,10 @@ dependent token moves.
 
 ## Workflow
 
-1. Before editing, read DESIGN_v6.md sections 1.4-1.5 and the golden snapshot
+1. Before editing, read DESIGN.md sections 1.4-1.5 and the golden snapshot
    tests in compiler/*.test.ts.
 2. After any change, run the unit tests, then:
-   `node .claude/skills/oklch-compiler/scripts/check-contrast.mjs <tokens.json>`
+   `node check-contrast.mjs <tokens.json>`
    which prints every pair's ratio and exits nonzero on a failure. A compiler
    change is not done until this passes on all theme packs.
 3. If output "looks wrong" in a screenshot: check gamut clamping first, hue

@@ -128,6 +128,67 @@ export function assignColorRoles(
     warnings.push(`locked text-secondary fails ${secondaryTarget} against surface-1`)
   }
 
+  // Hierarchy: text-primary must be visually distinct from (more contrast than) text-secondary.
+  // Minimum-sufficiency snapping can land both on the same ramp step — a designer would
+  // flinch; hierarchy beats minimum-sufficiency for primary text.
+  // Only adjust when NEITHER is locked; locked tokens are invariant.
+  if (!lock('--inv-text-primary') && !lock('--inv-text-secondary')) {
+    if (roles['--inv-text-primary'] === roles['--inv-text-secondary']) {
+      // rampLsArr mirrors neutralRamp output order.
+      // Light mode: descending L [0.98..0.15] — higher index = lower L = more contrast vs light surfaces.
+      // Dark mode: ascending L [0.15..0.98] — higher index = higher L = more contrast vs dark surfaces.
+      // In BOTH modes: higher ramp index = more contrast against the page background.
+      const rampLsArr = neutrals.map((n) => n.l)
+
+      // Map a hex color to its nearest ramp index by lightness proximity.
+      const closestIdx = (hex: string): number => {
+        const parsed = toOklch(hex)
+        if (!parsed) return -1
+        const p = parsed as { l?: number }
+        if (typeof p.l !== 'number') return -1
+        const lVal = p.l
+        return rampLsArr.reduce((best, l, i) =>
+          Math.abs(l - lVal) < Math.abs((rampLsArr[best] ?? 0) - lVal) ? i : best, 0)
+      }
+
+      // Fallback: try moving secondary one step shallower (lower index = less contrast = closer to surface).
+      const tryMoveSecondaryShallower = (): void => {
+        const secIdx = closestIdx(roles['--inv-text-secondary'] ?? '')
+        const prevSecL = rampLsArr[secIdx - 1]
+        if (secIdx > 0 && prevSecL !== undefined) {
+          const secCandidate = toHex({ mode: 'oklch', l: prevSecL, c: textChroma, h: spec.neutralTint })
+          // Only accept if secondary still meets its 4.5 floor on both common surfaces.
+          if (wcagContrast(secCandidate, s0) >= secondaryTarget && wcagContrast(secCandidate, s1) >= secondaryTarget) {
+            roles['--inv-text-secondary'] = secCandidate
+          } else {
+            warnings.push('text hierarchy collapsed: primary equals secondary')
+          }
+        } else {
+          warnings.push('text hierarchy collapsed: primary equals secondary')
+        }
+      }
+
+      const primaryIdx = closestIdx(roles['--inv-text-primary'])
+      // Push primary one step deeper (higher index = more contrast in both modes).
+      const nextPrimaryL = rampLsArr[primaryIdx + 1]
+
+      if (primaryIdx >= 0 && nextPrimaryL !== undefined) {
+        const candidate = toHex({ mode: 'oklch', l: nextPrimaryL, c: textChroma, h: spec.neutralTint })
+        // Going deeper only increases contrast vs every surface — verify the matrix assertion holds.
+        const allPass = [s0, s1, s2].every((s) => wcagContrast(candidate, s) >= primaryTarget)
+        if (allPass) {
+          roles['--inv-text-primary'] = candidate
+        } else {
+          // Step fails a surface pair (unlikely with standard surfaces) — try secondary instead.
+          tryMoveSecondaryShallower()
+        }
+      } else {
+        // Primary is already at the deepest ramp step; move secondary shallower.
+        tryMoveSecondaryShallower()
+      }
+    }
+  }
+
   // Disabled text: intentionally below the body-text floor — 3.0 large-text threshold
   const disabled = solveText(s1, { hue: spec.neutralTint, chroma: textChroma, target: 3.0, rampLs })
   roles['--inv-text-disabled'] = lock('--inv-text-disabled') ?? disabled.hex
@@ -163,7 +224,28 @@ export function assignColorRoles(
   const a3 = at(accents, 3)
   const a4 = at(accents, 4)
 
-  roles['--inv-accent'] = lockedAccent ?? toHex(a2)
+  if (lockedAccent) {
+    roles['--inv-accent'] = lockedAccent
+    // LOCKED accent below 3.0 is flagged but left untouched: the developer locked
+    // this value intentionally; only they can fix it (WCAG 1.4.11 non-text contrast).
+    if (wcagContrast(lockedAccent, s0) < 3.0) {
+      warnings.push('locked accent below 3.0 against surface-0 (non-text contrast)')
+    }
+  } else {
+    let accentCandidate = toHex(a2)
+    // Non-text contrast (WCAG 1.4.11): accent must read as a UI element on the page
+    // background. Required ratio is 3.0 (the large-text / non-text floor).
+    // Hue and chroma carry the identity; only lightness moves.
+    if (wcagContrast(accentCandidate, s0) < 3.0) {
+      const fixed = solveText(s0, { hue: seed?.h ?? spec.accentHue, chroma: a2.c, target: 3.0 })
+      if (fixed.met) {
+        accentCandidate = fixed.hex
+      }
+      // If solveText couldn't reach 3.0 (extremely rare — vivid accent on vivid surface)
+      // we keep the best available value; the sweep will catch it as a warning.
+    }
+    roles['--inv-accent'] = accentCandidate
+  }
 
   // Pick the hover step that stays on the same side of the contrast crossover as
   // the resting accent so that accent-contrast (a single color) can satisfy both.

@@ -26,6 +26,7 @@ describe('contrast pair matrix holds for every pack', () => {
         ['--inv-text-primary', '--inv-surface-2', target],
         ['--inv-text-secondary', '--inv-surface-0', 4.5],
         ['--inv-text-secondary', '--inv-surface-1', 4.5],
+        ['--inv-accent', '--inv-surface-0', 3.0],
         ['--inv-text-primary', '--inv-accent-subtle', 4.5],
         ['--inv-accent-contrast', '--inv-accent', 4.5],
         ['--inv-accent-contrast', '--inv-accent-hover', 4.5],
