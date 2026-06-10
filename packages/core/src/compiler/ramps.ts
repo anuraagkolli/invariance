@@ -16,12 +16,10 @@ export const L_SCALE = [0.98, 0.955, 0.92, 0.86, 0.78, 0.68, 0.57, 0.46, 0.36, 0
 export const ACCENT_L_SCALE = [0.85, 0.75, 0.65, 0.55, 0.45] as const
 
 // Warm and saturated hues go muddy at low lightness unless chroma backs off.
-// These factors apply to the darkest three indices in light mode (steps 8, 9, 10).
+// These factors target L_SCALE indices 8-10 (the lowest-lightness steps) and
+// apply to BOTH modes: they sit at the END of the light ramp and (after reversal)
+// at the START of the dark ramp.
 const DARK_STEP_CHROMA_FACTORS: Record<number, number> = { 8: 0.6, 9: 0.4, 10: 0.25 }
-
-// Clamp l to a safe interior range: avoids near-black / near-white
-// artifacts when a seed pushes the ramp toward the extremes.
-const clampL = (l: number): number => Math.min(0.95, Math.max(0.2, l))
 
 export function toHex(color: OklchColor): string {
   // formatHex silently clips out-of-gamut channels — always gamut-map first.
@@ -62,8 +60,22 @@ export function accentRamp(
   const h = seed?.h ?? spec.accentHue
   const rawChroma = seed?.c ?? ACCENT_CHROMA[spec.accentChroma]
   const c = Math.min(rawChroma, chromaMax ?? Infinity) * darkFactor
+  // Scale offsets to the available headroom so steps stay distinct near the
+  // clamp boundaries. For seed.l in [0.4, 0.75] this is identical to ±0.1/±0.2.
+  // When seed.l is very close to 0.2 or 0.95 the headroom reaches 0 and the
+  // outer steps legitimately merge — that is correct and expected.
   const ls: readonly number[] = seed
-    ? [seed.l + 0.2, seed.l + 0.1, seed.l, seed.l - 0.1, seed.l - 0.2].map(clampL)
+    ? (() => {
+        const up = Math.min(0.1, (0.95 - seed.l) / 2)
+        const down = Math.min(0.1, (seed.l - 0.2) / 2)
+        return [
+          seed.l + 2 * up,
+          seed.l + up,
+          seed.l,
+          seed.l - down,
+          seed.l - 2 * down,
+        ]
+      })()
     : [...ACCENT_L_SCALE]
   return ls.map((l): OklchColor => {
     // Normalise h after clamping for the same reason as neutralRamp.

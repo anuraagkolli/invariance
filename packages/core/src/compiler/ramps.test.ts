@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { wcagContrast } from 'culori'
+import { wcagContrast, clampChroma } from 'culori'
 import { L_SCALE, ACCENT_L_SCALE, neutralRamp, accentRamp, toHex } from './ramps'
 
 describe('L_SCALE', () => {
@@ -71,6 +71,28 @@ describe('accentRamp', () => {
     expect(ramp[2].h).toBe(12)
     expect(ramp[0].l).toBeCloseTo(0.82, 2) // +0.20, clamped to [0.20, 0.95]
     expect(ramp[4].l).toBeCloseTo(0.42, 2) // -0.20
+  })
+
+  it('keeps steps distinct for a light seed (headroom-scaled offsets)', () => {
+    const ramp = accentRamp({ mode: 'light', accentHue: 80, accentChroma: 'muted' }, { l: 0.9, c: 0.08, h: 80 })
+    const ls = ramp.map((s) => s.l)
+    for (let i = 1; i < ls.length; i++) expect(ls[i]).toBeLessThan(ls[i - 1])
+    expect(Math.max(...ls)).toBeLessThanOrEqual(0.95)
+  })
+
+  it('keeps steps distinct for a dark seed', () => {
+    const ramp = accentRamp({ mode: 'light', accentHue: 280, accentChroma: 'muted' }, { l: 0.25, c: 0.05, h: 280 })
+    const ls = ramp.map((s) => s.l)
+    for (let i = 1; i < ls.length; i++) expect(ls[i]).toBeLessThan(ls[i - 1])
+    expect(Math.min(...ls)).toBeGreaterThanOrEqual(0.2)
+  })
+
+  it('applies the dark factor before gamut clamping (out-of-gamut hue)', () => {
+    // at hue 260 vivid, c=0.22 exceeds the sRGB boundary at l=0.65:
+    // correct order: clamp(0.22 * 0.9); wrong order would give clamp(0.22) * 0.9
+    const dark = accentRamp({ mode: 'dark', accentHue: 260, accentChroma: 'vivid' })
+    const expected = clampChroma({ mode: 'oklch', l: 0.65, c: 0.22 * 0.9, h: 260 }, 'oklch')
+    expect(dark[2].c).toBeCloseTo(expected.c, 6)
   })
 })
 
