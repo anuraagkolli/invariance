@@ -1,0 +1,301 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`golden token snapshots > corporate-trust compiles to a stable token map 1`] = `
+{
+  "roles": {
+    "--inv-accent": "#2696e4",
+    "--inv-accent-contrast": "#212b33",
+    "--inv-accent-hover": "#59b6ff",
+    "--inv-accent-subtle": "#c4e3ff",
+    "--inv-border": "#acb9c3",
+    "--inv-border-strong": "#6d7982",
+    "--inv-border-width": "2px",
+    "--inv-density-unit": "4px",
+    "--inv-font-body": "'Inter', system-ui, sans-serif",
+    "--inv-font-display": "'Archivo', system-ui, sans-serif",
+    "--inv-font-mono": "'JetBrains Mono', ui-monospace, 'SF Mono', monospace",
+    "--inv-radius-base": "4px",
+    "--inv-radius-lg": "8px",
+    "--inv-ring": "#1d90de",
+    "--inv-shadow-1": "0 1px 2px rgb(0 0 0 / 0.08)",
+    "--inv-shadow-2": "0 4px 12px rgb(0 0 0 / 0.10)",
+    "--inv-surface-0": "#f2faff",
+    "--inv-surface-1": "#e5f2fd",
+    "--inv-surface-2": "#d9e7f1",
+    "--inv-text-disabled": "#6d7982",
+    "--inv-text-primary": "#4e5a62",
+    "--inv-text-secondary": "#4e5a62",
+  },
+  "warnings": [],
+}
+`;
+
+exports[`golden token snapshots > editorial compiles to a stable token map 1`] = `
+{
+  "roles": {
+    "--inv-accent": "#bb7b7f",
+    "--inv-accent-contrast": "#2d241c",
+    "--inv-accent-hover": "#dc999e",
+    "--inv-accent-subtle": "#ffd2d4",
+    "--inv-border": "#c0b5aa",
+    "--inv-border-strong": "#7f766b",
+    "--inv-border-width": "1px",
+    "--inv-density-unit": "5px",
+    "--inv-font-body": "'Source Serif 4', Georgia, serif",
+    "--inv-font-display": "'Playfair Display', Georgia, serif",
+    "--inv-font-mono": "'JetBrains Mono', ui-monospace, 'SF Mono', monospace",
+    "--inv-radius-base": "0px",
+    "--inv-radius-lg": "0px",
+    "--inv-ring": "#b9797e",
+    "--inv-shadow-1": "none",
+    "--inv-shadow-2": "none",
+    "--inv-surface-0": "#fff7ee",
+    "--inv-surface-1": "#f9eee2",
+    "--inv-surface-2": "#eee3d7",
+    "--inv-text-disabled": "#7f766b",
+    "--inv-text-primary": "#5f564c",
+    "--inv-text-secondary": "#5f564c",
+  },
+  "warnings": [],
+}
+`;
+
+exports[`golden token snapshots > glass-dark compiles to a stable token map 1`] = `
+{
+  "roles": {
+    "--inv-accent": "#00a0bb",
+    "--inv-accent-contrast": "#232d35",
+    "--inv-accent-hover": "#00c2e2",
+    "--inv-accent-subtle": "#04424e",
+    "--inv-border": "#6d7982",
+    "--inv-border-strong": "#acb9c3",
+    "--inv-border-width": "1px",
+    "--inv-density-unit": "4px",
+    "--inv-font-body": "'Inter', system-ui, sans-serif",
+    "--inv-font-display": "'Space Grotesk', system-ui, sans-serif",
+    "--inv-font-mono": "'JetBrains Mono', ui-monospace, 'SF Mono', monospace",
+    "--inv-radius-base": "12px",
+    "--inv-radius-lg": "20px",
+    "--inv-ring": "#007689",
+    "--inv-shadow-1": "0 2px 8px rgb(0 0 0 / 0.24)",
+    "--inv-shadow-2": "0 12px 32px rgb(0 0 0 / 0.35)",
+    "--inv-surface-0": "#090b0d",
+    "--inv-surface-1": "#1e2225",
+    "--inv-surface-2": "#383e43",
+    "--inv-text-disabled": "#6d7982",
+    "--inv-text-primary": "#acb9c3",
+    "--inv-text-secondary": "#8e9aa4",
+  },
+  "warnings": [],
+}
+`;
+
+exports[`golden token snapshots > mono compiles to a stable token map 1`] = `
+{
+  "roles": {
+    "--inv-accent": "#6993be",
+    "--inv-accent-contrast": "#322629",
+    "--inv-accent-hover": "#87b2df",
+    "--inv-accent-subtle": "#c7e2ff",
+    "--inv-border": "#b7b7b7",
+    "--inv-border-strong": "#777777",
+    "--inv-border-width": "1px",
+    "--inv-density-unit": "3px",
+    "--inv-font-body": "'Inter', system-ui, sans-serif",
+    "--inv-font-display": "'JetBrains Mono', ui-monospace, monospace",
+    "--inv-font-mono": "'JetBrains Mono', ui-monospace, monospace",
+    "--inv-radius-base": "0px",
+    "--inv-radius-lg": "0px",
+    "--inv-ring": "#658eba",
+    "--inv-shadow-1": "none",
+    "--inv-shadow-2": "none",
+    "--inv-surface-0": "#f8f8f8",
+    "--inv-surface-1": "#f0f0f0",
+    "--inv-surface-2": "#e4e4e4",
+    "--inv-text-disabled": "#777777",
+    "--inv-text-primary": "#3d3d3d",
+    "--inv-text-secondary": "#585858",
+  },
+  "warnings": [],
+}
+`;
+
+exports[`golden token snapshots > neobrutalist compiles to a stable token map 1`] = `
+{
+  "roles": {
+    "--inv-accent": "#e942a2",
+    "--inv-accent-contrast": "#291c20",
+    "--inv-accent-hover": "#ff78be",
+    "--inv-accent-subtle": "#ffcfe4",
+    "--inv-border": "#b7b7b7",
+    "--inv-border-strong": "#777777",
+    "--inv-border-width": "3px",
+    "--inv-density-unit": "4px",
+    "--inv-font-body": "'Archivo', system-ui, sans-serif",
+    "--inv-font-display": "'Archivo Black', system-ui, sans-serif",
+    "--inv-font-mono": "'JetBrains Mono', ui-monospace, 'SF Mono', monospace",
+    "--inv-radius-base": "0px",
+    "--inv-radius-lg": "0px",
+    "--inv-ring": "#ee48a6",
+    "--inv-shadow-1": "4px 4px 0 #000000",
+    "--inv-shadow-2": "6px 6px 0 #000000",
+    "--inv-surface-0": "#f8f8f8",
+    "--inv-surface-1": "#f0f0f0",
+    "--inv-surface-2": "#e4e4e4",
+    "--inv-text-disabled": "#777777",
+    "--inv-text-primary": "#3d3d3d",
+    "--inv-text-secondary": "#585858",
+  },
+  "warnings": [],
+}
+`;
+
+exports[`golden token snapshots > ocean compiles to a stable token map 1`] = `
+{
+  "roles": {
+    "--inv-accent": "#00a4a4",
+    "--inv-accent-contrast": "#212f32",
+    "--inv-accent-hover": "#00c7c7",
+    "--inv-accent-subtle": "#b1eceb",
+    "--inv-border": "#aabbbe",
+    "--inv-border-strong": "#6a7b7e",
+    "--inv-border-width": "1px",
+    "--inv-density-unit": "5px",
+    "--inv-font-body": "'Nunito', system-ui, sans-serif",
+    "--inv-font-display": "'Baloo 2', system-ui, sans-serif",
+    "--inv-font-mono": "'JetBrains Mono', ui-monospace, 'SF Mono', monospace",
+    "--inv-radius-base": "12px",
+    "--inv-radius-lg": "20px",
+    "--inv-ring": "#009b9c",
+    "--inv-shadow-1": "0 1px 2px rgb(0 0 0 / 0.08)",
+    "--inv-shadow-2": "0 4px 12px rgb(0 0 0 / 0.10)",
+    "--inv-surface-0": "#ecfcff",
+    "--inv-surface-1": "#e2f4f8",
+    "--inv-surface-2": "#d6e9ec",
+    "--inv-text-disabled": "#6a7b7e",
+    "--inv-text-primary": "#4c5b5e",
+    "--inv-text-secondary": "#4c5b5e",
+  },
+  "warnings": [],
+}
+`;
+
+exports[`golden token snapshots > retro-arcade compiles to a stable token map 1`] = `
+{
+  "roles": {
+    "--inv-accent": "#d76f00",
+    "--inv-accent-contrast": "#23242f",
+    "--inv-accent-hover": "#ff8b26",
+    "--inv-accent-subtle": "#52311a",
+    "--inv-border": "#757683",
+    "--inv-border-strong": "#b4b6c4",
+    "--inv-border-width": "3px",
+    "--inv-density-unit": "3px",
+    "--inv-font-body": "'Space Mono', monospace",
+    "--inv-font-display": "'VT323', monospace",
+    "--inv-font-mono": "'Space Mono', monospace",
+    "--inv-radius-base": "0px",
+    "--inv-radius-lg": "0px",
+    "--inv-ring": "#a75500",
+    "--inv-shadow-1": "4px 4px 0 #000000",
+    "--inv-shadow-2": "6px 6px 0 #000000",
+    "--inv-surface-0": "#0b0b0d",
+    "--inv-surface-1": "#212125",
+    "--inv-surface-2": "#3c3d43",
+    "--inv-text-disabled": "#757683",
+    "--inv-text-primary": "#b4b6c4",
+    "--inv-text-secondary": "#9597a5",
+  },
+  "warnings": [],
+}
+`;
+
+exports[`golden token snapshots > soft-pastel compiles to a stable token map 1`] = `
+{
+  "roles": {
+    "--inv-accent": "#ab7da7",
+    "--inv-accent-contrast": "#2c232b",
+    "--inv-accent-hover": "#cb9cc6",
+    "--inv-accent-subtle": "#f7d1f2",
+    "--inv-border": "#bfb3be",
+    "--inv-border-strong": "#7f737d",
+    "--inv-border-width": "1px",
+    "--inv-density-unit": "5px",
+    "--inv-font-body": "'Mulish', system-ui, sans-serif",
+    "--inv-font-display": "'Quicksand', system-ui, sans-serif",
+    "--inv-font-mono": "'JetBrains Mono', ui-monospace, 'SF Mono', monospace",
+    "--inv-radius-base": "12px",
+    "--inv-radius-lg": "20px",
+    "--inv-ring": "#a97ca4",
+    "--inv-shadow-1": "0 1px 2px rgb(0 0 0 / 0.08)",
+    "--inv-shadow-2": "0 4px 12px rgb(0 0 0 / 0.10)",
+    "--inv-surface-0": "#fff5fe",
+    "--inv-surface-1": "#f8ecf7",
+    "--inv-surface-2": "#ede0eb",
+    "--inv-text-disabled": "#7f737d",
+    "--inv-text-primary": "#5f545d",
+    "--inv-text-secondary": "#5f545d",
+  },
+  "warnings": [],
+}
+`;
+
+exports[`golden token snapshots > sunset compiles to a stable token map 1`] = `
+{
+  "roles": {
+    "--inv-accent": "#f04f4d",
+    "--inv-accent-contrast": "#24202b",
+    "--inv-accent-hover": "#ff847d",
+    "--inv-accent-subtle": "#562d2a",
+    "--inv-border": "#797582",
+    "--inv-border-strong": "#b9b5c3",
+    "--inv-border-width": "2px",
+    "--inv-density-unit": "4px",
+    "--inv-font-body": "'Roboto', system-ui, sans-serif",
+    "--inv-font-display": "'Oswald', system-ui, sans-serif",
+    "--inv-font-mono": "'JetBrains Mono', ui-monospace, 'SF Mono', monospace",
+    "--inv-radius-base": "0px",
+    "--inv-radius-lg": "0px",
+    "--inv-ring": "#cd2930",
+    "--inv-shadow-1": "0 2px 8px rgb(0 0 0 / 0.24)",
+    "--inv-shadow-2": "0 12px 32px rgb(0 0 0 / 0.35)",
+    "--inv-surface-0": "#0b0b0d",
+    "--inv-surface-1": "#222125",
+    "--inv-surface-2": "#3e3c43",
+    "--inv-text-disabled": "#797582",
+    "--inv-text-primary": "#b9b5c3",
+    "--inv-text-secondary": "#9a96a3",
+  },
+  "warnings": [],
+}
+`;
+
+exports[`golden token snapshots > terminal-green compiles to a stable token map 1`] = `
+{
+  "roles": {
+    "--inv-accent": "#16ac34",
+    "--inv-accent-contrast": "#283028",
+    "--inv-accent-hover": "#47cd56",
+    "--inv-accent-subtle": "#254326",
+    "--inv-border": "#707b70",
+    "--inv-border-strong": "#b0bbb0",
+    "--inv-border-width": "1px",
+    "--inv-density-unit": "3px",
+    "--inv-font-body": "'IBM Plex Sans', system-ui, sans-serif",
+    "--inv-font-display": "'IBM Plex Mono', ui-monospace, monospace",
+    "--inv-font-mono": "'IBM Plex Mono', ui-monospace, monospace",
+    "--inv-radius-base": "0px",
+    "--inv-radius-lg": "0px",
+    "--inv-ring": "#007e1f",
+    "--inv-shadow-1": "none",
+    "--inv-shadow-2": "none",
+    "--inv-surface-0": "#0a0c0a",
+    "--inv-surface-1": "#1f231f",
+    "--inv-surface-2": "#393f39",
+    "--inv-text-disabled": "#707b70",
+    "--inv-text-primary": "#c9d5c9",
+    "--inv-text-secondary": "#919c91",
+  },
+  "warnings": [],
+}
+`;
