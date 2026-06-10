@@ -62,6 +62,10 @@ export function assignColorRoles(
   /** Exists so compileTheme can enforce DesignConstraints.accent_chroma_max;
    *  real coverage lands with compileTheme's tests. */
   accentChromaMax?: number,
+  /** Invariant floors only raise targets, never lower them.
+   *  A developer floor of e.g. 7.0 overrides the spec-level target wherever
+   *  body text is involved (text-primary, text-secondary). */
+  contrastFloor?: number,
 ): ColorRoleResult {
   const warnings: string[] = []
   const roles: Record<string, string> = {}
@@ -82,7 +86,8 @@ export function assignColorRoles(
 
   const textChroma = NEUTRAL_TINT_CHROMA[spec.neutralTintStrength]
   const rampLs = neutrals.map((n) => n.l)
-  const primaryTarget = CONTRAST_TARGETS[spec.contrast]
+  // Floor raises the spec-level target; it never lowers it (invariant constraint).
+  const primaryTarget = Math.max(CONTRAST_TARGETS[spec.contrast], contrastFloor ?? 0)
 
   // text-primary must read on all three surfaces; surface-2 binds in both modes
   // (darkest surface in light mode, lightest in dark mode). Locks can reorder
@@ -113,12 +118,14 @@ export function assignColorRoles(
     warnings.push('locked text-primary fails the contrast target against surface-1')
   }
 
-  // Secondary text: 4.5 on surface-1 (the most common content background)
-  const secondary = solveText(s1, { hue: spec.neutralTint, chroma: textChroma, target: 4.5, rampLs })
-  if (!secondary.met) warnings.push('text-secondary could not reach 4.5')
+  // Secondary text: 4.5 on surface-1 (the most common content background).
+  // A developer floor of e.g. 7.0 raises this target too — body text is subject to the floor.
+  const secondaryTarget = Math.max(4.5, contrastFloor ?? 0)
+  const secondary = solveText(s1, { hue: spec.neutralTint, chroma: textChroma, target: secondaryTarget, rampLs })
+  if (!secondary.met) warnings.push(`text-secondary could not reach ${secondaryTarget}`)
   roles['--inv-text-secondary'] = lock('--inv-text-secondary') ?? secondary.hex
-  if (lock('--inv-text-secondary') && wcagContrast(roles['--inv-text-secondary'], s1) < 4.5) {
-    warnings.push('locked text-secondary fails 4.5 against surface-1')
+  if (lock('--inv-text-secondary') && wcagContrast(roles['--inv-text-secondary'], s1) < secondaryTarget) {
+    warnings.push(`locked text-secondary fails ${secondaryTarget} against surface-1`)
   }
 
   // Disabled text: intentionally below the body-text floor — 3.0 large-text threshold
@@ -137,7 +144,9 @@ export function assignColorRoles(
     if (parsed) {
       const p = parsed as { l?: number; c?: number; h?: number }
       if (typeof p.l === 'number') {
-        seed = { l: p.l, c: p.c ?? 0, h: p.h ?? 0 }
+        // An achromatic lock (hue === undefined) carries no hue information;
+        // derived steps follow the design intent instead of defaulting to red.
+        seed = { l: p.l, c: p.c ?? 0, h: p.h ?? spec.accentHue }
       } else {
         warnings.push(`locked accent ${lockedAccent} is not parseable; ignoring seed`)
       }

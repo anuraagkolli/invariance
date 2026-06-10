@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { converter, formatHex } from 'culori'
+import { converter, formatHex, wcagContrast } from 'culori'
 import { compileTheme, InvalidStyleSpecError } from './compile'
 import { ROLE_TOKENS } from './roles'
 import { THEME_PACKS } from '../registries/theme-packs'
@@ -70,8 +70,36 @@ describe('compileTheme', () => {
   it('never throws for any pack (the whole gauntlet compiles)', () => {
     for (const pack of THEME_PACKS) {
       const { roles, warnings } = compileTheme(pack.spec)
-      expect(Object.keys(roles).length).toBeGreaterThanOrEqual(22)
+      expect(Object.keys(roles).length, pack.id).toBeGreaterThanOrEqual(22)
       expect(warnings, `${pack.id}: ${warnings.join('; ')}`).toEqual([])
     }
+  })
+
+  it('enforces a developer contrast floor above the spec level', () => {
+    const { roles, warnings } = compileTheme(spec, { contrast: 7.0 })
+    expect(warnings).toEqual([])
+    for (const s of ['--inv-surface-0', '--inv-surface-1', '--inv-surface-2'])
+      expect(wcagContrast(roles['--inv-text-primary'], roles[s])).toBeGreaterThanOrEqual(7.0)
+    expect(wcagContrast(roles['--inv-text-secondary'], roles['--inv-surface-1'])).toBeGreaterThanOrEqual(7.0)
+  })
+
+  it('ignores empty locked values with a warning', () => {
+    const { roles, warnings } = compileTheme(spec, { locked_tokens: { '--inv-surface-0': '  ' } })
+    expect(roles['--inv-surface-0']).toMatch(/^#[0-9a-f]{6}$/)
+    expect(warnings.some((w) => w.includes('empty locked value'))).toBe(true)
+  })
+
+  it('achromatic locked accent: hover step follows spec hue, not red', () => {
+    // Spec hue is corporate-trust (accentHue 245 = blue). Lock accent to pure grey.
+    // The hover step should either be near hue 245 or remain achromatic (low chroma).
+    const { roles } = compileTheme(spec, { locked_tokens: { '--inv-accent': '#808080' } })
+    expect(roles['--inv-accent']).toBe('#808080')
+    const toOklch = converter('oklch')
+    const hover = toOklch(roles['--inv-accent-hover'])
+    // Accept either: hue within 245±20 degrees (spec intent), or effectively achromatic
+    // (chroma < 0.01 means hue is irrelevant).
+    const isAchromatic = !hover || (hover.c ?? 0) < 0.01
+    const isOnSpecHue = hover && !isAchromatic && Math.abs((hover.h ?? 0) - 245) <= 20
+    expect(isAchromatic || isOnSpecHue).toBe(true)
   })
 })

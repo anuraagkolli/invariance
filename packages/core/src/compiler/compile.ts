@@ -52,8 +52,21 @@ export function compileTheme(
     throw new InvalidStyleSpecError([`fontPairing '${pairing.id}' is not in the allowed registry`])
   }
 
-  const locks = constraints.locked_tokens ?? {}
-  const color = assignColorRoles(validSpec, locks, constraints.accent_chroma_max)
+  // Filter empty locked values once here so they don't seed the color ramp
+  // with meaningless input or overwrite computed values with whitespace.
+  const rawLocks = constraints.locked_tokens ?? {}
+  const warnings: string[] = []
+  const locks: Record<string, string> = {}
+  for (const [token, value] of Object.entries(rawLocks)) {
+    if (!value.trim()) {
+      warnings.push(`ignoring empty locked value for ${token}`)
+      continue
+    }
+    locks[token] = value
+  }
+
+  const color = assignColorRoles(validSpec, locks, constraints.accent_chroma_max, constraints.contrast)
+  warnings.push(...color.warnings)
 
   const roles: Record<string, string> = {
     ...color.roles,
@@ -66,9 +79,11 @@ export function compileTheme(
   // locks win over every computed value, color or not
   for (const [token, value] of Object.entries(locks)) roles[token] = value
 
-  const warnings = [...color.warnings]
+  // Missing role token = compiler invariant violated (not a user-input error — use plain Error).
   for (const token of ROLE_TOKENS) {
-    if (!roles[token]) warnings.push(`missing role token ${token}`)
+    if (roles[token] === undefined || roles[token] === '') {
+      throw new Error(`compiler invariant violated: missing role token ${token}`)
+    }
   }
 
   return { roles, warnings }
