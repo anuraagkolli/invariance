@@ -68,9 +68,15 @@ describe('assignColorRoles', () => {
     expect(wcagContrast(roles['--inv-text-secondary'], '#fdf6e3')).toBeGreaterThanOrEqual(4.5)
   })
 
-  it('accent-subtle keeps chroma low', () => {
+  it('accent-subtle emits valid hex', () => {
     const { roles } = assignColorRoles({ ...base, accentChroma: 'vivid' }, {})
     expect(roles['--inv-accent-subtle']).toMatch(/^#[0-9a-f]{6}$/)
+  })
+
+  it('warns when a locked text token fails its floor', () => {
+    const { roles, warnings } = assignColorRoles(base, { '--inv-text-secondary': '#eeeeee' })
+    expect(roles['--inv-text-secondary']).toBe('#eeeeee')
+    expect(warnings.some((w) => w.includes('locked text-secondary'))).toBe(true)
   })
 
   it('is deterministic', () => {

@@ -18,6 +18,7 @@ export const ROLE_TOKENS = [
 
 export type RoleToken = (typeof ROLE_TOKENS)[number]
 
+// Strict subset of ROLE_TOKENS: only the 13 hex-valued color tokens
 export const COLOR_ROLE_TOKENS = [
   '--inv-surface-0', '--inv-surface-1', '--inv-surface-2',
   '--inv-text-primary', '--inv-text-secondary', '--inv-text-disabled',
@@ -58,6 +59,8 @@ function parseOklch(hex: string, fallback: OklchColor): OklchColor {
 export function assignColorRoles(
   spec: StyleSpec,
   locks: Record<string, string>,
+  /** Exists so compileTheme can enforce DesignConstraints.accent_chroma_max;
+   *  real coverage lands with compileTheme's tests. */
   accentChromaMax?: number,
 ): ColorRoleResult {
   const warnings: string[] = []
@@ -88,7 +91,9 @@ export function assignColorRoles(
       const passesAll = surfaces.every((s) => wcagContrast(candidate.hex, s) >= target)
       if (candidate.met && passesAll) return { hex: candidate.hex, met: true }
     }
-    // Last resort: solve with zero chroma, no ramp snapping against the binding surface
+    // Last resort: solve with zero chroma, no ramp snapping against the binding surface.
+    // The extra fallbacks after surfaces[surfaces.length - 1] are unreachable at the only
+    // call site (surfaces is always [s2, s1, s0]) and exist only to satisfy noUncheckedIndexedAccess.
     const binding = surfaces[surfaces.length - 1] ?? surfaces[0] ?? roles['--inv-surface-2'] ?? '#ffffff'
     const fallback = solveText(binding, { hue: spec.neutralTint, chroma: 0, target })
     return { hex: fallback.hex, met: fallback.met && surfaces.every((s) => wcagContrast(fallback.hex, s) >= target) }
@@ -109,10 +114,16 @@ export function assignColorRoles(
   const secondary = solveText(s1, { hue: spec.neutralTint, chroma: textChroma, target: 4.5, rampLs })
   if (!secondary.met) warnings.push('text-secondary could not reach 4.5')
   roles['--inv-text-secondary'] = lock('--inv-text-secondary') ?? secondary.hex
+  if (lock('--inv-text-secondary') && wcagContrast(roles['--inv-text-secondary'], s1) < 4.5) {
+    warnings.push('locked text-secondary fails 4.5 against surface-1')
+  }
 
   // Disabled text: intentionally below the body-text floor — 3.0 large-text threshold
   const disabled = solveText(s1, { hue: spec.neutralTint, chroma: textChroma, target: 3.0, rampLs })
   roles['--inv-text-disabled'] = lock('--inv-text-disabled') ?? disabled.hex
+  if (lock('--inv-text-disabled') && wcagContrast(roles['--inv-text-disabled'], s1) < 3.0) {
+    warnings.push('locked text-disabled fails 3.0 against surface-1')
+  }
 
   // Accent ramp: a lock seeds the ramp so dependent steps stay related to the brand.
   // We parse the locked hex back to OKLCH to feed as the center seed.
@@ -164,7 +175,25 @@ export function assignColorRoles(
     if (wcagContrast(onHover.hex, accentHex) >= 4.5) {
       accentContrastHex = onHover.hex
     } else {
-      warnings.push('accent-contrast cannot satisfy both accent and accent-hover')
+      // Joint-failure: solveText couldn't satisfy both surfaces. Try the pure extremes
+      // (#000000 and #ffffff) — one often clears both when accent and hover share a
+      // lightness side. Prefer the candidate whose worst-case ratio is higher.
+      const extremes = ['#000000', '#ffffff'] as const
+      const valid = extremes.filter(
+        (e) => wcagContrast(e, accentHex) >= 4.5 && wcagContrast(e, hoverHex) >= 4.5,
+      )
+      if (valid.length > 0) {
+        // Pick the extreme with the higher minimum ratio across the two surfaces
+        accentContrastHex = valid.reduce((best, e) =>
+          Math.min(wcagContrast(e, accentHex), wcagContrast(e, hoverHex)) >
+          Math.min(wcagContrast(best, accentHex), wcagContrast(best, hoverHex))
+            ? e
+            : best,
+        )
+      } else {
+        // Neither extreme works; keep the accent-side solve and name the failing pair
+        warnings.push('accent-contrast cannot reach 4.5 on both accent and accent-hover; kept the accent-side solution')
+      }
     }
   }
   roles['--inv-accent-contrast'] = lock('--inv-accent-contrast') ?? accentContrastHex
