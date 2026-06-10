@@ -70,12 +70,15 @@ export function assignColorRoles(
   const lock = (token: string): string | undefined => locks[token]
 
   // Surfaces and borders come straight from ramp positions; locks override.
-  // neutralRamp returns 11 elements; indices 0-4 cover surfaces and borders.
+  // neutralRamp returns 11 elements (indices 0-10, lightest→darkest in light mode).
+  // border uses index 4 (L≈0.78) for a subtle divider.
+  // border-strong jumps to index 6 (L≈0.57) so it reaches the 3.0 WCAG advisory
+  // floor against surface-1 (L≈0.955) even when neutralTintStrength is 'none'.
   roles['--inv-surface-0'] = lock('--inv-surface-0') ?? toHex(at(neutrals, 0))
   roles['--inv-surface-1'] = lock('--inv-surface-1') ?? toHex(at(neutrals, 1))
   roles['--inv-surface-2'] = lock('--inv-surface-2') ?? toHex(at(neutrals, 2))
-  roles['--inv-border'] = lock('--inv-border') ?? toHex(at(neutrals, 3))
-  roles['--inv-border-strong'] = lock('--inv-border-strong') ?? toHex(at(neutrals, 4))
+  roles['--inv-border'] = lock('--inv-border') ?? toHex(at(neutrals, 4))
+  roles['--inv-border-strong'] = lock('--inv-border-strong') ?? toHex(at(neutrals, 6))
 
   const textChroma = NEUTRAL_TINT_CHROMA[spec.neutralTintStrength]
   const rampLs = neutrals.map((n) => n.l)
