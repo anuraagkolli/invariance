@@ -19,6 +19,7 @@ describe('culori API assumptions', () => {
     const clamped = clampChroma({ mode: 'oklch', l: 0.95, c: 0.3, h: 110 }, 'oklch')
     expect(clamped.c).toBeLessThan(0.3)
     expect(clamped.l).toBeCloseTo(0.95, 1)
+    expect(clamped.h).toBeCloseTo(110, 5)
   })
 
   it('wcagContrast matches known values (white/black = 21)', () => {
@@ -33,6 +34,6 @@ describe('culori API assumptions', () => {
   it('achromatic colors may have undefined hue', () => {
     const toOklch = converter('oklch')
     const gray = toOklch('#808080')
-    expect(gray?.h ?? 0).toBe(gray?.h ?? 0) // documents the h ?? 0 guard
+    expect(gray?.h).toBeUndefined() // achromatic: hue is powerless -> the h ?? 0 guard is load-bearing
   })
 })
