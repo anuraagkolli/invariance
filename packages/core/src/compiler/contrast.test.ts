@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { wcagContrast } from 'culori'
+import { clampChroma, formatHex, wcagContrast } from 'culori'
 import { srgbLuminance, solveText } from './contrast'
 
 describe('srgbLuminance', () => {
@@ -30,23 +30,26 @@ describe('solveText', () => {
     expect(srgbLuminance(r.hex)).toBeLessThan(srgbLuminance('#e94560'))
   })
 
-  it('degrades chroma when a vivid hue cannot reach target', () => {
-    // vivid yellow text on white cannot reach 7.0 at c=0.22
+  it('meets high targets at vivid hues (per-candidate gamut clamping)', () => {
+    // per-candidate clampChroma tames the vivid hue; the solver reaches 7.0 at tier 1
     const r = solveText('#ffffff', { hue: 110, chroma: 0.22, target: 7.0 })
     expect(r.met).toBe(true)
     expect(wcagContrast(r.hex, '#ffffff')).toBeGreaterThanOrEqual(7.0)
   })
 
   it('returns met:false with the best extreme for unsatisfiable targets', () => {
-    // nothing reaches 15+ against mid-gray
+    // nothing reaches 15+ against mid-gray; black (5.32) beats white (3.95)
     const r = solveText('#808080', { hue: 0, chroma: 0, target: 15 })
     expect(r.met).toBe(false)
-    expect(['#000000', '#ffffff']).toContain(r.hex)
+    expect(r.hex).toBe('#000000')
   })
 
-  it('snaps to a passing ramp step when one is close', () => {
+  it('snaps to the lowest-ratio passing ramp step', () => {
     const r = solveText('#ffffff', { hue: 250, chroma: 0.02, target: 4.5, rampLs: [0.45, 0.36] })
     expect(r.met).toBe(true)
+    // both steps pass on white; l=0.45 has the lower (minimum sufficient) ratio
+    const expected = formatHex(clampChroma({ mode: 'oklch', l: 0.45, c: 0.02, h: 250 }, 'oklch'))
+    expect(r.hex).toBe(expected)
     expect(wcagContrast(r.hex, '#ffffff')).toBeGreaterThanOrEqual(4.5)
   })
 

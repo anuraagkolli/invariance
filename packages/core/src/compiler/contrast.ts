@@ -22,6 +22,10 @@ export interface SolveResult {
 const candidate = (l: number, c: number, h: number): string =>
   formatHex(clampChroma({ mode: 'oklch', l, c, h }, 'oklch'))
 
+// dark text wins iff black beats white against this surface (crossover ~lum 0.179)
+const prefersDarkText = (surfaceHex: string): boolean =>
+  wcagContrast('#000000', surfaceHex) >= wcagContrast('#ffffff', surfaceHex)
+
 // Binary search on OKLCH lightness. OKLCH l is perceptual, NOT WCAG luminance:
 // the ratio must be recomputed on the gamut-mapped sRGB color every iteration.
 //
@@ -33,10 +37,11 @@ const candidate = (l: number, c: number, h: number): string =>
 // but checking the actual contrast values is simpler and always correct.
 function search(surfaceHex: string, hue: number, chroma: number, target: number): SolveResult | null {
   // searchDown = true means we want lower l (dark text); false = higher l (light text)
-  const searchDown = wcagContrast('#000000', surfaceHex) >= wcagContrast('#ffffff', surfaceHex)
+  const searchDown = prefersDarkText(surfaceHex)
   const extremeL = searchDown ? 0 : 1
   const extremeHex = candidate(extremeL, chroma, hue)
-  if (wcagContrast(extremeHex, surfaceHex) < target) return null
+  const extremeRatio = wcagContrast(extremeHex, surfaceHex)
+  if (extremeRatio < target) return null
 
   // pass region is the interval between the extreme and the boundary l*
   // for searchDown: pass iff l <= l*, converge lo up toward l*
@@ -45,7 +50,7 @@ function search(surfaceHex: string, hue: number, chroma: number, target: number)
   // (minimum sufficient contrast = most harmonious with the surface)
   let lo = 0
   let hi = 1
-  let best: SolveResult = { hex: extremeHex, ratio: wcagContrast(extremeHex, surfaceHex), met: true }
+  let best: SolveResult = { hex: extremeHex, ratio: extremeRatio, met: true }
   for (let i = 0; i < 24; i++) {
     const mid = (lo + hi) / 2
     const hex = candidate(mid, chroma, hue)
@@ -66,11 +71,15 @@ function search(surfaceHex: string, hue: number, chroma: number, target: number)
 }
 
 export function solveText(surfaceHex: string, opts: SolveOptions): SolveResult {
+  // The [c, c/2, 0] chroma tiers are a fallback guard — per-candidate clampChroma
+  // already tames vivid hues by reducing chroma toward the lightness extremes, so
+  // tier 1 (full chroma) nearly always succeeds. Lower tiers exist as defense-in-depth.
   for (const c of [opts.chroma, opts.chroma / 2, 0]) {
     const result = search(surfaceHex, opts.hue, c, opts.target)
     if (!result) continue
     if (opts.rampLs?.length) {
-      // prefer a passing ramp step: solved text stays harmonious with the ramp
+      // prefer the passing ramp step with minimum sufficient contrast — closest to
+      // the boundary, most harmonious with the ramp
       const passing = opts.rampLs
         .map((l) => {
           const hex = candidate(l, c, opts.hue)
@@ -78,15 +87,13 @@ export function solveText(surfaceHex: string, opts: SolveOptions): SolveResult {
         })
         .filter((r) => r.ratio >= opts.target)
       if (passing.length) {
-        // sort descending by ratio, then take the best (highest contrast ramp step)
-        const sorted = [...passing].sort((a, b) => b.ratio - a.ratio)
+        const sorted = [...passing].sort((a, b) => a.ratio - b.ratio)
         return sorted[0] as SolveResult
       }
     }
     return result
   }
   // unsatisfiable: best achievable extreme, flagged for the warnings path
-  const searchDown = wcagContrast('#000000', surfaceHex) >= wcagContrast('#ffffff', surfaceHex)
-  const hex = searchDown ? '#000000' : '#ffffff'
+  const hex = prefersDarkText(surfaceHex) ? '#000000' : '#ffffff'
   return { hex, ratio: wcagContrast(hex, surfaceHex), met: false }
 }
