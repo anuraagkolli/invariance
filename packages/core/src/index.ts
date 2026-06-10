@@ -42,3 +42,23 @@ export { verify } from './verify/engine'
 export type { TestResult, VerificationResult } from './verify/types'
 export { applyThemeJson } from './runtime/apply'
 export { applyGlobalTheme } from './runtime/apply-theme'
+
+// Theme Compiler (v6)
+export { compileTheme, InvalidStyleSpecError } from './compiler/compile'
+export type { CompiledTheme } from './compiler/compile'
+export { StyleSpecSchema, ACCENT_CHROMA, NEUTRAL_TINT_CHROMA, CONTRAST_TARGETS } from './compiler/style-spec'
+export type { StyleSpec, DesignConstraints } from './compiler/style-spec'
+export { ROLE_TOKENS, COLOR_ROLE_TOKENS } from './compiler/roles'
+export type { RoleToken } from './compiler/roles'
+
+// Registries
+export { FONT_PAIRINGS, DEFAULT_MONO_STACK, getFontPairing } from './registries/font-pairings'
+export type { FontPairing } from './registries/font-pairings'
+export { THEME_PACKS } from './registries/theme-packs'
+export type { ThemePack } from './registries/theme-packs'
+
+// theme.json v2
+export { ThemeJsonV2Schema } from './config/schema'
+export type { ThemeJsonV2, ThemeSectionV2 } from './config/types'
+export { upgradeThemeJson } from './config/upgrade'
+export type { UpgradeResult } from './config/upgrade'

@@ -23,9 +23,11 @@ export function upgradeThemeJson(input: ThemeJson): UpgradeResult {
     for (const [key, value] of Object.entries(globals.fonts ?? {})) slots[`--inv-font-${key}`] = value
     for (const [key, value] of Object.entries(globals.radii ?? {})) slots[`--inv-radius-${key}`] = `${value}px`
     if (globals.spacing) warnings.push('theme.globals.spacing has no v2 equivalent; dropped')
+    // runs last on purpose: an explicit --inv-* literal beats a value derived from the structured groups
     for (const [key, value] of Object.entries(globals)) {
       if (STRUCTURED_KEYS.has(key)) continue
       if (typeof value !== 'string') continue
+      // assumes the default prefix: no current tool can emit non---inv- keys into v1 globals (scanner hardcodes it, schema rejects others)
       if (key.startsWith('--inv-')) slots[key] = value
     }
   }
