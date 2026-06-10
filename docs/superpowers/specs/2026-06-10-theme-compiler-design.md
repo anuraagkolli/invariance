@@ -57,7 +57,7 @@ All functions pure: `(spec fields) -> oklch color[]`. No `Date`, no randomness.
 - **Neutral ramp, 11 steps.** Fixed non-linear lightness scale concentrating resolution near the light end, declared as a constant (deterministic, golden-testable):
   `L_SCALE = [0.98, 0.955, 0.92, 0.86, 0.78, 0.68, 0.57, 0.46, 0.36, 0.25, 0.15]`
   Light mode reads the scale as-is; dark mode reverses it (so surface steps never reach pure black `l=0` or pure white — design-taste principle 5 holds by construction). Chroma by `neutralTintStrength`: none=0, subtle=0.02, strong=0.04, hue = `neutralTint`; multiply chroma by 0.6 / 0.4 / 0.25 on the darkest three steps to avoid muddy warm-hue artifacts.
-- **Accent ramp, 5 steps** at fixed lightness scale `ACCENT_L_SCALE = [0.85, 0.75, 0.65, 0.55, 0.45]`; the center step (index 2) is `--inv-accent`. When a locked accent seeds the ramp, its parsed L replaces the center and neighbors offset ±0.10/±0.20, clamped to [0.20, 0.95]. Chroma by `accentChroma`: muted=0.08, medium=0.15, vivid=0.22 — each step `clampChroma`-ed to the sRGB gamut **after** setting L (max in-gamut chroma varies wildly by hue: yellows allow high chroma at high L, blues clip early; never assume a chroma fits at every hue).
+- **Accent ramp, 5 steps** at fixed lightness scale `ACCENT_L_SCALE = [0.85, 0.75, 0.65, 0.55, 0.45]`; the center step (index 2) is `--inv-accent`. When a locked accent seeds the ramp, its parsed L replaces the center and neighbors offset by headroom-scaled steps — `up = min(0.1, (0.95 − L)/2)`, `down = min(0.1, (L − 0.2)/2)` — so steps stay distinct even for very light/dark seeds (identical to ±0.10/±0.20 for L in [0.4, 0.75]). Chroma by `accentChroma`: muted=0.08, medium=0.15, vivid=0.22 — each step `clampChroma`-ed to the sRGB gamut **after** setting L (max in-gamut chroma varies wildly by hue: yellows allow high chroma at high L, blues clip early; never assume a chroma fits at every hue).
 - Dark mode reduces accent chroma slightly (×0.9) per design-taste principle 5.
 
 ### contrast.ts (the core invariant)
@@ -67,8 +67,10 @@ solveTextL(surfaceHex, hue, chroma, targetRatio):
   binary search l in [0,1], 24 iterations
   candidate = clampChroma({ mode:'oklch', l, c: chroma, h: hue }, 'oklch')
   ratio     = wcagContrast(formatHex(candidate), surfaceHex)
-  direction: compute the surface's WCAG luminance once; if > 0.5 search
-             downward in l (darker text raises ratio), else upward
+  direction: branch once by comparing the two extremes — search downward
+             (dark text) iff wcagContrast(black, surface) >= wcagContrast(white, surface).
+             (NOT luminance > 0.5: the black/white crossover is at luminance
+             ~0.179, so mid-tones like #e94560 at 0.224 need dark text)
   return the first candidate meeting targetRatio with minimal distance
   from the ramp's nearest step (keeps solved text harmonious with the ramp)
 ```
