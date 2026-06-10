@@ -1,0 +1,124 @@
+import type { StyleSpec } from '../compiler/style-spec'
+
+// Named StyleSpec presets. Three uses: few-shot taste examples in the Designer
+// prompt, shortcuts when a request names a style, one-tap starting points in
+// the panel. Free-form requests do NOT pass through packs.
+export interface ThemePack {
+  id: string
+  name: string
+  spec: StyleSpec
+}
+
+export const THEME_PACKS: ThemePack[] = [
+  {
+    id: 'retro-arcade',
+    name: 'Retro Arcade',
+    spec: {
+      mode: 'dark', accentHue: 55, accentChroma: 'vivid',
+      neutralTint: 280, neutralTintStrength: 'subtle', contrast: 'standard',
+      fontPairing: 'retro-terminal', radius: 'sharp', shadow: 'hard-offset',
+      density: 'compact', borderWeight: 'heavy',
+      rationale: 'CRT arcade: amber on deep violet-black, mono type, hard edges.',
+    },
+  },
+  {
+    id: 'neobrutalist',
+    name: 'Neobrutalist',
+    spec: {
+      mode: 'light', accentHue: 350, accentChroma: 'vivid',
+      neutralTint: 0, neutralTintStrength: 'none', contrast: 'high',
+      fontPairing: 'brutalist-grotesk', radius: 'sharp', shadow: 'hard-offset',
+      density: 'standard', borderWeight: 'heavy',
+      rationale: 'Stark neobrutalism: hot pink accent, black hard shadows, heavy borders.',
+    },
+  },
+  {
+    id: 'soft-pastel',
+    name: 'Soft Pastel',
+    spec: {
+      mode: 'light', accentHue: 330, accentChroma: 'muted',
+      neutralTint: 330, neutralTintStrength: 'subtle', contrast: 'soft',
+      fontPairing: 'pastel-soft', radius: 'rounded', shadow: 'subtle',
+      density: 'comfortable', borderWeight: 'hairline',
+      rationale: 'Powder pastel: blush accent, rounded corners, airy spacing.',
+    },
+  },
+  {
+    id: 'terminal-green',
+    name: 'Terminal Green',
+    spec: {
+      mode: 'dark', accentHue: 145, accentChroma: 'vivid',
+      neutralTint: 145, neutralTintStrength: 'subtle', contrast: 'high',
+      fontPairing: 'terminal-mono', radius: 'sharp', shadow: 'flat',
+      density: 'compact', borderWeight: 'hairline',
+      rationale: 'Phosphor terminal: green on near-black, mono type, dead flat.',
+    },
+  },
+  {
+    id: 'glass-dark',
+    name: 'Dark Glass',
+    spec: {
+      mode: 'dark', accentHue: 215, accentChroma: 'medium',
+      neutralTint: 240, neutralTintStrength: 'subtle', contrast: 'standard',
+      fontPairing: 'geo-grotesk', radius: 'rounded', shadow: 'pronounced',
+      density: 'standard', borderWeight: 'hairline',
+      rationale: 'Dark glass: cool blue glow, deep soft shadows, rounded panes.',
+    },
+  },
+  {
+    id: 'editorial',
+    name: 'Editorial',
+    spec: {
+      mode: 'light', accentHue: 15, accentChroma: 'muted',
+      neutralTint: 70, neutralTintStrength: 'subtle', contrast: 'standard',
+      fontPairing: 'editorial-serif', radius: 'sharp', shadow: 'flat',
+      density: 'comfortable', borderWeight: 'hairline',
+      rationale: 'Quiet print: serif type, paper-warm neutrals, oxblood accent.',
+    },
+  },
+  {
+    id: 'ocean',
+    name: 'Ocean',
+    spec: {
+      mode: 'light', accentHue: 195, accentChroma: 'medium',
+      neutralTint: 210, neutralTintStrength: 'subtle', contrast: 'standard',
+      fontPairing: 'rounded-friendly', radius: 'rounded', shadow: 'subtle',
+      density: 'comfortable', borderWeight: 'hairline',
+      rationale: 'Beach glass: aqua accent, rounded shapes, breezy spacing.',
+    },
+  },
+  {
+    id: 'sunset',
+    name: 'Sunset',
+    spec: {
+      mode: 'dark', accentHue: 25, accentChroma: 'vivid', secondaryHue: 320,
+      neutralTint: 300, neutralTintStrength: 'subtle', contrast: 'standard',
+      fontPairing: 'condensed-industrial', radius: 'sharp', shadow: 'pronounced',
+      density: 'standard', borderWeight: 'standard',
+      rationale: 'Dusk poster: burnt orange over violet dusk, condensed display type.',
+    },
+  },
+  {
+    id: 'mono',
+    name: 'Monochrome',
+    spec: {
+      mode: 'light', accentHue: 250, accentChroma: 'muted',
+      neutralTint: 0, neutralTintStrength: 'none', contrast: 'high',
+      fontPairing: 'mono-minimal', radius: 'sharp', shadow: 'flat',
+      density: 'compact', borderWeight: 'hairline',
+      rationale: 'Grayscale studio: ink on white, monospace accents, no decoration.',
+    },
+  },
+  // deliberately the quietest pack: corporate trust IS restraint (taste principle 6)
+  {
+    id: 'corporate-trust',
+    name: 'Corporate Trust',
+    spec: {
+      mode: 'light', accentHue: 245, accentChroma: 'medium',
+      neutralTint: 240, neutralTintStrength: 'subtle', contrast: 'standard',
+      fontPairing: 'corporate-clean', radius: 'subtle', shadow: 'subtle',
+      density: 'standard', borderWeight: 'standard',
+      rationale: 'Calm corporate: navy accent, quiet depth, clean sans.',
+    },
+  },
+]
