@@ -13,4 +13,9 @@ describe('canonicalStringify', () => {
     expect(JSON.parse(canonicalStringify(doc))).toEqual(doc)
     expect(canonicalStringify(doc)).toContain('["hero","grid"]')
   })
+
+  it('honors toJSON (a Date canonicalizes to its ISO string, not {})', () => {
+    const ts = new Date('2026-06-11T00:00:00.000Z')
+    expect(canonicalStringify({ ts })).toBe('{"ts":"2026-06-11T00:00:00.000Z"}')
+  })
 })
