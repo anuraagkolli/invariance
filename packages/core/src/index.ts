@@ -67,3 +67,17 @@ export { isV2Theme } from './config/types'
 export { upgradeThemeJson } from './config/upgrade'
 export type { UpgradeResult } from './config/upgrade'
 export { applyAnyTheme } from './runtime/apply'
+
+// Agent Pipeline (v6)
+export { callClaude } from './agent/api'
+export type { ClaudeCallOptions, ClaudeCallResult } from './agent/api'
+export { GATEKEEPER_MODEL, DESIGNER_MODEL, BUILDER_MODEL } from './agent/models'
+export { callDesigner } from './agent/designer'
+export type { DesignerInput, DesignerResult } from './agent/designer'
+export { selectFewShotPacks } from './agent/designer-prompt'
+export { styleSpecWireSchema } from './agent/wire-schemas'
+
+// Constraints + Verification (v6)
+export { deriveConstraints } from './config/derive-constraints'
+export { verifyV2 } from './verify/compiled-tests'
+export { contrastPairs } from './compiler/contrast-pairs'
