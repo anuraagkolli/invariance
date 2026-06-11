@@ -53,7 +53,13 @@ The Scanner assigns roles during semantic analysis: deterministic clustering of 
 
 ```
 packages/
-├── core/src/
+├── schema/src/                  # NEW (phase 4): @invariance/schema — keystone contracts, depends only on zod
+│   ├── style-spec.ts            # StyleSpec type + zod (moved from core/compiler)
+│   ├── theme.ts                 # theme.json v1/v2 types + InvarianceConfig (moved from core/config/types)
+│   ├── theme-schemas.ts         # zod schemas (moved from core/config/schema)
+│   ├── role-tokens.ts           # role vocabulary (moved from core/compiler/roles)
+│   └── canonical-json.ts        # sorted-key serialization (stable bytes for future signing)
+├── core/src/                    # re-exports moved names from their old paths (back-compat stubs)
 │   ├── compiler/                # NEW: the Theme Compiler
 │   │   ├── style-spec.ts        # StyleSpec type + zod schema
 │   │   ├── ramps.ts             # OKLCH neutral/accent ramp generation (culori)
@@ -90,7 +96,7 @@ packages/
 
 ## theme.json v2
 
-`theme.roles` + `theme.slots` (CSS-var keys, values are literals or `var(...)` refs) + `theme.styleSpec` (provenance). Loader accepts v1 `theme.globals` and partitions it. The old inline-style slots object is gone.
+`theme.roles` + `theme.slots` (CSS-var keys, values are literals or `var(...)` refs) + `theme.styleSpec` (provenance). Loader accepts v1 `theme.globals` and partitions it. The old inline-style slots object is gone. Serialized canonically (sorted keys via `canonicalStringify`) so identical themes are byte-identical — future signing/content-addressing is an envelope, not a migration. Stored themes are re-verified on load before applying (integrity net, not a permission system).
 
 ## Verification (additions to the v5 suite)
 
@@ -123,20 +129,22 @@ Unchanged from v5: strict TS, named exports, no `any`, async/await only, single 
 - Do not regress the existing suite (136 tests at v5 baseline). Deleted features (DOM appliers, theme.slots fallback) take their tests with them; everything else stays green.
 - Compiler determinism test: same StyleSpec in, byte-identical roles out.
 
-## Phase Scope (v6 rework)
+## Phase Scope (v6 rework — resequenced 2026-06-11, see DESIGN.md Part 5)
 
-1. Theme Compiler + registries (pure, no UI) with golden tests
-2. theme.json v2 + v1 upgrade path
-3. Designer agent + structured-outputs client; Gatekeeper routing update
-4. Slot-edit micro-mutation path; Builder cleanup (remove theme.slots)
-5. Render-driven F2/F3 (m.text from context, m.sections); delete DOM appliers
-6. Scanner: role clustering + role-tier emission
-7. SSR theme inlining + font loader
-8. `invariance check` + `migrate-theme` CLIs
-9. Trial Mode snippet
-10. Demo: theme packs in panel, ten-vibe gauntlet, visual QA harness
+1. ✅ Theme Compiler + registries (pure, no UI) with golden tests
+2. ✅ theme.json v2 + v1 upgrade path
+3. ✅ Designer agent + structured-outputs client; Gatekeeper routing update
+4. Slot-edit micro-mutation path; Builder cleanup (F2-F4 only — theme.slots fallback, the v1 pipeline path, and slot.tsx inline-style machinery all deleted); platform-readiness retrofits (usage hook + injectable base URL in the API client, canonical theme.json serialization, verify-on-load); `@invariance/schema` extraction. *Exit: "make the sidebar blue" lands as a contrast-solved slot literal; no inline-style path remains; schema package builds standalone.*
+5. Demo app — resurrect the v5 demo from git history, wire the panel end-to-end. **Moved up from phase 10**: the quality thesis needs rendered pixels, and later phases need an app to validate against. *Exit: ten-vibe gauntlet judged visually; "sidebar blue" works live.*
+   → **Decision gate before 6-7:** settle the scanner-vs-overlay integration question (cofounder); phases 6-7 are the work at risk under an overlay architecture.
+6. Render-driven F2/F3 (m.text from context, m.sections); delete DOM appliers. *Exit: overrides survive React re-render with the appliers gone.*
+7. Scanner: role clustering + role-tier emission. *Exit: scanning the demo emits the role tier + slot var() refs.*
+8. SSR theme inlining + font loader. **Constraint: SSR needs a server-readable theme channel (cookie mirror or api storage backend — localStorage alone cannot SSR).** *Exit: themed first paint, no flash.*
+9. `invariance check` + `migrate-theme` CLIs. *Exit: a removed slot blocks CI.*
+10. Trial Mode snippet, built as importable engine modules (mini-scan/virtual-tokens/observe are libraries, not a monolithic IIFE). *Exit: snippet themes an unmodified demo copy; exported theme.json round-trips post-scan.*
+11. Demo polish: theme packs in panel, full gauntlet sign-off, Playwright visual QA harness.
 
-> **Note:** `apps/` is currently empty — the v5 demo app was dropped (recoverable from git history). A fresh demo app is built at phase 10; until then, phases 1-9 stay demo-independent (compiler-level gauntlet via golden tests, not visual QA). The v5-era scanner spec is archived at `docs/scanner-v5.md` and predates the role-tier model.
+> **Note:** `apps/` is currently empty — the v5 demo app was dropped (recoverable from git history). It returns at phase 5; phases 1-4 stay demo-independent (compiler-level gauntlet via golden tests). The v5-era scanner spec is archived at `docs/scanner-v5.md` and predates the role-tier model.
 
 ### Success criteria
 

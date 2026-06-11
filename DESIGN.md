@@ -307,6 +307,16 @@ LLM calls per request: 2 for themes (Gatekeeper + Designer), 1 to 2 otherwise. V
 - The snippet on an unmodified copy of the demo produces a recognizable preview of the same retro theme, and its exported theme.json round-trips into the SDK after scanning.
 - A simulated "developer deploy" (rename a component file, restyle an unwrapped element) breaks nothing; `invariance check` catches a removed slot before merge.
 
+## Part 5: Platform-Readiness Addenda (2026-06-11)
+
+Decisions from comparing this design against the control-plane architecture proposal (DESIGN_kb): adopt its data-model and sequencing discipline now, none of its infrastructure. The artifact stays pure declarative data and deterministic verification remains the trust boundary — capability manifests, signing, CDN/registry distribution, and client-side permission engines exist to make *code-carrying* mods safe and stay out of scope until F5+/Tier 1 enters scope.
+
+- **`packages/schema` (`@invariance/schema`).** StyleSpec, theme.json v1/v2 types + zod schemas, the role-token vocabulary, canonical serialization. The keystone contracts package: everything depends on it, it depends only on zod. Forced anyway by the snippet's no-React <35KB budget; also the natural merge point with any future control-plane codebase.
+- **Hostable authoring.** The Gatekeeper/Designer/Compiler pipeline keeps serializable inputs/outputs and no DOM/filesystem coupling, so it can lift into a hosted authoring API without rework. `callClaude` takes an injectable base URL and reports per-call token usage via an `onUsage` hook — metering-readiness, not metering.
+- **Canonical serialization.** theme.json is written with recursively sorted keys: identical themes are byte-identical, so future signing/content-addressing wraps an envelope around stable bytes instead of forcing a data migration.
+- **Verify-on-load.** The provider re-runs `verifyV2` on stored themes before applying; corrupt or constraint-violating artifacts degrade to base styling with a console warning. This is an integrity net for untrusted stored bytes — enforcement still happens at authoring time, never as a runtime permission system.
+- **Sequencing.** The demo app moves up to phase 5 (from 10): the quality thesis is judged on rendered pixels, and golden token snapshots cannot prove "looks designed." Every phase carries an explicit exit criterion. The scanner-vs-overlay integration decision gates the render-driven and scanner phases — they are the only major work at risk if that argument resolves toward an overlay.
+
 ## Deferred
 
-Review UI, F5+ code path, blob storage, B-levels, per-slot palette constraints, vision-QA as a runtime gate, theme marketplace/sharing (the Mirage-style share link is a natural later feature on top of theme.json).
+Review UI, F5+ code path, blob storage, B-levels, per-slot palette constraints, vision-QA as a runtime gate, theme marketplace/sharing (the Mirage-style share link is a natural later feature on top of theme.json), capability manifests / signing / CDN registry / kill switches (meaningful only when mods carry code).
