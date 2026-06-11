@@ -72,3 +72,21 @@ describe('solveDependentText', () => {
     expect(solved.met).toBe(true)
   })
 })
+
+describe('varKindOf / compound suffixes', () => {
+  it('classifies compound text tokens as text', () => {
+    expect(resolveSlotVar('--inv-sidebar-text-secondary', theme({ '--inv-text-primary': '#f2f3f5' }, {}))).toBe('#f2f3f5')
+  })
+  it('classifies bg over later segments when both appear', () => {
+    expect(resolveSlotVar('--inv-card-bg-hover', theme({ '--inv-surface-1': '#171a21' }, {}))).toBe('#171a21')
+  })
+})
+
+describe('resolveSlotVar var() robustness', () => {
+  it('resolves var() with a fallback clause', () => {
+    expect(resolveSlotVar('--inv-sidebar-bg', theme({ '--inv-surface-2': '#1f232c' }, { '--inv-sidebar-bg': 'var(--inv-surface-2, #ffffff)' }))).toBe('#1f232c')
+  })
+  it('resolves var() with whitespace', () => {
+    expect(resolveSlotVar('--inv-sidebar-bg', theme({ '--inv-surface-2': '#1f232c' }, { '--inv-sidebar-bg': 'var( --inv-surface-2 )' }))).toBe('#1f232c')
+  })
+})

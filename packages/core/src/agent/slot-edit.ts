@@ -24,25 +24,42 @@ export type SlotLightness = keyof typeof LIGHTNESS_DELTA
 // Slot tokens default to role references by convention (CLAUDE.md two-tier
 // tokens). When theme.json carries no entry, the value the user actually sees
 // is the app stylesheet's default var() — resolve through the same convention.
-const DEFAULT_ROLE_FOR_SUFFIX: Record<string, string> = {
+
+export type SlotVarKind = 'bg' | 'text' | 'border' | 'accent'
+
+// Segment-aware classification: compound tokens like --inv-sidebar-text-secondary
+// must classify as text, not by their last segment. Priority order resolves the
+// (unlikely) case of multiple kind segments in one name.
+const KIND_SEGMENTS: Array<[SlotVarKind, string[]]> = [
+  ['bg', ['bg', 'background']],
+  ['text', ['text', 'color']],
+  ['border', ['border']],
+  ['accent', ['accent']],
+]
+
+export function varKindOf(varName: string): SlotVarKind | null {
+  const segments = varName.split('-')
+  for (const [kind, names] of KIND_SEGMENTS) {
+    if (segments.some((s) => names.includes(s))) return kind
+  }
+  return null
+}
+
+const DEFAULT_ROLE_FOR_KIND: Record<SlotVarKind, string> = {
   bg: '--inv-surface-1',
-  background: '--inv-surface-1',
   text: '--inv-text-primary',
-  color: '--inv-text-primary',
   border: '--inv-border',
   accent: '--inv-accent',
 }
 
-export function suffixOf(varName: string): string {
-  const parts = varName.split('-')
-  return parts[parts.length - 1] ?? ''
-}
-
 export function defaultRoleFor(varName: string): string {
-  return DEFAULT_ROLE_FOR_SUFFIX[suffixOf(varName)] ?? '--inv-surface-1'
+  const kind = varKindOf(varName)
+  return kind ? DEFAULT_ROLE_FOR_KIND[kind] : '--inv-surface-1'
 }
 
-const VAR_REF = /^var\((--[a-z0-9-]+)\)$/
+// Widen to tolerate fallback clauses (var(--x, #fff)) and whitespace (var( --x ))
+// so these legal CSS forms don't fall through as opaque literals.
+const VAR_REF = /^var\(\s*(--[A-Za-z0-9-]+)\s*(?:,[^)]*)?\)$/
 
 // Explicit literal > var() ref through roles > conventional default role.
 // null when nothing resolves (fresh theme) — callers fall back to mid lightness.
