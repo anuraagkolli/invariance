@@ -11,19 +11,35 @@ async function main() {
   });
   console.log("manifest publish:", manifestRes.status, await manifestRes.json());
 
+  // A hand-written modset for the default demo user, so the app loads visibly
+  // customized: cooler palette, rounder cards, a badge, and a personal tagline.
   const draft = {
     uiOps: [
-      { type: "token-override", token: "--inv-accent", value: "#ff4d8d" },
+      { type: "token-override", token: "--inv-accent", value: "#00b3a4" },
+      { type: "token-override", token: "--inv-accent-2", value: "#ffb43a" },
+      { type: "token-override", token: "--inv-radius", value: "14px" },
       {
         type: "style-rule",
         selector: ".show-card",
-        declarations: { border: "1px solid #ff4d8d" },
+        declarations: { border: "1px solid #00b3a466" },
       },
       {
         type: "slot-override",
         componentId: "show-card",
         slot: "badge",
         content: '<span class="badge">★ Hand-picked</span>',
+      },
+      {
+        type: "slot-override",
+        componentId: "billboard",
+        slot: "tagline",
+        content: "<span>Tonight's obsession, picked for you</span>",
+      },
+      {
+        type: "slot-override",
+        componentId: "footer",
+        slot: "message",
+        content: "<span>Customized by demo-user via Invariance ✨</span>",
       },
     ],
   };
