@@ -1,0 +1,78 @@
+:root {
+  /* Base values mirror the design tokens in invariance.manifest.json; the
+     overlay overrides them per user at runtime. */
+  --inv-bg: #0f1220;
+  --inv-surface: #1a1f35;
+  --inv-accent: #7c5cff;
+  --inv-text: #e8eaf6;
+  --inv-radius: 12px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--inv-bg);
+  color: var(--inv-text);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.hero {
+  padding: 48px 32px 24px;
+}
+
+.hero h1 {
+  margin: 0 0 4px;
+  font-size: 40px;
+}
+
+.hero .tagline {
+  color: var(--inv-accent);
+  font-size: 18px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 24px;
+  padding: 0 32px 48px;
+}
+
+.show-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.show-card {
+  background: var(--inv-surface);
+  border-radius: var(--inv-radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.show-card h3 { margin: 0; font-size: 17px; }
+.show-card .meta { font-size: 13px; opacity: 0.7; }
+.show-card .rating { color: var(--inv-accent); font-weight: 600; }
+
+.show-card button {
+  margin-top: auto;
+  padding: 8px 12px;
+  border: none;
+  border-radius: calc(var(--inv-radius) / 2);
+  background: var(--inv-accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.watchlist {
+  background: var(--inv-surface);
+  border-radius: var(--inv-radius);
+  padding: 16px;
+  align-self: start;
+}
+
+.watchlist h2 { margin-top: 0; }
+.watchlist li { margin-bottom: 8px; }

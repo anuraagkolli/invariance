@@ -1,0 +1,80 @@
+{
+  "appId": "streamline",
+  "version": "1.0.0",
+  "designTokens": [
+    { "name": "--inv-bg", "kind": "color", "value": "#0f1220" },
+    { "name": "--inv-surface", "kind": "color", "value": "#1a1f35" },
+    { "name": "--inv-accent", "kind": "color", "value": "#7c5cff" },
+    { "name": "--inv-text", "kind": "color", "value": "#e8eaf6" },
+    { "name": "--inv-radius", "kind": "radius", "value": "12px" }
+  ],
+  "components": [
+    {
+      "id": "hero",
+      "name": "Hero banner",
+      "slots": [{ "name": "tagline", "overridable": true }]
+    },
+    {
+      "id": "show-card",
+      "name": "Show card",
+      "slots": [{ "name": "badge", "overridable": true }]
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "list-shows",
+      "method": "GET",
+      "path": "/api/shows",
+      "description": "Catalog of shows for the browse grid"
+    },
+    {
+      "id": "list-watchlist",
+      "method": "GET",
+      "path": "/api/watchlist",
+      "description": "The signed-in user's watchlist"
+    },
+    {
+      "id": "add-watchlist",
+      "method": "POST",
+      "path": "/api/watchlist",
+      "description": "Add a show to the watchlist"
+    },
+    {
+      "id": "remove-watchlist",
+      "method": "DELETE",
+      "path": "/api/watchlist/:id",
+      "description": "Remove a watchlist item"
+    }
+  ],
+  "policies": [
+    {
+      "type": "endpoint-deny",
+      "id": "no-hooking-deletes",
+      "description": "Mods may never intercept watchlist deletion",
+      "endpointId": "remove-watchlist"
+    },
+    {
+      "type": "field-constraint",
+      "id": "titles-immutable",
+      "description": "Show titles are canonical and may not be rewritten",
+      "endpointId": "list-shows",
+      "fieldPath": "shows.*.title",
+      "constraint": { "immutable": true }
+    },
+    {
+      "type": "field-constraint",
+      "id": "priority-range",
+      "description": "Watchlist priority stays within 1-5",
+      "endpointId": "add-watchlist",
+      "fieldPath": "priority",
+      "constraint": { "min": 1, "max": 5 }
+    },
+    {
+      "type": "budget-limit",
+      "id": "hook-budgets",
+      "maxCpuMsPerHook": 100,
+      "maxMemMbPerHook": 64
+    }
+  ],
+  "createdAt": "2026-06-10T00:00:00.000Z"
+}
