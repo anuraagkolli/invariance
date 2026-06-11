@@ -165,6 +165,20 @@ describe("verifyBundleAgainstManifest", () => {
     expect(wholeBody.reasons.join()).toContain("declare granular fields");
   });
 
+  it("accepts ancestor write fields (container ops like reorder); runtime guards the values", () => {
+    const verdict = verifyBundleAgainstManifest(
+      bundle({
+        capabilities: {
+          reads: [],
+          writes: [{ endpointId: "list-items", fields: ["items"] }],
+          budgets: { cpuMs: 50, memMb: 32 },
+        },
+      }),
+      manifest,
+    );
+    expect(verdict.ok).toBe(true);
+  });
+
   it("rejects budgets above the policy cap", () => {
     const verdict = verifyBundleAgainstManifest(
       bundle({

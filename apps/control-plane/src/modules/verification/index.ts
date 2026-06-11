@@ -1,4 +1,4 @@
-import type { AppManifest, ModBundle, PolicyRule } from "@invariance/schema";
+import { pathWithin, type AppManifest, type ModBundle, type PolicyRule } from "@invariance/schema";
 import { analyzeHookSource } from "./static-hooks";
 
 export interface VerificationResult {
@@ -12,17 +12,6 @@ const MAX_UI_OPS = 200;
 const DANGEROUS_HTML = /<\s*(script|iframe|object|embed|link|meta|form)\b|on\w+\s*=|javascript:|srcdoc\s*=/i;
 const DANGEROUS_CSS = /expression\s*\(|javascript:|url\s*\(|@import|behavior\s*:/i;
 const UNSAFE_SELECTOR = /[{}@;<>]/;
-
-/** A declared write path covers a constrained path if they match segment-wise ("*" wildcards). */
-function pathCovers(writePath: string | undefined, constrainedPath: string): boolean {
-  if (writePath === undefined) return true; // whole-body write
-  const a = writePath.split(".");
-  const b = constrainedPath.split(".");
-  for (let i = 0; i < Math.min(a.length, b.length); i++) {
-    if (a[i] !== "*" && b[i] !== "*" && a[i] !== b[i]) return false;
-  }
-  return true;
-}
 
 /**
  * Deterministic verification: every check is pure and reproducible — no LLM
@@ -126,16 +115,25 @@ export function verifyBundleAgainstManifest(
     }
   }
 
+  // Declared writes may not target an immutable field (the field itself or
+  // anything inside it), and whole-body declarations are rejected outright on
+  // endpoints with immutable fields. A strict ancestor (e.g. "shows" when
+  // "shows.*.title" is immutable) is allowed: it grants container-level
+  // operations like reordering, while the runtime's multiset immutability
+  // check guarantees the protected values themselves survive unchanged.
   for (const write of bundle.capabilities.writes) {
     const constrained = immutablePaths.get(write.endpointId) ?? [];
     for (const path of constrained) {
-      const fields = write.fields ?? [undefined];
-      for (const field of fields) {
-        if (pathCovers(field, path)) {
-          reasons.push(
-            `write capability on ${write.endpointId} covers immutable field ${path}` +
-              (field === undefined ? " (declare granular fields, not whole-body writes)" : ""),
-          );
+      if (write.fields === undefined) {
+        reasons.push(
+          `write capability on ${write.endpointId} covers immutable field ${path}` +
+            " (declare granular fields, not whole-body writes)",
+        );
+        continue;
+      }
+      for (const field of write.fields) {
+        if (pathWithin(field, path)) {
+          reasons.push(`write capability on ${write.endpointId} covers immutable field ${path}`);
         }
       }
     }
