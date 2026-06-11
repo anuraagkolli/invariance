@@ -1,4 +1,5 @@
 import type { AnyThemeJson } from '../config/types'
+import { canonicalStringify } from '../utils/canonical-json'
 import type { StorageBackend } from './types'
 
 export function createApiStorage(baseUrl: string): StorageBackend {
@@ -22,7 +23,7 @@ export function createApiStorage(baseUrl: string): StorageBackend {
         await fetch(baseUrl, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, appId, theme }),
+          body: canonicalStringify({ userId, appId, theme }),
         })
       } catch {
         // silently fail

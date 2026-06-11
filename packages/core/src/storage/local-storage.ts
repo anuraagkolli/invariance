@@ -1,4 +1,5 @@
 import type { AnyThemeJson } from '../config/types'
+import { canonicalStringify } from '../utils/canonical-json'
 import type { StorageBackend } from './types'
 
 export function createLocalStorage(): StorageBackend {
@@ -19,7 +20,7 @@ export function createLocalStorage(): StorageBackend {
 
     async saveTheme(userId, appId, theme) {
       try {
-        localStorage.setItem(key(userId, appId), JSON.stringify(theme))
+        localStorage.setItem(key(userId, appId), canonicalStringify(theme))
       } catch {
         // silently fail (SSR, incognito, quota exceeded)
       }
