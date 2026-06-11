@@ -53,4 +53,15 @@ describe('verifyV2', () => {
     const r = verifyV2({ ...goodTheme, theme: { ...goodTheme.theme, slots } }, config, {})
     expect(r.results.find((t) => t.name === 'varRefsResolve')?.passed).toBe(false)
   })
+
+  it('contrastPairs secondary floor: passes at 4.5 threshold but fails when floor is 7', () => {
+    // #606060 on #e5f2fd (corporate-trust surface-1) gives ≈5.53 — above 4.5 but below 7.
+    // Without the floor the check should pass; with contrast floor 7 it must fail.
+    const roles = { ...compiled.roles, '--inv-text-secondary': '#606060' }
+    const theme = { ...goodTheme, theme: { ...goodTheme.theme, roles } }
+    const passAt4_5 = verifyV2(theme, config, {})
+    expect(passAt4_5.results.find((t) => t.name === 'contrastPairs')?.passed).toBe(true)
+    const failAt7 = verifyV2(theme, config, { contrast: 7 })
+    expect(failAt7.results.find((t) => t.name === 'contrastPairs')?.passed).toBe(false)
+  })
 })

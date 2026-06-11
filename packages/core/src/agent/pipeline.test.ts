@@ -41,6 +41,8 @@ describe('runPipeline THEME route', () => {
     const ctx = context(fetchFn)
     const result = await runPipeline('make it retro', [], ctx)
     expect(result.type).toBe('success')
+    // The retro-arcade pack compiles warning-free so warnings must be absent (not []).
+    if (result.type === 'success') expect(result.warnings).toBeUndefined()
     const stored = await ctx.storageBackend.loadTheme('u', 'a') as AnyThemeJson
     const parsed = ThemeJsonV2Schema.safeParse(stored)
     expect(parsed.success).toBe(true)

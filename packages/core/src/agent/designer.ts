@@ -24,8 +24,20 @@ export type DesignerResult =
 // they are appended to the prompt so the model can self-correct.
 export async function callDesigner(input: DesignerInput, retryFeedback?: string[]): Promise<DesignerResult> {
   // Restrict the fontPairing enum to the allowed registry subset when constraints say so.
-  // An unrestricted registry is the full FONT_PAIRINGS list.
-  const pairingIds = input.constraints.font_registry ?? FONT_PAIRINGS.map((p) => p.id)
+  // Intersect with the real registry ids so a typo'd config id can never enter the wire
+  // enum and cause the LLM to emit an unresolvable pairing id.
+  const allIds = FONT_PAIRINGS.map((p) => p.id)
+  const rawRegistry = input.constraints.font_registry
+  let pairingIds: string[]
+  if (rawRegistry) {
+    pairingIds = rawRegistry.filter((id) => allIds.includes(id))
+    // Empty intersection means the config has no valid ids — fail fast before the API call.
+    if (pairingIds.length === 0) {
+      return { ok: false, error: 'font_registry has no valid pairing ids', retryable: false }
+    }
+  } else {
+    pairingIds = allIds
+  }
 
   const system = buildDesignerPrompt({
     constraints: input.constraints,

@@ -19,7 +19,7 @@ import { applyThemeJson, applyAnyTheme } from '../runtime/apply'
 // ---------------------------------------------------------------------------
 
 export type PipelineResult =
-  | { type: 'success'; description: string; slotName: string }
+  | { type: 'success'; description: string; slotName: string; warnings?: string[] }
   | { type: 'clarification'; message: string }
   | { type: 'error'; message: string }
 
@@ -307,10 +307,13 @@ export async function runPipeline(
       context.themeStore.setTheme(candidate)
       applyAnyTheme(candidate, context.config)
 
+      // Only include warnings when non-empty (exactOptionalPropertyTypes: never assign
+      // undefined to an optional field explicitly).
       return {
         type: 'success',
         description: spec.rationale,
         slotName: 'theme',
+        ...(compiled.warnings.length > 0 ? { warnings: compiled.warnings } : {}),
       }
     }
 

@@ -36,6 +36,22 @@ describe('callDesigner', () => {
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.retryable).toBe(false)
   })
+
+  it('returns non-retryable error when font_registry has no valid pairing ids (all typos)', async () => {
+    // A config that lists only typo'd ids — none exist in the registry.
+    const r = await callDesigner({
+      request: 'make it retro',
+      constraints: { font_registry: ['does-not-exist', 'also-wrong'] },
+      apiKey: 'k',
+      // No fetchFn needed — should fail before the API call.
+      fetchFn: vi.fn() as unknown as typeof fetch,
+    })
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.retryable).toBe(false)
+      expect(r.error).toContain('font_registry')
+    }
+  })
 })
 
 describe('styleSpecWireSchema', () => {

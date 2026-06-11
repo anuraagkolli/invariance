@@ -12,6 +12,7 @@ import { useInvariance } from '../context/provider'
 import { runPipeline, type PipelineStage } from '../agent/pipeline'
 import type { ConvTurn } from '../agent/gatekeeper'
 import { applyAnyTheme } from '../runtime/apply'
+import { upgradeThemeJson } from '../config/upgrade'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -307,9 +308,14 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
 
   async function handleReset() {
     if (initialTheme) {
-      themeStore.setTheme(initialTheme)
-      applyAnyTheme(initialTheme, config)
-      await storageBackend.saveTheme(userId, appId, initialTheme)
+      // Upgrade the raw initialTheme to v2 before setting/applying, matching the
+      // provider's own load path so the in-memory invariant (store always holds v2)
+      // is preserved after a reset.
+      const { theme: upgradedTheme, warnings } = upgradeThemeJson(initialTheme)
+      if (warnings.length > 0) console.warn('[invariance] reset upgrade warnings:', warnings)
+      themeStore.setTheme(upgradedTheme)
+      applyAnyTheme(upgradedTheme, config)
+      await storageBackend.saveTheme(userId, appId, upgradedTheme)
     } else {
       themeStore.clear()
       if (typeof document !== 'undefined') {

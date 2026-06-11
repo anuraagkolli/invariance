@@ -128,7 +128,10 @@ function contrastPairsCheck(
   const specTarget = spec ? (CONTRAST_TARGETS[spec.contrast] ?? 4.5) : 4.5
   const primaryTarget = Math.max(specTarget, constraints.contrast ?? 0)
 
-  const pairs = contrastPairs(primaryTarget)
+  // Raise the secondary target to match the developer's floor so verifyV2 stays
+  // at least as strict as the compiler's own secondary-text ramp computation.
+  const secondaryTarget = Math.max(4.5, constraints.contrast ?? 0)
+  const pairs = contrastPairs(primaryTarget, secondaryTarget)
   const violations: string[] = []
 
   for (const [fg, bg, target] of pairs) {
