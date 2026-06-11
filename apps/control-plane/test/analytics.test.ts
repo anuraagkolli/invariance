@@ -136,6 +136,44 @@ describe("analytics + mods admin endpoints", () => {
     expect(killed.status).toBe(409);
   });
 
+  it("subject overview returns pointer, full history with contents, and the subject's events", async () => {
+    const { cp, modId } = await seededPlane();
+    await cp.app.request("/v1/apps/app1/subjects/u1/bundles", {
+      method: "POST",
+      body: JSON.stringify({ uiOps: [{ type: "token-override", token: "--b", value: "blue" }] }),
+      headers: { "content-type": "application/json" },
+    });
+    await cp.app.request("/v1/apps/app1/events", {
+      method: "POST",
+      body: JSON.stringify({ type: "mods_applied", subjectId: "u1" }),
+    });
+    await cp.app.request("/v1/apps/app1/events", {
+      method: "POST",
+      body: JSON.stringify({ type: "mods_applied", subjectId: "someone-else" }),
+    });
+
+    const overview = (await (await cp.app.request("/v1/apps/app1/subjects/u1/overview")).json()) as {
+      subjectId: string;
+      pointer: { status: string };
+      mods: Array<{
+        modId: string;
+        status: string;
+        contents: { uiOps: Array<{ token?: string }> } | null;
+        envelope?: unknown;
+      }>;
+      events: Array<{ subjectId?: string }>;
+    };
+    expect(overview.subjectId).toBe("u1");
+    expect(overview.pointer.status).toBe("active");
+    expect(overview.mods).toHaveLength(2); // newest first, history included
+    expect(overview.mods[0]!.status).toBe("active");
+    expect(overview.mods[0]!.contents?.uiOps[0]?.token).toBe("--b");
+    expect(overview.mods[1]!.modId).toBe(modId);
+    expect(overview.mods[1]!.status).toBe("superseded");
+    expect(overview.mods[0]!.envelope).toBeUndefined();
+    expect(overview.events).toHaveLength(1); // only u1's events
+  });
+
   it("restoring an active mod is rejected", async () => {
     const { cp, modId } = await seededPlane();
     const res = await cp.app.request(`/v1/apps/app1/mods/${modId}/restore`, { method: "POST" });

@@ -6,7 +6,7 @@ export { loadKeys } from "./keys";
 export * as registry from "./modules/registry";
 export { verifyBundleAgainstManifest, analyzeHookSource } from "./modules/verification";
 export type { VerificationResult } from "./modules/verification";
-export { classifyBundle, classifyRecord, modAdminView, summarizeApp } from "./modules/analytics";
+export { classifyBundle, classifyRecord, modAdminView, modDetailView, summarizeApp } from "./modules/analytics";
 export type { AnalyticsSummary, ModClassification } from "./modules/analytics";
 export { authorMod, refixMod } from "./modules/authoring/pipeline";
 export type { AuthoringResult } from "./modules/authoring/pipeline";

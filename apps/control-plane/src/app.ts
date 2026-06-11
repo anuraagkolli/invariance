@@ -10,7 +10,7 @@ import type { SigningKeyPair } from "@invariance/schema/signing";
 import { loadKeys } from "./keys";
 import type { AuthoringAgent } from "./modules/authoring/agent";
 import { AnthropicAgent } from "./modules/authoring/anthropic";
-import { modAdminView, summarizeApp } from "./modules/analytics";
+import { modAdminView, modDetailView, summarizeApp } from "./modules/analytics";
 import { authorMod, refixMod } from "./modules/authoring/pipeline";
 import {
   assembleBundle,
@@ -201,6 +201,27 @@ export function createControlPlane(options: ControlPlaneOptions = {}): ControlPl
   app.get("/v1/apps/:appId/mods", (c) =>
     c.json({ mods: store.allMods(c.req.param("appId")).map(modAdminView) }),
   );
+
+  /**
+   * Per-subject drill-down for the console: pointer state, full revision
+   * history (with bundle contents), and this subject's recent telemetry.
+   */
+  app.get("/v1/apps/:appId/subjects/:subjectId/overview", (c) => {
+    const appId = c.req.param("appId");
+    const subjectId = c.req.param("subjectId");
+    const mods = [...store.subjectMods(appId, subjectId)].reverse().map(modDetailView);
+    const events = store
+      .app(appId)
+      .events.filter((e) => e.subjectId === subjectId)
+      .slice(-50)
+      .reverse();
+    return c.json({
+      subjectId,
+      pointer: getPointer(store, appId, subjectId),
+      mods,
+      events,
+    });
+  });
 
   /** Developer kill switch: propagates via the subject's pointer within its TTL. */
   app.post("/v1/apps/:appId/mods/:modId/kill", (c) => {

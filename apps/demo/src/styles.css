@@ -61,6 +61,9 @@ body {
   padding: 4px 12px;
   font-size: 12px;
   color: var(--inv-text-muted);
+  appearance: none;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 /* ---------- billboard ---------- */

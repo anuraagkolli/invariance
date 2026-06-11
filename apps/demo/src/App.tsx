@@ -3,7 +3,13 @@ import { InvarianceProvider, PromptWidget, Slot } from "@invariance/client/react
 import type { InvarianceClientConfig } from "@invariance/client";
 import type { ContinueItem, Show, WatchlistItem } from "../server/app";
 
+const DEMO_USERS = ["demo-user", "demo-user2"];
 const DEMO_USER = localStorage.getItem("demo-user") ?? "demo-user";
+
+function switchUser(user: string) {
+  localStorage.setItem("demo-user", user);
+  location.reload();
+}
 
 const config: InvarianceClientConfig = {
   registryUrl: import.meta.env.VITE_INVARIANCE_REGISTRY ?? "http://localhost:4400",
@@ -112,7 +118,17 @@ function Nav() {
       <span className="nav-extra">
         <Slot componentId="nav" slot="extra" />
       </span>
-      <span className="user-chip">{DEMO_USER}</span>
+      <select
+        className="user-chip"
+        value={DEMO_USERS.includes(DEMO_USER) ? DEMO_USER : DEMO_USERS[0]}
+        onChange={(e) => switchUser(e.target.value)}
+      >
+        {DEMO_USERS.map((user) => (
+          <option key={user} value={user}>
+            {user}
+          </option>
+        ))}
+      </select>
     </nav>
   );
 }

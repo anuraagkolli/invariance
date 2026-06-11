@@ -135,3 +135,26 @@ export function modAdminView(record: ModRecord) {
     classification: classifyRecord(record),
   };
 }
+
+/**
+ * Drill-down projection: the admin view plus the bundle's actual contents
+ * (UI ops and hooks, including source) so the developer can inspect exactly
+ * what a mod does. Still excludes the envelope — signatures stay distribution
+ * machinery, not console data.
+ */
+export function modDetailView(record: ModRecord) {
+  const base = modAdminView(record);
+  try {
+    const bundle = ModBundleSchema.parse(JSON.parse(record.envelope.payload));
+    return {
+      ...base,
+      contents: {
+        uiOps: bundle.uiOps,
+        hooks: bundle.hooks,
+        capabilities: bundle.capabilities,
+      },
+    };
+  } catch {
+    return { ...base, contents: null };
+  }
+}

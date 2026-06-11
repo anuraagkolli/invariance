@@ -1,6 +1,12 @@
-import type { AppManifest } from "@invariance/schema";
+import type { AppManifest, UiOp } from "@invariance/schema";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, type AnalyticsSummary, type ModRow } from "./api";
+import {
+  api,
+  type AnalyticsSummary,
+  type ModContents,
+  type ModRow,
+  type SubjectOverview,
+} from "./api";
 
 const DEFAULT_APP = "streamline";
 const HELP_DISMISSED_KEY = "invariance-console:help-dismissed";
@@ -11,15 +17,83 @@ const STATUS_HELP: Record<string, string> = {
   degraded: "Paused: it no longer passes your guardrails after an app update. The user is offered an AI fix.",
   disabled: "Killed by a developer. The user sees the base app.",
   superseded: "Replaced by a newer revision of this user's customizations.",
+  none: "This user has no customizations.",
 };
+
+function statusLabel(status: string): string {
+  return status === "degraded" ? "paused" : status === "disabled" ? "killed" : status;
+}
+
+function StatusChip({ status }: { status: string }) {
+  return (
+    <span className={`status status-${status}`} title={STATUS_HELP[status]}>
+      {statusLabel(status)}
+    </span>
+  );
+}
+
+/** Hash routing: "" = dashboard, "#/u/<subjectId>" = per-user drill-down. */
+function subjectFromHash(): string | null {
+  const match = /^#\/u\/(.+)$/.exec(window.location.hash);
+  return match ? decodeURIComponent(match[1]!) : null;
+}
 
 export default function App() {
   const [appId, setAppId] = useState(DEFAULT_APP);
+  const [subject, setSubject] = useState<string | null>(() => subjectFromHash());
+
+  useEffect(() => {
+    const onHash = () => setSubject(subjectFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  const openSubject = (subjectId: string) => {
+    window.location.hash = `#/u/${encodeURIComponent(subjectId)}`;
+  };
+  const closeSubject = () => {
+    window.location.hash = "";
+  };
+
+  return (
+    <div className="console">
+      <header>
+        <h1>
+          <span className="logo">◆</span>{" "}
+          <button className="title-link" onClick={closeSubject}>
+            Invariance Console
+          </button>
+          {subject && (
+            <span className="crumb">
+              {" "}
+              / <span className="muted">user</span> {subject}
+            </span>
+          )}
+        </h1>
+        <div className="header-right">
+          <label>
+            App{" "}
+            <input value={appId} onChange={(e) => setAppId(e.target.value)} spellCheck={false} />
+          </label>
+        </div>
+      </header>
+
+      {subject ? (
+        <SubjectView appId={appId} subjectId={subject} onBack={closeSubject} />
+      ) : (
+        <Dashboard appId={appId} onOpenSubject={openSubject} />
+      )}
+    </div>
+  );
+}
+
+function Dashboard({ appId, onOpenSubject }: { appId: string; onOpenSubject: (s: string) => void }) {
   const [manifest, setManifest] = useState<AppManifest | null>(null);
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [mods, setMods] = useState<ModRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
+  const [modsQuery, setModsQuery] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -50,29 +124,25 @@ export default function App() {
   };
 
   return (
-    <div className="console">
-      <header>
-        <h1>
-          <span className="logo">◆</span> Invariance Console
-        </h1>
-        <div className="header-right">
-          <label>
-            App{" "}
-            <input value={appId} onChange={(e) => setAppId(e.target.value)} spellCheck={false} />
-          </label>
-          <button onClick={() => void refresh()}>Refresh</button>
+    <>
+      <div className="toolbar">
+        <HelpBanner />
+        <span>
+          <button onClick={() => void refresh()}>Refresh</button>{" "}
           {loadedAt && <span className="muted">updated {loadedAt}</span>}
-        </div>
-      </header>
-
-      <HelpBanner />
+        </span>
+      </div>
 
       {error && <div className="error">{error}</div>}
 
       <main>
         <section className="panel">
           <h2>At a glance</h2>
-          {summary ? <SummaryPanel summary={summary} /> : <p className="muted">No data yet.</p>}
+          {summary ? (
+            <SummaryPanel summary={summary} onFilter={setModsQuery} />
+          ) : (
+            <p className="muted">No data yet.</p>
+          )}
         </section>
 
         <section className="panel wide">
@@ -80,10 +150,16 @@ export default function App() {
             Your users&rsquo; customizations <span className="muted">({mods.length})</span>
           </h2>
           <p className="hint">
-            Every change a user has made, newest first. Kill anything that shouldn&rsquo;t be live —
-            it takes effect within seconds and the user falls back to the base app.
+            Every change a user has made, newest first. Click a user for the full story, or kill
+            anything that shouldn&rsquo;t be live — it takes effect within seconds.
           </p>
-          <ModsTable mods={mods} onAct={act} />
+          <ModsTable
+            mods={mods}
+            query={modsQuery}
+            onQuery={setModsQuery}
+            onAct={act}
+            onOpenSubject={onOpenSubject}
+          />
         </section>
 
         <section className="panel wide">
@@ -107,7 +183,7 @@ export default function App() {
           )}
         </section>
       </main>
-    </div>
+    </>
   );
 }
 
@@ -165,7 +241,13 @@ function HelpBanner() {
   );
 }
 
-function SummaryPanel({ summary }: { summary: AnalyticsSummary }) {
+function SummaryPanel({
+  summary,
+  onFilter,
+}: {
+  summary: AnalyticsSummary;
+  onFilter: (query: string) => void;
+}) {
   return (
     <div className="summary">
       <div className="stat-row">
@@ -185,18 +267,20 @@ function SummaryPanel({ summary }: { summary: AnalyticsSummary }) {
       </h3>
       <Ranked rows={Object.entries(summary.events.byType).map(([name, count]) => ({ name, count }))} />
 
-      <h3 title="Design tokens: the named style properties (colors, spacing, type) users may restyle.">
+      <h3 title="Design tokens: the named style properties (colors, spacing, type) users may restyle. Click to filter the mods table.">
         Most-restyled properties
       </h3>
-      <Ranked rows={summary.topTokens} empty="No restyles yet." />
+      <Ranked rows={summary.topTokens} empty="No restyles yet." onSelect={onFilter} />
 
-      <h3 title="API endpoints users have attached behavior-changing hooks to.">
+      <h3 title="API endpoints users have attached behavior-changing hooks to. Click to filter the mods table.">
         Most-rewired endpoints
       </h3>
-      <Ranked rows={summary.topEndpoints} empty="No behavior changes yet." />
+      <Ranked rows={summary.topEndpoints} empty="No behavior changes yet." onSelect={onFilter} />
 
-      <h3 title="UI slots users have replaced with their own content.">Most-edited UI areas</h3>
-      <Ranked rows={summary.topComponents} empty="No UI edits yet." />
+      <h3 title="UI slots users have replaced with their own content. Click to filter the mods table.">
+        Most-edited UI areas
+      </h3>
+      <Ranked rows={summary.topComponents} empty="No UI edits yet." onSelect={onFilter} />
 
       <h3 title="The most recent plain-language requests, straight from your users.">
         What users are asking for
@@ -238,9 +322,11 @@ function Stat({
 function Ranked({
   rows,
   empty = "Nothing yet.",
+  onSelect,
 }: {
   rows: Array<{ name: string; count: number }>;
   empty?: string;
+  onSelect?: (name: string) => void;
 }) {
   if (rows.length === 0) return <p className="muted">{empty}</p>;
   const max = Math.max(...rows.map((r) => r.count));
@@ -248,7 +334,12 @@ function Ranked({
     <table className="ranked">
       <tbody>
         {rows.slice(0, 6).map((row) => (
-          <tr key={row.name}>
+          <tr
+            key={row.name}
+            className={onSelect ? "clickable" : ""}
+            title={onSelect ? `Show mods touching ${row.name}` : undefined}
+            onClick={onSelect ? () => onSelect(row.name) : undefined}
+          >
             <td className="ranked-name">{row.name}</td>
             <td className="ranked-bar">
               <div className="bar" style={{ width: `${(row.count / max) * 100}%` }} />
@@ -263,14 +354,32 @@ function Ranked({
 
 const MODS_PAGE = 15;
 
+function modMatches(mod: ModRow, q: string): boolean {
+  if (mod.subjectId.toLowerCase().includes(q)) return true;
+  if (mod.status.includes(q) || statusLabel(mod.status).includes(q)) return true;
+  if (mod.prompts.some((p) => p.toLowerCase().includes(q))) return true;
+  const c = mod.classification;
+  if (!c) return false;
+  return (
+    c.tokensTouched.some((t) => t.toLowerCase().includes(q)) ||
+    c.endpointsHooked.some((e) => e.toLowerCase().includes(q)) ||
+    c.componentsTouched.some((s) => s.toLowerCase().includes(q))
+  );
+}
+
 function ModsTable({
   mods,
+  query,
+  onQuery,
   onAct,
+  onOpenSubject,
 }: {
   mods: ModRow[];
+  query: string;
+  onQuery: (q: string) => void;
   onAct: (action: "kill" | "restore", modId: string) => Promise<void>;
+  onOpenSubject: (subjectId: string) => void;
 }) {
-  const [query, setQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -278,13 +387,7 @@ function ModsTable({
     const ordered = [...mods].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     const live = showHistory ? ordered : ordered.filter((m) => m.status !== "superseded");
     const q = query.trim().toLowerCase();
-    if (!q) return live;
-    return live.filter(
-      (m) =>
-        m.subjectId.toLowerCase().includes(q) ||
-        m.status.includes(q) ||
-        m.prompts.some((p) => p.toLowerCase().includes(q)),
-    );
+    return q ? live.filter((m) => modMatches(m, q)) : live;
   }, [mods, query, showHistory]);
 
   if (mods.length === 0) {
@@ -302,10 +405,10 @@ function ModsTable({
       <div className="table-tools">
         <input
           className="search"
-          placeholder="Search by user, request, or status…"
+          placeholder="Search by user, request, status, or what it touches…"
           value={query}
           onChange={(e) => {
-            setQuery(e.target.value);
+            onQuery(e.target.value);
             setShowAll(false);
           }}
         />
@@ -335,12 +438,18 @@ function ModsTable({
         <tbody>
           {visible.map((mod) => (
             <tr key={mod.modId} className={mod.status === "superseded" ? "dim" : ""}>
-              <td>{mod.subjectId}</td>
+              <td>
+                <button
+                  className="link"
+                  title="Open this user's full history"
+                  onClick={() => onOpenSubject(mod.subjectId)}
+                >
+                  {mod.subjectId}
+                </button>
+              </td>
               <td>{mod.revision}</td>
               <td>
-                <span className={`status status-${mod.status}`} title={STATUS_HELP[mod.status]}>
-                  {mod.status === "degraded" ? "paused" : mod.status === "disabled" ? "killed" : mod.status}
-                </span>
+                <StatusChip status={mod.status} />
                 {mod.status === "degraded" && mod.reasons.length > 0 && (
                   <div className="reasons">{mod.reasons.join("; ")}</div>
                 )}
@@ -373,7 +482,14 @@ function ModsTable({
           Show all {filtered.length}
         </button>
       )}
-      {filtered.length === 0 && <p className="muted">No mods match “{query}”.</p>}
+      {filtered.length === 0 && (
+        <p className="muted">
+          No mods match “{query}”.{" "}
+          <button className="link" onClick={() => onQuery("")}>
+            Clear
+          </button>
+        </p>
+      )}
     </>
   );
 }
@@ -386,6 +502,228 @@ function surfacesLabel(surfaces: { tokens: number; styles: number; slots: number
   if (surfaces.hooks) parts.push(`${surfaces.hooks} API hook${surfaces.hooks > 1 ? "s" : ""}`);
   return parts.length > 0 ? parts.join(", ") : "empty";
 }
+
+/* ------------------------------------------------------------------ */
+/* Per-user drill-down                                                  */
+/* ------------------------------------------------------------------ */
+
+function SubjectView({
+  appId,
+  subjectId,
+  onBack,
+}: {
+  appId: string;
+  subjectId: string;
+  onBack: () => void;
+}) {
+  const [overview, setOverview] = useState<SubjectOverview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      setOverview(await api.overview(appId, subjectId));
+      setError(null);
+    } catch (err) {
+      setError(`Cannot load this user (${(err as Error).message})`);
+    }
+  }, [appId, subjectId]);
+
+  useEffect(() => {
+    void refresh();
+    const timer = setInterval(() => void refresh(), 5000);
+    return () => clearInterval(timer);
+  }, [refresh]);
+
+  const act = async (action: "kill" | "restore", modId: string) => {
+    await (action === "kill" ? api.kill(appId, modId) : api.restore(appId, modId));
+    await refresh();
+  };
+
+  if (error) return <div className="error">{error}</div>;
+  if (!overview) return <p className="muted">Loading…</p>;
+
+  const current = overview.mods.find((m) => m.status !== "superseded");
+
+  return (
+    <>
+      <div className="toolbar">
+        <button className="link" onClick={onBack}>
+          ← All users
+        </button>
+        <span>
+          <StatusChip status={overview.pointer.status} />
+        </span>
+      </div>
+
+      <main>
+        <section className="panel wide">
+          <h2>Current customization</h2>
+          {current ? (
+            <>
+              <p className="hint">
+                Revision {current.revision}, verified against app v{current.boundManifestVersion}.
+                {current.status === "degraded" && current.reasons.length > 0 && (
+                  <span className="reasons"> Paused: {current.reasons.join("; ")}</span>
+                )}
+              </p>
+              {current.contents ? (
+                <ModContentsView contents={current.contents} />
+              ) : (
+                <p className="muted">Contents unavailable.</p>
+              )}
+              <div className="actions">
+                {(current.status === "active" ||
+                  current.status === "stale" ||
+                  current.status === "degraded") && (
+                  <button className="danger" onClick={() => void act("kill", current.modId)}>
+                    Kill this user&rsquo;s customization
+                  </button>
+                )}
+                {current.status === "disabled" && (
+                  <button onClick={() => void act("restore", current.modId)}>Restore</button>
+                )}
+              </div>
+            </>
+          ) : (
+            <p className="muted">This user has no customizations.</p>
+          )}
+        </section>
+
+        <section className="panel">
+          <h2>History</h2>
+          <p className="hint">Each request replaces the previous revision.</p>
+          {overview.mods.length === 0 ? (
+            <p className="muted">Nothing yet.</p>
+          ) : (
+            <ol className="timeline">
+              {overview.mods.map((mod) => (
+                <li key={mod.modId} className={mod.status === "superseded" ? "dim" : ""}>
+                  <div>
+                    <strong>rev {mod.revision}</strong> <StatusChip status={mod.status} />{" "}
+                    <span className="muted">{new Date(mod.createdAt).toLocaleString()}</span>
+                  </div>
+                  <div className="timeline-prompt">
+                    {mod.prompts.at(-1) ? `“${mod.prompts.at(-1)}”` : "published by a developer"}
+                  </div>
+                  {mod.classification && (
+                    <div className="muted">{surfacesLabel(mod.classification.surfaces)}</div>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
+
+          <h2 className="spaced">Recent activity</h2>
+          {overview.events.length === 0 ? (
+            <p className="muted">No telemetry from this user yet.</p>
+          ) : (
+            <ul className="events">
+              {overview.events.slice(0, 12).map((e, i) => (
+                <li key={i}>
+                  <code>{e.type}</code>{" "}
+                  <span className="muted">{new Date(e.at).toLocaleTimeString()}</span>
+                  {Array.isArray(e.detail?.violations) && (
+                    <div className="reasons">{(e.detail.violations as string[]).join("; ")}</div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </main>
+    </>
+  );
+}
+
+function ModContentsView({ contents }: { contents: ModContents }) {
+  const tokens = contents.uiOps.filter((op): op is Extract<UiOp, { type: "token-override" }> => op.type === "token-override");
+  const styles = contents.uiOps.filter((op): op is Extract<UiOp, { type: "style-rule" }> => op.type === "style-rule");
+  const slots = contents.uiOps.filter((op): op is Extract<UiOp, { type: "slot-override" }> => op.type === "slot-override");
+
+  return (
+    <div className="contents">
+      {tokens.length > 0 && (
+        <div>
+          <h3>Restyled properties</h3>
+          <ul>
+            {tokens.map((op) => (
+              <li key={op.token}>
+                <code>{op.token}</code> → <span className="swatch" style={{ background: op.value }} />
+                <code>{op.value}</code>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {styles.length > 0 && (
+        <div>
+          <h3>Custom CSS rules</h3>
+          <ul>
+            {styles.map((op, i) => (
+              <li key={i}>
+                <code>
+                  {op.selector} {"{ "}
+                  {Object.entries(op.declarations)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join("; ")}
+                  {" }"}
+                </code>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {slots.length > 0 && (
+        <div>
+          <h3>Replaced UI areas</h3>
+          <ul>
+            {slots.map((op, i) => (
+              <li key={i}>
+                <code>
+                  {op.componentId}.{op.slot}
+                </code>{" "}
+                <span className="muted">{op.content}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {contents.hooks.length > 0 && (
+        <div>
+          <h3>API hooks</h3>
+          <p className="hint">
+            Runs in a sandbox ({contents.capabilities.budgets.cpuMs}ms CPU,{" "}
+            {contents.capabilities.budgets.memMb}MB), may only write{" "}
+            {contents.capabilities.writes
+              .map((w) => `${w.endpointId}${w.fields ? ` (${w.fields.join(", ")})` : ""}`)
+              .join("; ") || "nothing"}
+            .
+          </p>
+          <ul>
+            {contents.hooks.map((hook) => (
+              <li key={hook.id}>
+                <details>
+                  <summary>
+                    <code>{hook.trigger.endpointId}</code>{" "}
+                    <span className="muted">({hook.trigger.phase} phase)</span>
+                  </summary>
+                  <pre>{hook.source}</pre>
+                </details>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {contents.uiOps.length === 0 && contents.hooks.length === 0 && (
+        <p className="muted">This mod is empty.</p>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Manifest                                                             */
+/* ------------------------------------------------------------------ */
 
 /**
  * Manifest sections are searchable and capped: a real app can declare
