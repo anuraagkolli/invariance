@@ -8,6 +8,9 @@ import {
 } from "@invariance/schema";
 import type { SigningKeyPair } from "@invariance/schema/signing";
 import { loadKeys } from "./keys";
+import type { AuthoringAgent } from "./modules/authoring/agent";
+import { AnthropicAgent } from "./modules/authoring/anthropic";
+import { authorMod } from "./modules/authoring/pipeline";
 import {
   assembleBundle,
   getPointer,
@@ -15,11 +18,14 @@ import {
   publishManifest,
   RegistryError,
 } from "./modules/registry";
+import { verifyBundleAgainstManifest } from "./modules/verification";
 import { MemoryStore } from "./store";
 
 export interface ControlPlaneOptions {
   store?: MemoryStore;
   keys?: SigningKeyPair;
+  /** Authoring agent; defaults to AnthropicAgent when ANTHROPIC_API_KEY is set. */
+  agent?: AuthoringAgent;
 }
 
 export const ModDraftSchema = z.object({
@@ -37,6 +43,8 @@ export interface ControlPlane {
 export function createControlPlane(options: ControlPlaneOptions = {}): ControlPlane {
   const store = options.store ?? new MemoryStore();
   const keys = options.keys ?? loadKeys();
+  const agent =
+    options.agent ?? (process.env.ANTHROPIC_API_KEY ? new AnthropicAgent() : null);
   const app = new Hono();
 
   app.use("*", cors());
@@ -77,10 +85,43 @@ export function createControlPlane(options: ControlPlaneOptions = {}): ControlPl
    * loop). End-user mods go through the authoring pipeline instead.
    */
   app.post("/v1/apps/:appId/subjects/:subjectId/bundles", async (c) => {
+    const appId = c.req.param("appId");
     const draft = ModDraftSchema.parse(await c.req.json());
-    const bundle = assembleBundle(store, c.req.param("appId"), c.req.param("subjectId"), draft);
+    const bundle = assembleBundle(store, appId, c.req.param("subjectId"), draft);
+    const manifest = store.currentManifest(appId)!;
+    const verdict = verifyBundleAgainstManifest(bundle, manifest);
+    if (!verdict.ok) {
+      return c.json({ error: "verification failed", reasons: verdict.reasons }, 422);
+    }
     const record = publishBundle(store, keys, bundle, []);
     return c.json({ modId: record.modId, contentHash: record.contentHash }, 201);
+  });
+
+  /** End-user authoring: natural-language prompt -> verified, signed bundle. */
+  app.post("/v1/apps/:appId/subjects/:subjectId/prompts", async (c) => {
+    if (!agent) {
+      return c.json({ error: "authoring agent not configured" }, 503);
+    }
+    const { prompt } = z.object({ prompt: z.string().min(1).max(2000) }).parse(await c.req.json());
+    const result = await authorMod({
+      store,
+      keys,
+      agent,
+      appId: c.req.param("appId"),
+      subjectId: c.req.param("subjectId"),
+      prompt,
+    });
+    if (!result.ok) {
+      return c.json({ error: "verification failed", reasons: result.reasons }, 422);
+    }
+    return c.json(
+      {
+        modId: result.record.modId,
+        contentHash: result.record.contentHash,
+        attempts: result.attempts,
+      },
+      201,
+    );
   });
 
   app.get("/v1/apps/:appId/subjects/:subjectId/pointer", (c) =>

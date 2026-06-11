@@ -1,5 +1,9 @@
 import { serve, type ServerType } from "@hono/node-server";
-import { createControlPlane, type ControlPlane } from "@invariance/control-plane";
+import {
+  createControlPlane,
+  type ControlPlane,
+  type ControlPlaneOptions,
+} from "@invariance/control-plane";
 import type { AddressInfo } from "node:net";
 import manifest from "../invariance.manifest.json";
 
@@ -10,8 +14,10 @@ export interface TestControlPlane extends ControlPlane {
 }
 
 /** Boots an in-process control plane on an ephemeral port. */
-export async function startControlPlane(): Promise<TestControlPlane> {
-  const cp = createControlPlane();
+export async function startControlPlane(
+  options: ControlPlaneOptions = {},
+): Promise<TestControlPlane> {
+  const cp = createControlPlane(options);
   const server = await new Promise<ServerType>((resolve) => {
     const s = serve({ fetch: cp.app.fetch, port: 0 }, () => resolve(s));
   });
