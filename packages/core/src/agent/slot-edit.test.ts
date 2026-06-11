@@ -177,9 +177,43 @@ describe('runSlotEdit', () => {
     }
   })
 
-  it('errors politely on an unparseable model reply', async () => {
+  it('errors politely on a schema-violating reply (zod branch)', async () => {
     const fetchFn = vi.fn().mockResolvedValue(okReply('not-a-pick'))
     const outcome = await runSlotEdit({ ...baseInput, currentV2: theme({}, {}), fetchFn })
     expect(outcome.ok).toBe(false)
+  })
+
+  it('errors politely on genuinely malformed JSON (parse branch)', async () => {
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ content: [{ type: 'text', text: '{not json' }], stop_reason: 'end_turn' }),
+    } as unknown as Response)
+    const outcome = await runSlotEdit({ ...baseInput, currentV2: theme({}, {}), fetchFn })
+    expect(outcome.ok).toBe(false)
+  })
+
+  it('rejects an out-of-range hue (wire schema has no numeric bounds; zod is the net)', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(okReply({
+      targetVar: '--inv-sidebar-bg', hue: 999, chromaLevel: 'medium', lightness: 'same',
+      explanation: 'blue',
+    }))
+    const outcome = await runSlotEdit({ ...baseInput, currentV2: theme({}, {}), fetchFn })
+    expect(outcome.ok).toBe(false)
+  })
+
+  it('refuses a bg edit that would make LOCKED sibling text unreadable', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(okReply({
+      targetVar: '--inv-sidebar-bg', hue: 250, chromaLevel: 'neutral', lightness: 'much-lighter',
+      explanation: 'Made the sidebar lighter',
+    }))
+    const outcome = await runSlotEdit({
+      ...baseInput,
+      constraints: { contrast: 4.5, locked_tokens: { '--inv-sidebar-text': '#e8ecf4' } },
+      currentV2: theme({}, { '--inv-sidebar-bg': '#bdbdbd', '--inv-sidebar-text': '#e8ecf4' }),
+      fetchFn,
+    })
+    expect(outcome.ok).toBe(false)
+    if (!outcome.ok) expect(outcome.error).toContain('locked')
   })
 })

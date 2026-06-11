@@ -216,12 +216,23 @@ export async function runSlotEdit(input: SlotEditInput): Promise<SlotEditOutcome
   if (kind === 'bg') {
     // One coordinated micro-mutation: the sibling text token moves with its bg.
     const textVar = vars.find((v) => varKindOf(v) === 'text')
-    if (textVar && input.constraints.locked_tokens?.[textVar] === undefined) {
-      const solved = solveDependentText(literal, resolveSlotVar(textVar, input.currentV2), target)
-      if (!solved.met) {
-        return { ok: false, error: 'Could not find an accessible text color for that background. Try a different shade.' }
+    if (textVar) {
+      const lockedText = input.constraints.locked_tokens?.[textVar]
+      if (lockedText !== undefined) {
+        // The locked text cannot move with its background, so the background
+        // must keep reading against it — verifyV2's contrast pairs only cover
+        // role tokens, making this the sole guard for slot-level pairs.
+        const ratio = wcagContrast(literal, lockedText)
+        if (ratio !== undefined && ratio < target) {
+          return { ok: false, error: 'That background would make the locked text unreadable. Try a different shade.' }
+        }
+      } else {
+        const solved = solveDependentText(literal, resolveSlotVar(textVar, input.currentV2), target)
+        if (!solved.met) {
+          return { ok: false, error: 'Could not find an accessible text color for that background. Try a different shade.' }
+        }
+        newSlots[textVar] = solved.hex
       }
-      newSlots[textVar] = solved.hex
     }
   } else if (kind === 'text') {
     // The requested text color must read against the current background;
