@@ -128,6 +128,8 @@ function HistoryCard({ item }: { item: HistoryItem }) {
 
 const PROGRESS_LABELS: Record<PipelineStage, string> = {
   gatekeeper: 'Understanding your request...',
+  designer: 'Designing the theme...',
+  compiling: 'Compiling design tokens...',
   builder: 'Producing changes...',
   verifying: 'Verifying invariants...',
   retry: 'Retrying...',

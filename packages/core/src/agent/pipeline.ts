@@ -5,6 +5,10 @@ import type { ThemeStore } from '../context/theme-store'
 import type { StorageBackend } from '../storage/types'
 import { callGatekeeper, type ConvTurn } from './gatekeeper'
 import { callBuilder } from './builder'
+import { callDesigner } from './designer'
+import { compileTheme, InvalidStyleSpecError } from '../compiler/compile'
+import { upgradeThemeJson } from '../config/upgrade'
+import { ThemeJsonV2Schema } from '../config/schema'
 import { verify } from '../verify/engine'
 import { verifyV2 } from '../verify/compiled-tests'
 import { deriveConstraints } from '../config/derive-constraints'
@@ -158,7 +162,8 @@ function translateMutationToV2(
 // Pipeline
 // ---------------------------------------------------------------------------
 
-export type PipelineStage = 'gatekeeper' | 'builder' | 'verifying' | 'retry' | 'applying'
+// 'designer' and 'compiling' added for the THEME route
+export type PipelineStage = 'gatekeeper' | 'designer' | 'compiling' | 'builder' | 'verifying' | 'retry' | 'applying'
 
 export async function runPipeline(
   userMessage: string,
@@ -193,10 +198,123 @@ export async function runPipeline(
     },
   )
 
-  // --- v6 kind routing shim ---
-  // THEME: placeholder until Task 7 wires the Designer pipeline
+  // --- THEME route: Designer → compileTheme → verifyV2 → store + apply ---
   if (gatekeeperResult.kind === 'THEME') {
-    return { type: 'error', message: 'Whole-app theming lands in the next task.' }
+    const constraints = deriveConstraints(context.config)
+
+    // Load the current theme; prefer the in-memory store (already upgraded by
+    // the provider on load) then fall back to the storage backend.
+    const storedRaw: AnyThemeJson | null =
+      context.themeStore.getTheme() ??
+      await context.storageBackend.loadTheme(context.userId, context.appId)
+
+    // Upgrade v1 → v2 so the rest of the THEME path only handles v2 shapes.
+    const { theme: currentV2 } = upgradeThemeJson(storedRaw ?? { version: 1, base_app_version: 'v1' })
+
+    // Read the current styleSpec for "more X" relativity in the Designer prompt.
+    const currentSpec = currentV2.theme?.styleSpec
+
+    // Designer retry loop — budget: 1 initial + 2 retries (shared by spec-invalid
+    // and verify-fail). Non-retryable failures (transport) abort immediately.
+    const MAX_RETRIES = 2
+    let retryFeedback: string[] | undefined
+    let lastError = 'Could not produce a valid theme after multiple attempts. Try a simpler request.'
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      onProgress?.(attempt === 0 ? 'designer' : 'retry')
+
+      const designerResult = await callDesigner(
+        {
+          request: userMessage,
+          // exactOptionalPropertyTypes: only spread currentSpec when present so
+          // undefined is never assigned to an optional field explicitly.
+          ...(currentSpec !== undefined ? { currentSpec } : {}),
+          constraints,
+          apiKey: context.apiKey,
+          ...(context.fetchFn ? { fetchFn: context.fetchFn } : {}),
+        },
+        retryFeedback,
+      )
+
+      // Non-retryable failure (transport / HTTP / refusal / truncation).
+      if (!designerResult.ok) {
+        if (!designerResult.retryable) {
+          return { type: 'error', message: designerResult.error }
+        }
+        // Retryable (zod issues); feed them back and continue.
+        retryFeedback = [designerResult.error]
+        lastError = designerResult.error
+        continue
+      }
+
+      const spec = designerResult.spec
+
+      // Compile — InvalidStyleSpecError = retryable constraint violation.
+      onProgress?.('compiling')
+      let compiled: ReturnType<typeof compileTheme>
+      try {
+        compiled = compileTheme(spec, constraints)
+      } catch (err) {
+        if (err instanceof InvalidStyleSpecError) {
+          retryFeedback = err.issues
+          lastError = err.issues.join('; ')
+          continue
+        }
+        // Plain Error = compiler invariant violated (never from user input).
+        throw err
+      }
+
+      // Build the v2 candidate: carry existing slots (user precision edits) + new
+      // compiler roles on top; preserve content/layout/components sections.
+      const candidate: ThemeJsonV2 = {
+        version: 2,
+        base_app_version: currentV2.base_app_version,
+        theme: {
+          roles: compiled.roles,
+          // Preserve any slot overrides the user added; they layer over roles on :root.
+          slots: { ...(currentV2.theme?.slots ?? {}) },
+          styleSpec: spec,
+        },
+      }
+      if (currentV2.content !== undefined) candidate.content = currentV2.content
+      if (currentV2.layout !== undefined) candidate.layout = currentV2.layout
+      if (currentV2.components !== undefined) candidate.components = currentV2.components
+
+      // Verify — failures are retryable via the Designer (same budget).
+      onProgress?.('verifying')
+      const verification = verifyV2(candidate, context.config, constraints)
+      if (!verification.passed) {
+        const failMessages = verification.results
+          .filter((r) => !r.passed)
+          .map((r) => `${r.name}: ${r.message}`)
+        retryFeedback = failMessages
+        lastError = failMessages.join('; ')
+        continue
+      }
+
+      // Final invariant: ThemeJsonV2Schema must accept the candidate.
+      // A failure here is a compiler bug (programmer error), not user input.
+      const schemaCheck = ThemeJsonV2Schema.safeParse(candidate)
+      if (!schemaCheck.success) {
+        throw new Error(
+          `compiler produced an invalid v2 doc: ${schemaCheck.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
+        )
+      }
+
+      // Store + apply.
+      onProgress?.('applying')
+      await context.storageBackend.saveTheme(context.userId, context.appId, candidate)
+      context.themeStore.setTheme(candidate)
+      applyAnyTheme(candidate, context.config)
+
+      return {
+        type: 'success',
+        description: spec.rationale,
+        slotName: 'theme',
+      }
+    }
+
+    return { type: 'error', message: lastError }
   }
 
   // Pass-through kinds that need no further processing
@@ -231,6 +349,7 @@ export async function runPipeline(
       intent,
       slotRegistry: context.registry,
       invariantConfig: context.config,
+      ...(context.fetchFn ? { fetchFn: context.fetchFn } : {}),
     },
     context.apiKey,
   )
@@ -291,6 +410,7 @@ export async function runPipeline(
             slotRegistry: context.registry,
             invariantConfig: context.config,
             retryFeedback: failedResults,
+            ...(context.fetchFn ? { fetchFn: context.fetchFn } : {}),
           },
           context.apiKey,
         )
@@ -335,6 +455,7 @@ export async function runPipeline(
             slotRegistry: context.registry,
             invariantConfig: context.config,
             retryFeedback: verification.results.filter((r) => !r.passed),
+            ...(context.fetchFn ? { fetchFn: context.fetchFn } : {}),
           },
           context.apiKey,
         )

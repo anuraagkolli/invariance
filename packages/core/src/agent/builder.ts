@@ -27,6 +27,8 @@ export interface BuilderConfigInput {
   slotRegistry: SlotRegistration[]
   invariantConfig: InvarianceConfig
   retryFeedback?: TestResult[]
+  // injectable for keyless tests — defaults to globalThis.fetch
+  fetchFn?: typeof fetch
 }
 
 // ---------------------------------------------------------------------------
@@ -131,9 +133,11 @@ ${retrySection}
 
 Produce the theme.json mutation now:`
 
+  // Use injectable fetch for keyless tests; fall back to the global for production.
+  const fetchFn = input.fetchFn ?? fetch
   let response: Response
   try {
-    response = await fetch('https://api.anthropic.com/v1/messages', {
+    response = await fetchFn('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
