@@ -2,6 +2,14 @@ import { z } from 'zod'
 import { StyleSpecSchema } from '../compiler/style-spec'
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+// CSS variable key pattern for both config and theme.json.
+// Keys must match /^--inv-[a-z0-9-]+$/.
+const CSS_VAR_KEY = /^--inv-[a-z0-9-]+$/
+
+// ---------------------------------------------------------------------------
 // Invariant config schema (parsed from YAML)
 // ---------------------------------------------------------------------------
 
@@ -21,10 +29,25 @@ const SpacingConfigSchema = z.object({
   scale: z.array(z.number().nonnegative()).min(1),
 })
 
+const ConstraintsConfigSchema = z.object({
+  contrast: z.string().optional(),
+  accent_chroma_max: z.number().nonnegative().optional(),
+  locked_tokens: z.record(
+    z.string().regex(CSS_VAR_KEY, 'keys must be --inv-* CSS variables'),
+    z.string(),
+  ).optional(),
+  allowed_modes: z.array(z.enum(['light', 'dark'])).optional(),
+  font_registry: z.union([
+    z.literal('default'),
+    z.array(z.string().min(1)),
+  ]).optional(),
+})
+
 const DesignConfigSchema = z.object({
   colors: ColorsConfigSchema.optional(),
   fonts: FontsConfigSchema.optional(),
   spacing: SpacingConfigSchema.optional(),
+  constraints: ConstraintsConfigSchema.optional(),
 })
 
 const StructureConfigSchema = z.object({
@@ -81,7 +104,6 @@ const ThemeRadiiSchema = z.record(z.string(), z.number().nonnegative())
 // Accepts structured keys (colors/fonts/spacing/radii) plus arbitrary --inv-*
 // CSS variable keys written by the scanner during migration. Unknown
 // non-CSS-var keys are stripped; bad --inv-* values fail.
-const CSS_VAR_KEY = /^--inv-[a-z0-9-]+$/
 const ThemeGlobalsSchema = z
   .object({
     colors: ThemeColorsSchema.optional(),

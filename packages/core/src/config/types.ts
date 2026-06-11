@@ -15,6 +15,13 @@ export interface InvarianceConfig {
       colors?: { mode: 'any' } | { mode: 'palette'; palette: string[] }
       fonts?: { allowed: string[] }
       spacing?: { scale: number[] }
+      constraints?: {
+        contrast?: string
+        accent_chroma_max?: number
+        locked_tokens?: Record<string, string>
+        allowed_modes?: Array<'light' | 'dark'>
+        font_registry?: 'default' | string[]
+      }
     }
     structure?: {
       required_sections?: string[]
