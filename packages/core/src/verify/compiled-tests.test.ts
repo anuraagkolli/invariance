@@ -64,4 +64,17 @@ describe('verifyV2', () => {
     const failAt7 = verifyV2(theme, config, { contrast: 7 })
     expect(failAt7.results.find((t) => t.name === 'contrastPairs')?.passed).toBe(false)
   })
+
+  it('lockedTokensUntouched passes for a roles-less theme (precision edits cannot touch a lock)', () => {
+    // A theme with no compiled roles is a precision-edit-only theme. The locked
+    // token still lives in the app's own CSS defaults — absent roles means the
+    // lock cannot have been violated.
+    const theme: ThemeJsonV2 = {
+      version: 2, base_app_version: 'v1',
+      theme: { roles: {}, slots: { '--inv-sidebar-bg': '#123456' } },
+    }
+    const result = verifyV2(theme, { app: 'test' }, { locked_tokens: { '--inv-accent': '#e94560' } })
+    const locked = result.results.find((r) => r.name === 'lockedTokensUntouched')
+    expect(locked?.passed).toBe(true)
+  })
 })

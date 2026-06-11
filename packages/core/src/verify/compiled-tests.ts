@@ -85,6 +85,19 @@ function lockedTokensUntouched(
     }
   }
   const roles = theme?.roles ?? {}
+  // A theme with no compiled roles cannot have touched a lock — the locked
+  // value still comes from the app's own CSS defaults. Absence only becomes
+  // suspicious in a compiled theme (roles present), where a missing locked
+  // key means something removed it.
+  if (Object.keys(roles).length === 0) {
+    return {
+      name: 'lockedTokensUntouched',
+      passed: true,
+      message: 'No roles present — locked tokens untouched by construction',
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
   const violations: string[] = []
   for (const [token, expected] of Object.entries(locked)) {
     if (roles[token] !== expected) {

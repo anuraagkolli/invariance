@@ -17,7 +17,7 @@ import { createLocalStorage } from '../storage/local-storage'
 import { createApiStorage } from '../storage/api'
 import type { StorageBackend } from '../storage/types'
 import { applyAnyTheme } from '../runtime/apply'
-import { upgradeThemeJson } from '../config/upgrade'
+import { prepareStoredTheme } from '../runtime/load-theme'
 
 // ---------------------------------------------------------------------------
 // Context value
@@ -77,30 +77,33 @@ export function InvarianceProvider({
   }, [])
 
   // Load theme.json from storage on mount, falling back to initialTheme.
-  // upgradeThemeJson ensures the in-memory shape is always v2 from here on,
-  // so downstream consumers (Builder, Designer route, slot.tsx) see a uniform type.
+  // prepareStoredTheme upgrades to v2 and re-runs the deterministic verifier —
+  // stored bytes are untrusted (localStorage is user-editable; a remote backend
+  // can drift). Verification failures are logged and the theme is silently
+  // dropped so the app falls back to its own CSS defaults.
   useEffect(() => {
     let cancelled = false
+    function applyPrepared(raw: AnyThemeJson): void {
+      const prepared = prepareStoredTheme(raw, config)
+      for (const w of prepared.warnings) console.warn('[invariance] theme upgrade:', w)
+      if (!prepared.ok) {
+        for (const f of prepared.failures) {
+          console.warn('[invariance] stored theme failed verification; using base styling:', f)
+        }
+        return
+      }
+      themeStore.setTheme(prepared.theme)
+      applyAnyTheme(prepared.theme, config)
+    }
     async function loadTheme(): Promise<void> {
       try {
         const stored = await storageBackend.loadTheme(userId, config.app)
         if (cancelled) return
         const raw = stored ?? initialTheme ?? null
-        if (raw) {
-          const { theme, warnings } = upgradeThemeJson(raw)
-          for (const w of warnings) console.warn('[invariance] theme upgrade:', w)
-          themeStore.setTheme(theme)
-          applyAnyTheme(theme, config)
-        }
+        if (raw) applyPrepared(raw)
       } catch (e) {
         console.warn('Failed to load theme.json:', e)
-        // Still try to apply initialTheme on storage failure
-        if (!cancelled && initialTheme) {
-          const { theme, warnings } = upgradeThemeJson(initialTheme)
-          for (const w of warnings) console.warn('[invariance] theme upgrade:', w)
-          themeStore.setTheme(theme)
-          applyAnyTheme(theme, config)
-        }
+        if (!cancelled && initialTheme) applyPrepared(initialTheme)
       }
     }
     void loadTheme()
