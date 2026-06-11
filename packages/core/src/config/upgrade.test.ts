@@ -61,4 +61,27 @@ describe('upgradeThemeJson', () => {
     expect(again.theme).toEqual(v2)
     expect(again.warnings).toEqual([])
   })
+
+  it('upgrades a legacy v5 doc at version 3 WITH globals (does not pass through)', () => {
+    // v5 used version as a per-save revision counter; a doc at version 3 that
+    // still has theme.globals must be upgraded (partition globals → slots), not
+    // passed through with globals intact.
+    const legacyV5: ThemeJson = {
+      version: 3,
+      base_app_version: 'v1',
+      theme: {
+        globals: {
+          '--inv-sidebar-bg': '#1a1a2e',
+          '--inv-header-bg': '#ffffff',
+        },
+      },
+    }
+    const { theme, warnings } = upgradeThemeJson(legacyV5 as unknown as import('./types').AnyThemeJson)
+    // globals partitioned into slots
+    expect(theme.theme?.slots?.['--inv-sidebar-bg']).toBe('#1a1a2e')
+    expect(theme.theme?.slots?.['--inv-header-bg']).toBe('#ffffff')
+    // upgraded to canonical v2 schema version
+    expect(theme.version).toBe(2)
+    expect(warnings).toEqual([])
+  })
 })

@@ -119,8 +119,11 @@ export interface ThemeJsonV2 {
 // accept either; the provider upgrades to v2 in-memory on load.
 export type AnyThemeJson = ThemeJson | ThemeJsonV2
 
-// Version guard: version >= 2 is the v2 discriminant. Pure runtime export —
-// types.ts is allowed a single runtime helper; no new file warranted.
+// Version guard: shape-aware discriminant. v5 used `version` as a per-save
+// revision counter, so a legacy v5 doc at version 3+ with a `globals` key
+// would misclassify as v2 under a plain `>= 2` check. v2 documents never
+// carry the v1 `theme.globals` key — that key moved to `theme.slots` during
+// upgrade. Checking for its absence makes the guard version-counter-safe.
 export function isV2Theme(t: ThemeJson | ThemeJsonV2): t is ThemeJsonV2 {
-  return t.version >= 2
+  return t.version >= 2 && !(t.theme && 'globals' in t.theme)
 }

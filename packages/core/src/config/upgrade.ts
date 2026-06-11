@@ -1,4 +1,5 @@
 import type { AnyThemeJson, ThemeJson, ThemeJsonV2 } from './types'
+import { isV2Theme } from './types'
 
 export interface UpgradeResult {
   theme: ThemeJsonV2
@@ -10,9 +11,12 @@ const STRUCTURED_KEYS = new Set(['colors', 'fonts', 'spacing', 'radii'])
 // Pure key-partition from v1 globals into v2 slots. Naming mirrors what the
 // v1 apply-theme.ts wrote to :root, so upgraded themes render identically.
 // Accepts AnyThemeJson: v2 themes pass through immediately (no-op upgrade).
+// Guard uses isV2Theme (shape-aware) instead of version >= 2 alone: a legacy
+// v5 doc at version 3 WITH globals should upgrade (partition globals → slots),
+// not pass through with its globals intact.
 export function upgradeThemeJson(input: AnyThemeJson): UpgradeResult {
-  if (input.version >= 2) {
-    return { theme: input as unknown as ThemeJsonV2, warnings: [] }
+  if (isV2Theme(input)) {
+    return { theme: input as ThemeJsonV2, warnings: [] }
   }
 
   // After the early return above, input must be v1 (ThemeJson). Cast so that
