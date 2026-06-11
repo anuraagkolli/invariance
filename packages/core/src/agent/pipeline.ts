@@ -1,11 +1,11 @@
-import type { ThemeJson, InvarianceConfig } from '../config/types'
+import type { AnyThemeJson, ThemeJson, InvarianceConfig } from '../config/types'
 import type { SlotRegistration } from '../context/registry'
 import type { ThemeStore } from '../context/theme-store'
 import type { StorageBackend } from '../storage/types'
 import { callGatekeeper, type ConvTurn } from './gatekeeper'
 import { callBuilder } from './builder'
 import { verify } from '../verify/engine'
-import { applyThemeJson } from '../runtime/apply'
+import { applyAnyTheme } from '../runtime/apply'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -110,13 +110,16 @@ export async function runPipeline(
     requirements: gatekeeperResult.requirements,
   }
 
-  // Step 2: Builder — produce theme.json mutation
+  // Step 2: Builder — produce theme.json mutation.
+  // The v5 Builder path operates on v1-shaped themes; cast is safe here because
+  // slot-level THEME routing (Task 7) will bypass this path entirely.
   onProgress?.('builder')
   const currentTheme = context.themeStore.getTheme()
+  const currentThemeV1 = currentTheme as ThemeJson | null
 
   let builderResult = await callBuilder(
     {
-      currentThemeJson: currentTheme,
+      currentThemeJson: currentThemeV1,
       intent,
       slotRegistry: context.registry,
       invariantConfig: context.config,
@@ -126,7 +129,7 @@ export async function runPipeline(
 
   // Step 3: Merge + Verify (with retries to Builder on failure)
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const candidateTheme = mergeTheme(currentTheme, builderResult.mutation)
+    const candidateTheme = mergeTheme(currentThemeV1, builderResult.mutation)
     candidateTheme.version = (currentTheme?.version ?? 0) + 1
 
     onProgress?.(attempt === 0 ? 'verifying' : 'retry')
@@ -143,7 +146,7 @@ export async function runPipeline(
       onProgress?.('applying')
       await context.storageBackend.saveTheme(context.userId, context.appId, candidateTheme)
       context.themeStore.setTheme(candidateTheme)
-      applyThemeJson(candidateTheme, context.config)
+      applyAnyTheme(candidateTheme, context.config)
       return {
         type: 'success',
         description: builderResult.explanation,
@@ -155,7 +158,7 @@ export async function runPipeline(
       // Retry: send failures back to Builder (not Gatekeeper)
       builderResult = await callBuilder(
         {
-          currentThemeJson: currentTheme,
+          currentThemeJson: currentThemeV1,
           intent,
           slotRegistry: context.registry,
           invariantConfig: context.config,

@@ -1,4 +1,4 @@
-import type { ThemeJson } from '../config/types'
+import type { AnyThemeJson } from '../config/types'
 import type { StorageBackend } from './types'
 
 export function createApiStorage(baseUrl: string): StorageBackend {
@@ -11,7 +11,7 @@ export function createApiStorage(baseUrl: string): StorageBackend {
         if (!res.ok) return null
         const data = await res.json()
         if (!data || typeof data !== 'object' || !('version' in data)) return null
-        return data as ThemeJson
+        return data as AnyThemeJson
       } catch {
         return null
       }

@@ -1,8 +1,8 @@
-import type { ThemeJson } from '../config/types'
+import type { AnyThemeJson } from '../config/types'
 import type { StorageBackend } from './types'
 
 export function createMemoryStorage(): StorageBackend {
-  const store = new Map<string, ThemeJson>()
+  const store = new Map<string, AnyThemeJson>()
 
   function key(userId: string, appId: string): string {
     return `${userId}:${appId}`

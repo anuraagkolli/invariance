@@ -11,7 +11,7 @@ import {
 import { useInvariance } from '../context/provider'
 import { runPipeline, type PipelineStage } from '../agent/pipeline'
 import type { ConvTurn } from '../agent/gatekeeper'
-import { applyThemeJson } from '../runtime/apply'
+import { applyAnyTheme } from '../runtime/apply'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -306,7 +306,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
   async function handleReset() {
     if (initialTheme) {
       themeStore.setTheme(initialTheme)
-      applyThemeJson(initialTheme, config)
+      applyAnyTheme(initialTheme, config)
       await storageBackend.saveTheme(userId, appId, initialTheme)
     } else {
       themeStore.clear()

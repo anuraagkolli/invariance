@@ -114,3 +114,13 @@ export interface ThemeJsonV2 {
   layout?: LayoutSection
   components?: ComponentsSection
 }
+
+// Union of all supported schema versions. Storage backends and the runtime
+// accept either; the provider upgrades to v2 in-memory on load.
+export type AnyThemeJson = ThemeJson | ThemeJsonV2
+
+// Version guard: version >= 2 is the v2 discriminant. Pure runtime export —
+// types.ts is allowed a single runtime helper; no new file warranted.
+export function isV2Theme(t: ThemeJson | ThemeJsonV2): t is ThemeJsonV2 {
+  return t.version >= 2
+}

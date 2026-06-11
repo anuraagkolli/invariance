@@ -1,4 +1,4 @@
-import type { ThemeJson } from '../config/types'
+import type { AnyThemeJson } from '../config/types'
 import type { StorageBackend } from './types'
 
 export function createLocalStorage(): StorageBackend {
@@ -11,7 +11,7 @@ export function createLocalStorage(): StorageBackend {
       try {
         const raw = localStorage.getItem(key(userId, appId))
         if (!raw) return null
-        return JSON.parse(raw) as ThemeJson
+        return JSON.parse(raw) as AnyThemeJson
       } catch {
         return null
       }
@@ -29,7 +29,7 @@ export function createLocalStorage(): StorageBackend {
       try {
         const raw = localStorage.getItem(key(userId, appId))
         if (!raw) return 0
-        const theme = JSON.parse(raw) as ThemeJson
+        const theme = JSON.parse(raw) as AnyThemeJson
         return theme.version ?? 0
       } catch {
         return 0

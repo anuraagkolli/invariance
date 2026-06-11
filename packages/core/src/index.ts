@@ -60,8 +60,10 @@ export type { FontPairing } from './registries/font-pairings'
 export { THEME_PACKS } from './registries/theme-packs'
 export type { ThemePack } from './registries/theme-packs'
 
-// theme.json v2
+// theme.json v2 + version-agnostic types and runtime
 export { ThemeJsonV2Schema } from './config/schema'
-export type { ThemeJsonV2, ThemeSectionV2 } from './config/types'
+export type { ThemeJsonV2, ThemeSectionV2, AnyThemeJson } from './config/types'
+export { isV2Theme } from './config/types'
 export { upgradeThemeJson } from './config/upgrade'
 export type { UpgradeResult } from './config/upgrade'
+export { applyAnyTheme } from './runtime/apply'

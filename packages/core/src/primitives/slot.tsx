@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, type CSSProperties, type ReactNode } from 'r
 
 import type { Level } from '../levels/index'
 import { useInvariance } from '../context/provider'
+import { isV2Theme } from '../config/types'
 import { ErrorBoundary } from './error-boundary'
 
 interface SlotProps {
@@ -69,8 +70,13 @@ export function Slot({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // F1: per-slot style overrides from theme.json
-  const slotStyles: CSSProperties = (themeJson?.theme?.slots?.[name] ?? {}) as CSSProperties
+  // F1: per-slot style overrides from theme.json.
+  // v2 themes use CSS-variable maps (roles/slots) written to :root — the lookup
+  // below would be a silent no-op for v2 anyway (var() refs aren't CSSProperties),
+  // so guard explicitly to keep the type honest and avoid future false positives.
+  const slotStyles: CSSProperties = (
+    themeJson && !isV2Theme(themeJson) ? (themeJson?.theme?.slots?.[name] ?? {}) : {}
+  ) as CSSProperties
 
   // Build CSS to cascade styles through to direct children (overrides Tailwind etc.)
   const childCss = useMemo(() => buildChildCss(name, slotStyles), [name, slotStyles])

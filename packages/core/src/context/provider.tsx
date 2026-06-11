@@ -9,14 +9,15 @@ import {
   type ReactNode,
 } from 'react'
 
-import type { InvarianceConfig, ThemeJson } from '../config/types'
+import type { InvarianceConfig, AnyThemeJson } from '../config/types'
 import { createThemeStore, type ThemeStore } from './theme-store'
 import { createSlotRegistry, type SlotRegistry } from './registry'
 import { createMemoryStorage } from '../storage/memory'
 import { createLocalStorage } from '../storage/local-storage'
 import { createApiStorage } from '../storage/api'
 import type { StorageBackend } from '../storage/types'
-import { applyThemeJson } from '../runtime/apply'
+import { applyAnyTheme } from '../runtime/apply'
+import { upgradeThemeJson } from '../config/upgrade'
 
 // ---------------------------------------------------------------------------
 // Context value
@@ -28,8 +29,8 @@ interface InvarianceContextValue {
   userId: string
   appId: string
   themeStore: ThemeStore
-  themeJson: ThemeJson | null
-  initialTheme: ThemeJson | undefined
+  themeJson: AnyThemeJson | null
+  initialTheme: AnyThemeJson | undefined
   registry: SlotRegistry
   storageBackend: StorageBackend
   componentLibrary: Record<string, React.ComponentType<any>> | undefined
@@ -45,7 +46,7 @@ interface InvarianceProviderProps {
   config: InvarianceConfig
   apiKey?: string
   userId?: string
-  initialTheme?: ThemeJson
+  initialTheme?: AnyThemeJson
   componentLibrary?: Record<string, React.ComponentType<any>>
   storage?: 'memory' | 'localStorage' | 'api'
   storageUrl?: string
@@ -75,24 +76,30 @@ export function InvarianceProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Load theme.json from storage on mount, falling back to initialTheme
+  // Load theme.json from storage on mount, falling back to initialTheme.
+  // upgradeThemeJson ensures the in-memory shape is always v2 from here on,
+  // so downstream consumers (Builder, Designer route, slot.tsx) see a uniform type.
   useEffect(() => {
     let cancelled = false
     async function loadTheme(): Promise<void> {
       try {
         const stored = await storageBackend.loadTheme(userId, config.app)
         if (cancelled) return
-        const theme = stored ?? initialTheme ?? null
-        if (theme) {
+        const raw = stored ?? initialTheme ?? null
+        if (raw) {
+          const { theme, warnings } = upgradeThemeJson(raw)
+          for (const w of warnings) console.warn('[invariance] theme upgrade:', w)
           themeStore.setTheme(theme)
-          applyThemeJson(theme, config)
+          applyAnyTheme(theme, config)
         }
       } catch (e) {
         console.warn('Failed to load theme.json:', e)
         // Still try to apply initialTheme on storage failure
         if (!cancelled && initialTheme) {
-          themeStore.setTheme(initialTheme)
-          applyThemeJson(initialTheme, config)
+          const { theme, warnings } = upgradeThemeJson(initialTheme)
+          for (const w of warnings) console.warn('[invariance] theme upgrade:', w)
+          themeStore.setTheme(theme)
+          applyAnyTheme(theme, config)
         }
       }
     }

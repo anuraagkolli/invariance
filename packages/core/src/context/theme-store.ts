@@ -1,17 +1,17 @@
 'use client'
 
-import type { ThemeJson } from '../config/types'
+import type { AnyThemeJson } from '../config/types'
 
 export interface ThemeStore {
-  getTheme(): ThemeJson | null
-  setTheme(theme: ThemeJson): void
+  getTheme(): AnyThemeJson | null
+  setTheme(theme: AnyThemeJson): void
   clear(): void
   subscribe(listener: () => void): () => void
-  getSnapshot(): ThemeJson | null
+  getSnapshot(): AnyThemeJson | null
 }
 
-export function createThemeStore(initial?: ThemeJson | null): ThemeStore {
-  let current: ThemeJson | null = initial ?? null
+export function createThemeStore(initial?: AnyThemeJson | null): ThemeStore {
+  let current: AnyThemeJson | null = initial ?? null
   const listeners = new Set<() => void>()
 
   function notify(): void {
@@ -25,7 +25,7 @@ export function createThemeStore(initial?: ThemeJson | null): ThemeStore {
       return current
     },
 
-    setTheme(theme: ThemeJson) {
+    setTheme(theme: AnyThemeJson) {
       current = theme
       notify()
     },
