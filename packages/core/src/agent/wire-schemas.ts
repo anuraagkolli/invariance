@@ -15,6 +15,23 @@ export const GATEKEEPER_WIRE_SCHEMA = {
   },
 } as const
 
+// Slot-edit pick: the model chooses intent, never values. targetVar is an enum
+// of the slot's registered variables so an off-list var cannot be emitted.
+export function slotEditWireSchema(targetVars: readonly string[]) {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['targetVar', 'hue', 'chromaLevel', 'lightness', 'explanation'],
+    properties: {
+      targetVar: { type: 'string', enum: [...targetVars] },
+      hue: { type: 'number' },
+      chromaLevel: { type: 'string', enum: ['neutral', 'muted', 'medium', 'vivid'] },
+      lightness: { type: 'string', enum: ['much-darker', 'darker', 'same', 'lighter', 'much-lighter'] },
+      explanation: { type: 'string' },
+    },
+  } as const
+}
+
 // Relaxed StyleSpec schema for the structured-outputs dialect.
 // fontPairing is an enum of registry ids (the one bound the dialect CAN express);
 // all other numeric ranges are enforced by StyleSpecSchema (zod) after receipt.

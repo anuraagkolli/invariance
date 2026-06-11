@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { converter, wcagContrast } from 'culori'
-import { resolveSlotVar, buildSlotLiteral, solveDependentText } from './slot-edit'
+import { resolveSlotVar, buildSlotLiteral, solveDependentText, runSlotEdit } from './slot-edit'
 import type { ThemeJsonV2 } from '../config/types'
+import type { SlotRegistration } from '../context/registry'
 
 const toOklch = converter('oklch')
 
@@ -88,5 +89,97 @@ describe('resolveSlotVar var() robustness', () => {
   })
   it('resolves var() with whitespace', () => {
     expect(resolveSlotVar('--inv-sidebar-bg', theme({ '--inv-surface-2': '#1f232c' }, { '--inv-sidebar-bg': 'var( --inv-surface-2 )' }))).toBe('#1f232c')
+  })
+})
+
+const okReply = (body: unknown) =>
+  ({
+    ok: true,
+    status: 200,
+    json: async () => ({ content: [{ type: 'text', text: JSON.stringify(body) }], stop_reason: 'end_turn' }),
+  }) as unknown as Response
+
+const sidebarReg: SlotRegistration = {
+  name: 'sidebar', level: 1, pageName: '', preserve: false,
+  alternativesCount: 0, type: 'slot', source: 'page',
+  cssVariables: ['--inv-sidebar-bg', '--inv-sidebar-text'],
+}
+
+const baseInput = {
+  intent: { slotName: 'sidebar', description: 'make the sidebar blue' },
+  registry: [sidebarReg],
+  config: { app: 'test' },
+  constraints: { contrast: 4.5 },
+  apiKey: 'k',
+}
+
+describe('runSlotEdit', () => {
+  it('builds a contrast-solved bg+text micro-mutation', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(okReply({
+      targetVar: '--inv-sidebar-bg', hue: 250, chromaLevel: 'medium', lightness: 'same',
+      explanation: 'Made the sidebar blue',
+    }))
+    // Current values come in as slot literals, NOT a partial roles map: a
+    // non-empty-but-incomplete roles map would (correctly) fail
+    // compilerOutputComplete in verifyV2. Real edits ride on either a complete
+    // compiled theme or no roles at all.
+    const currentV2 = theme({}, { '--inv-sidebar-bg': '#171a21', '--inv-sidebar-text': '#f2f3f5' })
+    const outcome = await runSlotEdit({ ...baseInput, currentV2, fetchFn })
+    expect(outcome.ok).toBe(true)
+    if (outcome.ok) {
+      const slots = outcome.candidate.theme?.slots ?? {}
+      const bg = slots['--inv-sidebar-bg']
+      const text = slots['--inv-sidebar-text']
+      expect(bg).toMatch(/^#[0-9a-f]{6}$/)
+      expect(text).toMatch(/^#[0-9a-f]{6}$/)
+      expect(wcagContrast(text!, bg!)).toBeGreaterThanOrEqual(4.5)
+      expect(outcome.explanation).toBe('Made the sidebar blue')
+    }
+  })
+
+  it('rejects a slot with no registered css variables before calling the model', async () => {
+    const fetchFn = vi.fn()
+    const bare: SlotRegistration = { ...sidebarReg, name: 'bare' }
+    delete (bare as Record<string, unknown>).cssVariables
+    const outcome = await runSlotEdit({
+      ...baseInput, intent: { slotName: 'bare', description: 'make it blue' },
+      registry: [bare], currentV2: theme({}, {}), fetchFn,
+    })
+    expect(outcome.ok).toBe(false)
+    expect(fetchFn).not.toHaveBeenCalled()
+  })
+
+  it('refuses to shadow a developer lock with a slot literal', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(okReply({
+      targetVar: '--inv-sidebar-bg', hue: 250, chromaLevel: 'medium', lightness: 'same',
+      explanation: 'Made the sidebar blue',
+    }))
+    const outcome = await runSlotEdit({
+      ...baseInput,
+      constraints: { contrast: 4.5, locked_tokens: { '--inv-sidebar-bg': '#101010' } },
+      currentV2: theme({}, {}), fetchFn,
+    })
+    expect(outcome.ok).toBe(false)
+    if (!outcome.ok) expect(outcome.error).toContain('locked')
+  })
+
+  it('adjusts a requested text color that cannot read against the current bg', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(okReply({
+      targetVar: '--inv-sidebar-text', hue: 250, chromaLevel: 'medium', lightness: 'much-darker',
+      explanation: 'Made the sidebar text navy',
+    }))
+    const currentV2 = theme({}, { '--inv-sidebar-bg': '#0f1117' })
+    const outcome = await runSlotEdit({ ...baseInput, currentV2, fetchFn })
+    expect(outcome.ok).toBe(true)
+    if (outcome.ok) {
+      const text = outcome.candidate.theme?.slots?.['--inv-sidebar-text']
+      expect(wcagContrast(text!, '#0f1117')).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('errors politely on an unparseable model reply', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(okReply('not-a-pick'))
+    const outcome = await runSlotEdit({ ...baseInput, currentV2: theme({}, {}), fetchFn })
+    expect(outcome.ok).toBe(false)
   })
 })

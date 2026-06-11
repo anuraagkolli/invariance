@@ -2,3 +2,6 @@
 export const GATEKEEPER_MODEL = 'claude-haiku-4-5'
 export const DESIGNER_MODEL = 'claude-sonnet-4-6'
 export const BUILDER_MODEL = 'claude-sonnet-4-6'
+// Slot-edit is a micro-mutation classification job: Haiku latency matters more
+// than Sonnet capability here.
+export const SLOT_EDIT_MODEL = 'claude-haiku-4-5'

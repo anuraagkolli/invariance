@@ -1,8 +1,17 @@
-import { converter, formatHex, clampChroma, wcagContrast } from 'culori' // wcagContrast used by runSlotEdit (Task 5)
+import { z } from 'zod'
+import { converter, formatHex, clampChroma, wcagContrast } from 'culori'
 
-import type { ThemeJsonV2 } from '../config/types'
+import type { ThemeJsonV2, InvarianceConfig } from '../config/types'
+import type { DesignConstraints } from '../compiler/style-spec'
 import { ACCENT_CHROMA } from '../compiler/style-spec'
 import { solveText } from '../compiler/contrast'
+import type { SlotRegistration } from '../context/registry'
+import { callClaude } from './api'
+import type { UsageHandler } from './api'
+import { SLOT_EDIT_MODEL } from './models'
+import { slotEditWireSchema } from './wire-schemas'
+import { buildSlotEditPrompt } from './slot-edit-prompt'
+import { verifyV2 } from '../verify/compiled-tests'
 
 const toOklch = converter('oklch')
 
@@ -120,7 +129,138 @@ export function solveDependentText(
   return { hex: result.hex, met: result.met }
 }
 
-// Prevent tree-shaking of wcagContrast import — Task 5 (runSlotEdit) will use
-// it directly. Exported as a re-export so tsc doesn't flag noUnusedLocals if
-// the flag is ever enabled.
-export { wcagContrast }
+const SlotEditReplySchema = z.object({
+  targetVar: z.string(),
+  hue: z.number().min(0).max(360),
+  chromaLevel: z.enum(['neutral', 'muted', 'medium', 'vivid']),
+  lightness: z.enum(['much-darker', 'darker', 'same', 'lighter', 'much-lighter']),
+  explanation: z.string().min(1),
+})
+
+export interface SlotEditInput {
+  intent: { slotName: string; description: string }
+  currentV2: ThemeJsonV2
+  registry: SlotRegistration[]
+  constraints: DesignConstraints
+  config: InvarianceConfig
+  apiKey: string
+  fetchFn?: typeof fetch
+  baseUrl?: string
+  onUsage?: UsageHandler
+}
+
+export type SlotEditOutcome =
+  | { ok: true; candidate: ThemeJsonV2; explanation: string }
+  | { ok: false; error: string }
+
+const MISUNDERSTOOD = 'Could not understand the color request. Try rephrasing.'
+
+export async function runSlotEdit(input: SlotEditInput): Promise<SlotEditOutcome> {
+  const registration = input.registry.find((r) => r.name === input.intent.slotName)
+  const vars = registration?.cssVariables ?? []
+  if (vars.length === 0) {
+    return { ok: false, error: 'This slot does not support style variables yet.' }
+  }
+
+  const system = buildSlotEditPrompt({
+    slotName: input.intent.slotName,
+    variables: vars.map((name) => ({ name, currentValue: resolveSlotVar(name, input.currentV2) })),
+  })
+
+  const result = await callClaude({
+    apiKey: input.apiKey,
+    // Micro-edit: a classification-sized job where latency matters most.
+    model: SLOT_EDIT_MODEL,
+    system,
+    messages: [{ role: 'user', content: input.intent.description }],
+    temperature: 0.1,
+    maxTokens: 512,
+    outputSchema: slotEditWireSchema(vars) as unknown as Record<string, unknown>,
+    ...(input.fetchFn ? { fetchFn: input.fetchFn } : {}),
+    ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
+    ...(input.onUsage ? { onUsage: input.onUsage } : {}),
+  })
+  if (!result.ok) return { ok: false, error: result.error }
+
+  let raw: unknown
+  try {
+    raw = JSON.parse(result.text)
+  } catch {
+    return { ok: false, error: MISUNDERSTOOD }
+  }
+  const parsed = SlotEditReplySchema.safeParse(raw)
+  if (!parsed.success || !vars.includes(parsed.data.targetVar)) {
+    return { ok: false, error: MISUNDERSTOOD }
+  }
+  const pick = parsed.data
+
+  // Deterministic guard: a slot literal would visually shadow a developer lock
+  // (slots write to :root after roles), so locked vars are refused outright.
+  if (input.constraints.locked_tokens?.[pick.targetVar] !== undefined) {
+    return { ok: false, error: 'That value is locked by the developer and cannot be changed.' }
+  }
+
+  const currentHex = resolveSlotVar(pick.targetVar, input.currentV2)
+  const literal = buildSlotLiteral({
+    hue: pick.hue,
+    chromaLevel: pick.chromaLevel,
+    lightness: pick.lightness,
+    currentHex,
+    ...(input.constraints.accent_chroma_max !== undefined ? { chromaMax: input.constraints.accent_chroma_max } : {}),
+  })
+
+  const target = input.constraints.contrast ?? 4.5
+  const newSlots: Record<string, string> = { [pick.targetVar]: literal }
+  const kind = varKindOf(pick.targetVar)
+
+  if (kind === 'bg') {
+    // One coordinated micro-mutation: the sibling text token moves with its bg.
+    const textVar = vars.find((v) => varKindOf(v) === 'text')
+    if (textVar && input.constraints.locked_tokens?.[textVar] === undefined) {
+      const solved = solveDependentText(literal, resolveSlotVar(textVar, input.currentV2), target)
+      if (!solved.met) {
+        return { ok: false, error: 'Could not find an accessible text color for that background. Try a different shade.' }
+      }
+      newSlots[textVar] = solved.hex
+    }
+  } else if (kind === 'text') {
+    // The requested text color must read against the current background;
+    // adjust its lightness minimally when it falls short.
+    const bgVar = vars.find((v) => varKindOf(v) === 'bg')
+    const bgHex = bgVar ? resolveSlotVar(bgVar, input.currentV2) : null
+    if (bgHex) {
+      const ratio = wcagContrast(literal, bgHex)
+      // wcagContrast can return undefined if either input is unparseable; only
+      // trigger the solver when we have a concrete ratio that falls short.
+      if (ratio !== undefined && ratio < target) {
+        const parsedLiteral = toOklch(literal)
+        const solved = solveText(bgHex, { hue: parsedLiteral?.h ?? pick.hue, chroma: parsedLiteral?.c ?? 0, target })
+        if (!solved.met) {
+          return { ok: false, error: 'That text color cannot reach readable contrast here. Try a different color.' }
+        }
+        newSlots[pick.targetVar] = solved.hex
+      }
+    }
+  }
+
+  const candidate: ThemeJsonV2 = {
+    version: 2,
+    base_app_version: input.currentV2.base_app_version,
+    theme: {
+      roles: { ...(input.currentV2.theme?.roles ?? {}) },
+      slots: { ...(input.currentV2.theme?.slots ?? {}), ...newSlots },
+      ...(input.currentV2.theme?.styleSpec ? { styleSpec: input.currentV2.theme.styleSpec } : {}),
+    },
+  }
+  if (input.currentV2.content !== undefined) candidate.content = input.currentV2.content
+  if (input.currentV2.layout !== undefined) candidate.layout = input.currentV2.layout
+  if (input.currentV2.components !== undefined) candidate.components = input.currentV2.components
+
+  const verification = verifyV2(candidate, input.config, input.constraints)
+  if (!verification.passed) {
+    const failures = verification.results.filter((r) => !r.passed).map((r) => `${r.name}: ${r.message}`)
+    return { ok: false, error: `The change failed verification: ${failures.join('; ')}` }
+  }
+
+  return { ok: true, candidate, explanation: pick.explanation }
+}
