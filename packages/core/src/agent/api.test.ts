@@ -100,4 +100,14 @@ describe('callClaude baseUrl + usage', () => {
     await callClaude({ ...baseOpts, fetchFn, onUsage })
     expect(onUsage).not.toHaveBeenCalled()
   })
+
+  it('survives a throwing onUsage handler (metering must never break a call)', async () => {
+    const onUsage = vi.fn(() => { throw new Error('sink down') })
+    const fetchFn = vi.fn().mockResolvedValue(okResponse({
+      content: [{ type: 'text', text: '{}' }], stop_reason: 'end_turn',
+      usage: { input_tokens: 1, output_tokens: 1 },
+    }))
+    const result = await callClaude({ ...baseOpts, fetchFn, onUsage })
+    expect(result.ok).toBe(true)
+  })
 })

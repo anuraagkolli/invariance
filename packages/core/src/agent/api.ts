@@ -78,11 +78,15 @@ export async function callClaude(opts: ClaudeCallOptions): Promise<ClaudeCallRes
   // Report token usage before branching on stop_reason — tokens are spent even
   // on refusal or truncation, so the handler must fire regardless of outcome.
   if (data.usage && opts.onUsage) {
-    opts.onUsage({
-      model: opts.model,
-      inputTokens: data.usage.input_tokens ?? 0,
-      outputTokens: data.usage.output_tokens ?? 0,
-    })
+    try {
+      opts.onUsage({
+        model: opts.model,
+        inputTokens: data.usage.input_tokens ?? 0,
+        outputTokens: data.usage.output_tokens ?? 0,
+      })
+    } catch {
+      // metering must never break a model call (callClaude never throws)
+    }
   }
 
   if (data.stop_reason === 'refusal') return { ok: false, error: 'The request was declined. Try rephrasing.' }
