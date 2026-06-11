@@ -25,7 +25,8 @@ export async function submitPrompt(
     return { ok: false, reasons: body.reasons ?? ["rejected by verification"] };
   }
   if (!res.ok) {
-    return { ok: false, reasons: [`authoring failed (${res.status})`] };
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    return { ok: false, reasons: [body.error ?? `authoring failed (${res.status})`] };
   }
   const body = (await res.json()) as { modId: string };
   return { ok: true, modId: body.modId };
@@ -38,8 +39,11 @@ export async function requestRefix(config: InvarianceClientConfig): Promise<Auth
     { method: "POST" },
   );
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { reasons?: string[] };
-    return { ok: false, reasons: body.reasons ?? [`refix failed (${res.status})`] };
+    const body = (await res.json().catch(() => ({}))) as { reasons?: string[]; error?: string };
+    return {
+      ok: false,
+      reasons: body.reasons ?? [body.error ?? `refix failed (${res.status})`],
+    };
   }
   const body = (await res.json()) as { modId: string };
   return { ok: true, modId: body.modId };
