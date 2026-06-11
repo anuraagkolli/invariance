@@ -1,5 +1,6 @@
 import type { InvarianceConfig } from '../config/types'
 import type { SlotRegistration } from '../context/registry'
+import { GATEKEEPER_MODEL } from './models'
 
 // ---------------------------------------------------------------------------
 // Response types
@@ -139,7 +140,7 @@ export async function callGatekeeper(
         'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: GATEKEEPER_MODEL,
         max_tokens: 1024,
         temperature: 0.2,
         system: systemPrompt,

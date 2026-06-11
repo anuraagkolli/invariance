@@ -1,6 +1,7 @@
 import type { ThemeJson, InvarianceConfig } from '../config/types'
 import type { SlotRegistration } from '../context/registry'
 import type { TestResult } from '../verify/types'
+import { BUILDER_MODEL } from './models'
 
 // ---------------------------------------------------------------------------
 // Response type
@@ -141,7 +142,7 @@ Produce the theme.json mutation now:`
         'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: BUILDER_MODEL,
         max_tokens: 4096,
         temperature: 0.2,
         system: systemPrompt,
