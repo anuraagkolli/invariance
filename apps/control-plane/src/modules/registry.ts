@@ -191,6 +191,11 @@ export function revalidateSubject(
   return { status: "active", contentHash: record.contentHash };
 }
 
+/**
+ * Developer kill switch / restore. Superseded history is immutable: flipping
+ * an old revision's status would make it the subject's "latest non-superseded"
+ * record and corrupt pointer resolution.
+ */
 export function setModStatus(
   store: MemoryStore,
   appId: string,
@@ -199,6 +204,12 @@ export function setModStatus(
 ): ModRecord {
   const mod = store.findMod(appId, modId);
   if (!mod) throw new RegistryError(`mod ${modId} not found`, 404);
+  if (mod.status === "superseded") {
+    throw new RegistryError(`mod ${modId} is superseded history and cannot change status`, 409);
+  }
+  if (status === "active" && mod.status !== "disabled") {
+    throw new RegistryError(`mod ${modId} is ${mod.status}; only disabled mods can be restored`, 409);
+  }
   mod.status = status;
   return mod;
 }

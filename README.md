@@ -16,15 +16,42 @@ Full system design: [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Layout
 
+All six build phases are complete:
+
 ```
-packages/schema   Shared contracts: App Manifest, Mod Bundle, signing (phase 1 — done)
-packages/client   Client SDK: mod loader, UI override engine, prompt widget (phase 2)
-packages/server   Server SDK: middleware, sandboxed hook executor (phase 4)
-packages/cli      Integration codemod, manifest publish (phase 2+)
-apps/control-plane  Authoring, verification, registry, analytics (phase 3+)
-apps/console      Developer dashboard (phase 6)
-apps/demo         Demo app, living integration test (phase 2)
+packages/schema   Shared contracts: App Manifest, Mod Bundle, signing, path/diff utils
+packages/client   Client SDK: mod loader, UI override engine, prompt widget, telemetry
+packages/server   Server SDK: Express/Next middleware, QuickJS-on-WASM sandbox,
+                  runtime capability + policy enforcement
+packages/cli      `invariance` bin: init, manifest publish, local dev control plane
+apps/control-plane  Authoring (Claude w/ verifier in the loop), deterministic
+                  verification, registry + lazy migration, analytics
+apps/console      Developer dashboard: manifest, mods w/ kill switches, analytics
+apps/demo         Netflix-style demo app, living integration test for every phase
 ```
+
+## Quick demo
+
+```sh
+pnpm install
+
+# 1. Control plane (set ANTHROPIC_API_KEY to enable natural-language authoring)
+ANTHROPIC_API_KEY=sk-... pnpm -F @invariance/control-plane dev
+
+# 2. Demo API (Express + Invariance middleware) and web app
+pnpm -F @invariance/demo seed       # publish manifest + a seeded mod
+pnpm -F @invariance/demo dev:api
+pnpm -F @invariance/demo dev:web    # http://localhost:4501
+
+# 3. Developer console
+pnpm -F @invariance/console dev     # http://localhost:4600
+```
+
+Then click **✨ Customize** in the demo and type things like *"make the accent
+color teal"*, *"sort shows by rating"*, or *"always add shows to my list at top
+priority"* — UI mods apply instantly; hook mods rewire the API seam under
+sandbox + capability enforcement. Watch mods, prompts, and kill switches in
+the console.
 
 ## Development
 

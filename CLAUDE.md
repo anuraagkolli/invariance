@@ -36,16 +36,31 @@ Core invariants of the system itself:
 ## Layout & Phase Status
 
 ```
-packages/schema     # DONE (phase 1): AppManifest, ModBundle, capability manifest, signing
-packages/client     # phase 2: mod loader, UI override engine, prompt widget
-packages/cli        # phase 2+: integration codemod, `manifest publish`
-apps/demo           # phase 2: demo app, living integration test
-apps/control-plane  # phase 3+: authoring, verification, registry, analytics
-packages/server     # phase 4: middleware adapters, sandboxed hook executor
-apps/console        # phase 6: developer dashboard
+packages/schema     # AppManifest, ModBundle, capability manifest, signing, path/diff utils
+packages/client     # mod loader, UI override engine, prompt widget, telemetry
+packages/cli        # `invariance` bin: init, manifest publish, dev control plane
+apps/demo           # Netflix-style demo app, living integration test (e2e per phase)
+apps/control-plane  # authoring, verification, registry + lazy migration, analytics
+packages/server     # Express/Next middleware, QuickJS sandbox, runtime enforcement
+apps/console        # developer dashboard (manifest, mods + kill switches, analytics)
 ```
 
-Phases (exit criteria in `docs/DESIGN.md`): 1 foundations/schema ✅ · 2 Tier-0 vertical slice · 3 authoring+verification v0 · 4 Tier-1 hooks/sandbox · 5 versioning+lazy migration · 6 analytics+console.
+Phases (exit criteria in `docs/DESIGN.md`): 1 foundations/schema ✅ · 2 Tier-0
+vertical slice ✅ · 3 authoring+verification v0 ✅ · 4 Tier-1 hooks/sandbox ✅ ·
+5 versioning+lazy migration ✅ · 6 analytics+console ✅. Implementation notes
+for 4–6 live in `docs/HANDOFF-PHASES-4-6.md`.
+
+Enforcement semantics worth knowing (shared by verifier and server runtime):
+- `diffPaths` treats a pure array permutation as a write to the array itself,
+  not its element fields — so "sort my list" mods are possible.
+- Immutable field policies compare the *multiset* of values at the path:
+  reordering is legal; rewriting, adding, or hiding a protected value is not.
+- The verifier rejects declared writes that target an immutable field
+  (descendant-or-equal path) and whole-body writes on such endpoints, but
+  allows strict-ancestor declarations (e.g. `shows`), relying on the runtime
+  checks above.
+- Middleware executes only `active` pointers; `stale` subjects get base API
+  behavior until their next client session revalidates.
 
 ## Conventions
 

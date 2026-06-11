@@ -10,6 +10,7 @@ import type { SigningKeyPair } from "@invariance/schema/signing";
 import { loadKeys } from "./keys";
 import type { AuthoringAgent } from "./modules/authoring/agent";
 import { AnthropicAgent } from "./modules/authoring/anthropic";
+import { modAdminView, summarizeApp } from "./modules/analytics";
 import { authorMod, refixMod } from "./modules/authoring/pipeline";
 import {
   assembleBundle,
@@ -18,6 +19,7 @@ import {
   publishManifest,
   RegistryError,
   revalidateSubject,
+  setModStatus,
 } from "./modules/registry";
 import { verifyBundleAgainstManifest } from "./modules/verification";
 import { MemoryStore } from "./store";
@@ -28,6 +30,8 @@ export interface ControlPlaneOptions {
   /** Authoring agent; defaults to AnthropicAgent when ANTHROPIC_API_KEY is set. */
   agent?: AuthoringAgent;
 }
+
+const MAX_EVENTS_PER_APP = 50_000;
 
 export const ModDraftSchema = z.object({
   uiOps: z.array(UiOpSchema).optional(),
@@ -157,6 +161,72 @@ export function createControlPlane(options: ControlPlaneOptions = {}): ControlPl
       },
       201,
     );
+  });
+
+  /**
+   * Client/server telemetry ingestion. sendBeacon posts without a JSON
+   * content-type, so the body is parsed leniently; bad events are dropped,
+   * never errored — telemetry must stay invisible to the host app.
+   */
+  app.post("/v1/apps/:appId/events", async (c) => {
+    const appId = c.req.param("appId");
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await c.req.text());
+    } catch {
+      return c.json({ accepted: false }, 202);
+    }
+    const event = z
+      .object({
+        type: z.string().min(1).max(64),
+        subjectId: z.string().max(256).optional(),
+        modId: z.string().max(256).optional(),
+        detail: z.record(z.unknown()).optional(),
+      })
+      .safeParse(parsed);
+    if (!event.success) return c.json({ accepted: false }, 202);
+    const events = store.app(appId).events;
+    events.push({ ...event.data, appId, at: Date.now() });
+    if (events.length > MAX_EVENTS_PER_APP) {
+      events.splice(0, events.length - MAX_EVENTS_PER_APP);
+    }
+    return c.json({ accepted: true }, 202);
+  });
+
+  app.get("/v1/apps/:appId/analytics/summary", (c) =>
+    c.json(summarizeApp(store, c.req.param("appId"))),
+  );
+
+  /** Mods admin: every record (envelope payloads excluded) with classification. */
+  app.get("/v1/apps/:appId/mods", (c) =>
+    c.json({ mods: store.allMods(c.req.param("appId")).map(modAdminView) }),
+  );
+
+  /** Developer kill switch: propagates via the subject's pointer within its TTL. */
+  app.post("/v1/apps/:appId/mods/:modId/kill", (c) => {
+    const appId = c.req.param("appId");
+    const record = setModStatus(store, appId, c.req.param("modId"), "disabled");
+    store.app(appId).events.push({
+      type: "mod_killed",
+      appId,
+      subjectId: record.subjectId,
+      modId: record.modId,
+      at: Date.now(),
+    });
+    return c.json(modAdminView(record));
+  });
+
+  app.post("/v1/apps/:appId/mods/:modId/restore", (c) => {
+    const appId = c.req.param("appId");
+    const record = setModStatus(store, appId, c.req.param("modId"), "active");
+    store.app(appId).events.push({
+      type: "mod_restored",
+      appId,
+      subjectId: record.subjectId,
+      modId: record.modId,
+      at: Date.now(),
+    });
+    return c.json(modAdminView(record));
   });
 
   app.get("/v1/apps/:appId/bundles/:hash", (c) => {
