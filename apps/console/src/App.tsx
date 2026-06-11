@@ -1,8 +1,17 @@
 import type { AppManifest } from "@invariance/schema";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type AnalyticsSummary, type ModRow } from "./api";
 
 const DEFAULT_APP = "streamline";
+const HELP_DISMISSED_KEY = "invariance-console:help-dismissed";
+
+const STATUS_HELP: Record<string, string> = {
+  active: "Live: this user sees the customization right now.",
+  stale: "Your app shipped an update; this mod is re-checked on the user's next visit.",
+  degraded: "Paused: it no longer passes your guardrails after an app update. The user is offered an AI fix.",
+  disabled: "Killed by a developer. The user sees the base app.",
+  superseded: "Replaced by a newer revision of this user's customizations.",
+};
 
 export default function App() {
   const [appId, setAppId] = useState(DEFAULT_APP);
@@ -56,33 +65,102 @@ export default function App() {
         </div>
       </header>
 
+      <HelpBanner />
+
       {error && <div className="error">{error}</div>}
 
       <main>
         <section className="panel">
-          <h2>Summary</h2>
+          <h2>At a glance</h2>
           {summary ? <SummaryPanel summary={summary} /> : <p className="muted">No data yet.</p>}
         </section>
 
         <section className="panel wide">
           <h2>
-            Mods <span className="muted">({mods.length})</span>
+            Your users&rsquo; customizations <span className="muted">({mods.length})</span>
           </h2>
+          <p className="hint">
+            Every change a user has made, newest first. Kill anything that shouldn&rsquo;t be live —
+            it takes effect within seconds and the user falls back to the base app.
+          </p>
           <ModsTable mods={mods} onAct={act} />
         </section>
 
         <section className="panel wide">
           <h2>
-            Manifest{" "}
+            What users are allowed to touch{" "}
             {manifest && (
               <span className="muted">
-                v{manifest.version} · {manifest.appId}
+                (manifest v{manifest.version} · {manifest.appId})
               </span>
             )}
           </h2>
-          {manifest ? <ManifestPanel manifest={manifest} /> : <p className="muted">No manifest published.</p>}
+          <p className="hint">
+            Published from your codebase with <code>invariance manifest publish</code>. Users can
+            only customize what is declared here — anything else is rejected before it is ever
+            signed.
+          </p>
+          {manifest ? (
+            <ManifestPanel manifest={manifest} />
+          ) : (
+            <p className="muted">No manifest published for this app yet.</p>
+          )}
         </section>
       </main>
+    </div>
+  );
+}
+
+function HelpBanner() {
+  const [open, setOpen] = useState(() => localStorage.getItem(HELP_DISMISSED_KEY) !== "1");
+  if (!open) {
+    return (
+      <button
+        className="link"
+        onClick={() => {
+          localStorage.removeItem(HELP_DISMISSED_KEY);
+          setOpen(true);
+        }}
+      >
+        What am I looking at?
+      </button>
+    );
+  }
+  return (
+    <div className="help">
+      <div className="help-head">
+        <strong>How Invariance works</strong>
+        <button
+          className="link"
+          onClick={() => {
+            localStorage.setItem(HELP_DISMISSED_KEY, "1");
+            setOpen(false);
+          }}
+        >
+          Dismiss
+        </button>
+      </div>
+      <p>
+        Your users describe changes to your app in plain language — &ldquo;make the accent color
+        teal&rdquo;, &ldquo;sort shows by rating&rdquo;. Each request becomes a <strong>mod</strong>:
+        a small, signed package of changes that only applies for that user.
+      </p>
+      <ol>
+        <li>
+          <strong>You stay in control.</strong> Mods can only touch what you declare below — your
+          chosen style properties, UI areas, and API endpoints — and must pass your{" "}
+          <strong>guardrails</strong> (e.g. &ldquo;prices can never be rewritten&rdquo;) before they
+          are signed. There is no way around the check: unsigned mods never run.
+        </li>
+        <li>
+          <strong>Nothing breaks.</strong> Mods run sandboxed with strict budgets, and any failure
+          falls back to your base app. When you ship an update, incompatible mods pause themselves.
+        </li>
+        <li>
+          <strong>You see everything.</strong> This console shows what users are changing, and every
+          mod has a kill switch.
+        </li>
+      </ol>
     </div>
   );
 }
@@ -91,25 +169,38 @@ function SummaryPanel({ summary }: { summary: AnalyticsSummary }) {
   return (
     <div className="summary">
       <div className="stat-row">
-        <Stat label="mods" value={summary.mods.total} />
-        <Stat label="active" value={summary.mods.byStatus["active"] ?? 0} />
-        <Stat label="degraded" value={summary.mods.degraded} accent={summary.mods.degraded > 0} />
+        <Stat label="customizations" value={summary.mods.total} />
+        <Stat label="live now" value={summary.mods.byStatus["active"] ?? 0} />
+        <Stat
+          label="paused"
+          value={summary.mods.degraded}
+          accent={summary.mods.degraded > 0}
+          help="Mods that stopped passing your guardrails after an app update."
+        />
         <Stat label="events" value={summary.events.total} />
       </div>
 
-      <h3>Events by type</h3>
+      <h3 title="Telemetry from the SDKs: applications, rejections, enforcement actions.">
+        Activity
+      </h3>
       <Ranked rows={Object.entries(summary.events.byType).map(([name, count]) => ({ name, count }))} />
 
-      <h3>Top tokens touched</h3>
-      <Ranked rows={summary.topTokens} empty="No UI customizations yet." />
+      <h3 title="Design tokens: the named style properties (colors, spacing, type) users may restyle.">
+        Most-restyled properties
+      </h3>
+      <Ranked rows={summary.topTokens} empty="No restyles yet." />
 
-      <h3>Top endpoints hooked</h3>
-      <Ranked rows={summary.topEndpoints} empty="No API-seam mods yet." />
+      <h3 title="API endpoints users have attached behavior-changing hooks to.">
+        Most-rewired endpoints
+      </h3>
+      <Ranked rows={summary.topEndpoints} empty="No behavior changes yet." />
 
-      <h3>Top slots overridden</h3>
-      <Ranked rows={summary.topComponents} empty="No slot overrides yet." />
+      <h3 title="UI slots users have replaced with their own content.">Most-edited UI areas</h3>
+      <Ranked rows={summary.topComponents} empty="No UI edits yet." />
 
-      <h3>Recent prompts</h3>
+      <h3 title="The most recent plain-language requests, straight from your users.">
+        What users are asking for
+      </h3>
       {summary.recentPrompts.length === 0 ? (
         <p className="muted">None yet.</p>
       ) : (
@@ -125,9 +216,19 @@ function SummaryPanel({ summary }: { summary: AnalyticsSummary }) {
   );
 }
 
-function Stat({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
+function Stat({
+  label,
+  value,
+  accent,
+  help,
+}: {
+  label: string;
+  value: number;
+  accent?: boolean;
+  help?: string;
+}) {
   return (
-    <div className={`stat${accent ? " accent" : ""}`}>
+    <div className={`stat${accent ? " accent" : ""}`} title={help}>
       <div className="stat-value">{value}</div>
       <div className="stat-label">{label}</div>
     </div>
@@ -160,6 +261,8 @@ function Ranked({
   );
 }
 
+const MODS_PAGE = 15;
+
 function ModsTable({
   mods,
   onAct,
@@ -167,111 +270,243 @@ function ModsTable({
   mods: ModRow[];
   onAct: (action: "kill" | "restore", modId: string) => Promise<void>;
 }) {
-  if (mods.length === 0) return <p className="muted">No mods published for this app.</p>;
-  const ordered = [...mods].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const [query, setQuery] = useState("");
+  const [showAll, setShowAll] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  const filtered = useMemo(() => {
+    const ordered = [...mods].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    const live = showHistory ? ordered : ordered.filter((m) => m.status !== "superseded");
+    const q = query.trim().toLowerCase();
+    if (!q) return live;
+    return live.filter(
+      (m) =>
+        m.subjectId.toLowerCase().includes(q) ||
+        m.status.includes(q) ||
+        m.prompts.some((p) => p.toLowerCase().includes(q)),
+    );
+  }, [mods, query, showHistory]);
+
+  if (mods.length === 0) {
+    return (
+      <p className="muted">
+        No customizations yet. They will appear here the moment a user submits one.
+      </p>
+    );
+  }
+
+  const visible = showAll ? filtered : filtered.slice(0, MODS_PAGE);
+
   return (
-    <table className="mods">
-      <thead>
-        <tr>
-          <th>subject</th>
-          <th>rev</th>
-          <th>status</th>
-          <th>surfaces</th>
-          <th>bound to</th>
-          <th>last prompt</th>
-          <th />
-        </tr>
-      </thead>
-      <tbody>
-        {ordered.map((mod) => (
-          <tr key={mod.modId} className={mod.status === "superseded" ? "dim" : ""}>
-            <td>{mod.subjectId}</td>
-            <td>{mod.revision}</td>
-            <td>
-              <span className={`status status-${mod.status}`}>{mod.status}</span>
-              {mod.status === "degraded" && mod.reasons.length > 0 && (
-                <div className="reasons">{mod.reasons.join("; ")}</div>
-              )}
-            </td>
-            <td>{mod.classification ? surfacesLabel(mod.classification.surfaces) : "—"}</td>
-            <td>v{mod.boundManifestVersion}</td>
-            <td className="prompt-cell">{mod.prompts.at(-1) ?? <span className="muted">seeded</span>}</td>
-            <td>
-              {(mod.status === "active" || mod.status === "stale" || mod.status === "degraded") && (
-                <button className="danger" onClick={() => void onAct("kill", mod.modId)}>
-                  Kill
-                </button>
-              )}
-              {mod.status === "disabled" && (
-                <button onClick={() => void onAct("restore", mod.modId)}>Restore</button>
-              )}
-            </td>
+    <>
+      <div className="table-tools">
+        <input
+          className="search"
+          placeholder="Search by user, request, or status…"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setShowAll(false);
+          }}
+        />
+        <label className="muted checkbox">
+          <input
+            type="checkbox"
+            checked={showHistory}
+            onChange={(e) => setShowHistory(e.target.checked)}
+          />{" "}
+          include replaced revisions
+        </label>
+      </div>
+      <table className="mods">
+        <thead>
+          <tr>
+            <th>user</th>
+            <th title="Each new request replaces the previous revision of that user's mod.">rev</th>
+            <th>status</th>
+            <th title="Which surfaces this mod touches: style properties, CSS rules, UI areas, API hooks.">
+              what it changes
+            </th>
+            <th title="The app version this mod was verified against.">app version</th>
+            <th>user&rsquo;s request</th>
+            <th />
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {visible.map((mod) => (
+            <tr key={mod.modId} className={mod.status === "superseded" ? "dim" : ""}>
+              <td>{mod.subjectId}</td>
+              <td>{mod.revision}</td>
+              <td>
+                <span className={`status status-${mod.status}`} title={STATUS_HELP[mod.status]}>
+                  {mod.status === "degraded" ? "paused" : mod.status === "disabled" ? "killed" : mod.status}
+                </span>
+                {mod.status === "degraded" && mod.reasons.length > 0 && (
+                  <div className="reasons">{mod.reasons.join("; ")}</div>
+                )}
+              </td>
+              <td>{mod.classification ? surfacesLabel(mod.classification.surfaces) : "—"}</td>
+              <td>v{mod.boundManifestVersion}</td>
+              <td className="prompt-cell">
+                {mod.prompts.at(-1) ?? <span className="muted">published by a developer</span>}
+              </td>
+              <td>
+                {(mod.status === "active" || mod.status === "stale" || mod.status === "degraded") && (
+                  <button
+                    className="danger"
+                    title="Disable this mod. The user falls back to the base app within seconds."
+                    onClick={() => void onAct("kill", mod.modId)}
+                  >
+                    Kill
+                  </button>
+                )}
+                {mod.status === "disabled" && (
+                  <button onClick={() => void onAct("restore", mod.modId)}>Restore</button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {filtered.length > visible.length && (
+        <button className="link" onClick={() => setShowAll(true)}>
+          Show all {filtered.length}
+        </button>
+      )}
+      {filtered.length === 0 && <p className="muted">No mods match “{query}”.</p>}
+    </>
   );
 }
 
 function surfacesLabel(surfaces: { tokens: number; styles: number; slots: number; hooks: number }) {
   const parts: string[] = [];
-  if (surfaces.tokens) parts.push(`${surfaces.tokens} token${surfaces.tokens > 1 ? "s" : ""}`);
-  if (surfaces.styles) parts.push(`${surfaces.styles} style${surfaces.styles > 1 ? "s" : ""}`);
-  if (surfaces.slots) parts.push(`${surfaces.slots} slot${surfaces.slots > 1 ? "s" : ""}`);
-  if (surfaces.hooks) parts.push(`${surfaces.hooks} hook${surfaces.hooks > 1 ? "s" : ""}`);
+  if (surfaces.tokens) parts.push(`${surfaces.tokens} style propert${surfaces.tokens > 1 ? "ies" : "y"}`);
+  if (surfaces.styles) parts.push(`${surfaces.styles} CSS rule${surfaces.styles > 1 ? "s" : ""}`);
+  if (surfaces.slots) parts.push(`${surfaces.slots} UI area${surfaces.slots > 1 ? "s" : ""}`);
+  if (surfaces.hooks) parts.push(`${surfaces.hooks} API hook${surfaces.hooks > 1 ? "s" : ""}`);
   return parts.length > 0 ? parts.join(", ") : "empty";
+}
+
+/**
+ * Manifest sections are searchable and capped: a real app can declare
+ * hundreds of tokens and endpoints, and a wall of all of them helps no one.
+ */
+function ManifestSection<T>({
+  title,
+  hint,
+  items,
+  searchText,
+  render,
+  keyOf,
+}: {
+  title: string;
+  hint: string;
+  items: T[];
+  searchText: (item: T) => string;
+  render: (item: T) => React.ReactNode;
+  keyOf: (item: T) => string;
+}) {
+  const CAP = 8;
+  const [query, setQuery] = useState("");
+  const [showAll, setShowAll] = useState(false);
+
+  const q = query.trim().toLowerCase();
+  const filtered = q ? items.filter((i) => searchText(i).toLowerCase().includes(q)) : items;
+  const visible = showAll ? filtered : filtered.slice(0, CAP);
+
+  return (
+    <div>
+      <h3>
+        {title} <span className="muted">({items.length})</span>
+      </h3>
+      <p className="hint">{hint}</p>
+      {items.length > CAP && (
+        <input
+          className="search"
+          placeholder={`Search ${items.length}…`}
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setShowAll(false);
+          }}
+        />
+      )}
+      {items.length === 0 ? (
+        <p className="muted">None declared.</p>
+      ) : (
+        <ul>{visible.map((item) => <li key={keyOf(item)}>{render(item)}</li>)}</ul>
+      )}
+      {filtered.length > visible.length && (
+        <button className="link" onClick={() => setShowAll(true)}>
+          Show all {filtered.length}
+        </button>
+      )}
+      {q && filtered.length === 0 && items.length > 0 && (
+        <p className="muted">No matches for “{query}”.</p>
+      )}
+    </div>
+  );
 }
 
 function ManifestPanel({ manifest }: { manifest: AppManifest }) {
   return (
     <div className="manifest">
-      <div>
-        <h3>Design tokens ({manifest.designTokens.length})</h3>
-        <ul>
-          {manifest.designTokens.map((t) => (
-            <li key={t.name}>
-              {t.kind === "color" && <span className="swatch" style={{ background: t.value }} />}
-              <code>{t.name}</code> <span className="muted">{t.value}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div>
-        <h3>Components ({manifest.components.length})</h3>
-        <ul>
-          {manifest.components.map((c) => (
-            <li key={c.id}>
-              <code>{c.id}</code>{" "}
-              <span className="muted">
-                {c.slots.map((s) => s.name + (s.overridable ? "" : " 🔒")).join(", ") || "no slots"}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div>
-        <h3>Endpoints ({manifest.endpoints.length})</h3>
-        <ul>
-          {manifest.endpoints.map((e) => (
-            <li key={e.id}>
-              <code>
-                {e.method} {e.path}
-              </code>{" "}
-              <span className="muted">{e.id}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div>
-        <h3>Invariants ({manifest.policies.length})</h3>
-        <ul>
-          {manifest.policies.map((p) => (
-            <li key={p.id}>
-              <code>{p.id}</code> <span className="muted">{describePolicy(p)}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+      <ManifestSection
+        title="Style properties"
+        hint="Colors, spacing, and type users may restyle (your design tokens)."
+        items={manifest.designTokens}
+        keyOf={(t) => t.name}
+        searchText={(t) => `${t.name} ${t.value} ${t.description ?? ""}`}
+        render={(t) => (
+          <>
+            {t.kind === "color" && <span className="swatch" style={{ background: t.value }} />}
+            <code>{t.name}</code>{" "}
+            <span className="muted">{t.description ?? t.value}</span>
+          </>
+        )}
+      />
+      <ManifestSection
+        title="UI areas"
+        hint="Marked spots in your interface users may fill with their own content. 🔒 = off-limits."
+        items={manifest.components}
+        keyOf={(c) => c.id}
+        searchText={(c) => `${c.name} ${c.id} ${c.slots.map((s) => s.name).join(" ")}`}
+        render={(c) => (
+          <>
+            <code>{c.name}</code>{" "}
+            <span className="muted">
+              {c.slots.map((s) => s.name + (s.overridable ? "" : " 🔒")).join(", ") || "no slots"}
+            </span>
+          </>
+        )}
+      />
+      <ManifestSection
+        title="API endpoints"
+        hint="The requests and responses user hooks may transform — per user, in a sandbox."
+        items={manifest.endpoints}
+        keyOf={(e) => e.id}
+        searchText={(e) => `${e.method} ${e.path} ${e.id} ${e.description ?? ""}`}
+        render={(e) => (
+          <>
+            <code>
+              {e.method} {e.path}
+            </code>{" "}
+            <span className="muted">{e.description ?? e.id}</span>
+          </>
+        )}
+      />
+      <ManifestSection
+        title="Guardrails"
+        hint="Your invariants: rules no mod may break, checked before signing and again at runtime."
+        items={manifest.policies}
+        keyOf={(p) => p.id}
+        searchText={(p) => `${p.id} ${p.description ?? ""} ${describePolicy(p)}`}
+        render={(p) => (
+          <>
+            <code>{p.id}</code> <span className="muted">{p.description ?? describePolicy(p)}</span>
+          </>
+        )}
+      />
     </div>
   );
 }
@@ -283,15 +518,15 @@ function describePolicy(policy: AppManifest["policies"][number]): string {
     case "field-constraint": {
       const c = policy.constraint;
       const rules = [
-        c.immutable ? "immutable" : null,
+        c.immutable ? "can never be changed" : null,
         c.min !== undefined ? `min ${c.min}` : null,
         c.max !== undefined ? `max ${c.max}` : null,
-        c.enum ? `in {${c.enum.join(", ")}}` : null,
+        c.enum ? `one of {${c.enum.join(", ")}}` : null,
         c.pattern ? `matches /${c.pattern}/` : null,
       ].filter(Boolean);
       return `${policy.endpointId} · ${policy.fieldPath}: ${rules.join(", ")}`;
     }
     case "budget-limit":
-      return `hooks ≤ ${policy.maxCpuMsPerHook}ms CPU, ≤ ${policy.maxMemMbPerHook}MB`;
+      return `hooks limited to ${policy.maxCpuMsPerHook}ms CPU, ${policy.maxMemMbPerHook}MB memory`;
   }
 }

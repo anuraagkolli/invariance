@@ -86,6 +86,80 @@ button.danger:hover {
   margin-bottom: 16px;
 }
 
+.help {
+  background: linear-gradient(135deg, #181430, #151a23);
+  border: 1px solid #3a2f6b;
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  max-width: 880px;
+}
+
+.help-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.help p,
+.help li {
+  color: #c6cce0;
+}
+
+.help ol {
+  margin: 8px 0 2px;
+  padding-left: 20px;
+}
+
+.help li {
+  margin-bottom: 6px;
+}
+
+button.link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+button.link:hover {
+  text-decoration: underline;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 13px;
+  margin: -6px 0 12px;
+  max-width: 720px;
+}
+
+.search {
+  width: 100%;
+  max-width: 320px;
+  margin-bottom: 10px;
+}
+
+.table-tools {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.checkbox {
+  font-size: 13px;
+  cursor: pointer;
+}
+
+[title] {
+  cursor: help;
+}
+
+button[title] {
+  cursor: pointer;
+}
+
 main {
   display: grid;
   grid-template-columns: 360px 1fr;
