@@ -16,6 +16,8 @@ In: `packages/core/src/agent/` (api client, models constants, designer + prompt 
 
 Out (later phases): SLOT_F1 micro-mutation path (phase 4 — SLOT_F1 falls back to the v5 Builder in this phase), Builder `theme.slots` fallback removal (4), render-driven F2/F3 + DOM-applier deletion (5), SSR + font loading (7), scanner role emission (6). The v5 Builder and its prompt are untouched except for routing.
 
+**Known interim gap (dies in phase 4):** once the loader upgrades a stored theme to v2 — the normal state for every user after this phase — a SLOT_F1 Builder mutation is translated from `theme.globals` into v2 `theme.slots` (`translateMutationToV2` in pipeline.ts). The v5 F1 value checks (palette membership, hex validity, contrast) read `theme.globals` and therefore pass trivially on the translated candidate; slot literal values are unverified until the phase-4 micro-mutation path (which contrast-solves them) replaces the bridge. A slot literal keyed to a locked role token would also visually shadow the lock (slots write after roles). Accepted because the bridge is temporary and the inline-style fallback is rejected outright.
+
 ## Current-API facts this design relies on (verified 2026-06-11 via the claude-api skill)
 
 - Structured outputs are GA: `output_config: { format: { type: 'json_schema', schema } }` on `POST /v1/messages`. No beta header. (DESIGN.md's "beta header the feature requires" is stale — the spec supersedes it.)
@@ -163,7 +165,7 @@ Zod schema additions mirror the shape; `deriveConstraints(config): DesignConstra
 
 ### Store/apply bridge (minimal, phase-5 work NOT pulled forward)
 
-- `export type AnyThemeJson = ThemeJson | ThemeJsonV2` in config/types; `isV2Theme(t): t is ThemeJsonV2` guard (`version >= 2`).
+- `export type AnyThemeJson = ThemeJson | ThemeJsonV2` in config/types; `isV2Theme(t): t is ThemeJsonV2` guard — shape-aware: `version >= 2 && !('globals' in theme)`, because v5's pipeline used `version` as a per-save revision counter, so the number alone misclassifies legacy data.
 - `StorageBackend`, `ThemeStore`, provider state widen to `AnyThemeJson` (backends serialize JSON — no behavior change; memory/localStorage/api don't introspect).
 - v1-only consumers (`slot.tsx` inline-style read, DOM appliers) gain a guard: v2 themes short-circuit those paths (v2 has no inline-style slots by construction — lookup misses are already no-ops; the guard makes it explicit).
 - `runtime/apply.ts`: `applyAnyTheme(theme, config)` — v1 → existing `applyThemeJson` unchanged; v2 → write every `theme.roles` then `theme.slots` entry verbatim to `:root` (`var()` references are valid custom-property values natively — no resolution needed). F2/F3 application for v2 stays out (phase 5); content/layout in a v2 doc are stored but not applied, matching today's reality that the DOM appliers are being deleted next phase anyway.
