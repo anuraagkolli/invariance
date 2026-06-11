@@ -1,18 +1,19 @@
-import type { AnyThemeJson, ThemeJson, ThemeJsonV2, InvarianceConfig, ContentSection, LayoutSection, ComponentsSection } from '../config/types'
-import { isV2Theme } from '../config/types'
+import type { AnyThemeJson, ThemeJson, ThemeJsonV2, InvarianceConfig } from '../config/types'
 import type { SlotRegistration } from '../context/registry'
 import type { ThemeStore } from '../context/theme-store'
 import type { StorageBackend } from '../storage/types'
 import { callGatekeeper, type ConvTurn } from './gatekeeper'
-import { callBuilder } from './builder'
+import { callBuilder, type SectionsMutation } from './builder'
 import { callDesigner } from './designer'
+import { runSlotEdit } from './slot-edit'
 import { compileTheme, InvalidStyleSpecError } from '../compiler/compile'
 import { upgradeThemeJson } from '../config/upgrade'
 import { ThemeJsonV2Schema } from '../config/schema'
 import { verify } from '../verify/engine'
 import { verifyV2 } from '../verify/compiled-tests'
 import { deriveConstraints } from '../config/derive-constraints'
-import { applyThemeJson, applyAnyTheme } from '../runtime/apply'
+import { applyAnyTheme } from '../runtime/apply'
+import type { UsageHandler } from './api'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -22,6 +23,24 @@ export type PipelineResult =
   | { type: 'success'; description: string; slotName: string; warnings?: string[] }
   | { type: 'clarification'; message: string }
   | { type: 'error'; message: string }
+
+// 'designer'/'compiling' belong to the THEME route; 'slot-edit' to SLOT_F1;
+// 'builder' to F2/F3/F4.
+export type PipelineStage = 'gatekeeper' | 'designer' | 'compiling' | 'slot-edit' | 'builder' | 'verifying' | 'retry' | 'applying'
+
+export interface PipelineContext {
+  registry: SlotRegistration[]
+  config: InvarianceConfig
+  themeStore: ThemeStore
+  storageBackend: StorageBackend
+  apiKey: string
+  userId: string
+  appId: string
+  componentLibrary?: string[]
+  fetchFn?: typeof fetch
+  apiBaseUrl?: string
+  onUsage?: UsageHandler
+}
 
 // ---------------------------------------------------------------------------
 // Theme merge utility
@@ -51,138 +70,65 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
   return result
 }
 
-function mergeTheme(current: ThemeJson | null, mutation: Partial<ThemeJson>): ThemeJson {
-  const base: ThemeJson = current ?? { version: 0, base_app_version: 'v1' }
-  return deepMerge(base as unknown as Record<string, unknown>, mutation as unknown as Record<string, unknown>) as unknown as ThemeJson
-}
-
 // ---------------------------------------------------------------------------
-// v2 mutation translation
-//
-// The Builder always emits v1-shaped mutations (theme.globals for CSS vars).
-// When the current stored theme is already v2 (upgraded by the provider), we
-// must translate before merging: --inv-* entries in globals move to slots.
-// The v1 inline-style fallback path (theme.slots keyed by slot name with
-// style objects) has no v2 home — surface an error instead of silently
-// dropping the values.
-//
-// NOTE: this translation bridge is temporary. Phase 4's slot-edit
-// micro-mutation path will have the Builder emit v2-native mutations directly,
-// at which point this function can be deleted.
+// v2-native helpers
 // ---------------------------------------------------------------------------
 
-interface V1Mutation extends Partial<ThemeJson> {
-  theme?: {
-    globals?: Record<string, string>
-    slots?: Record<string, Record<string, string>>
-  }
+// Every route operates on v2: stored v1 (or nothing) upgrades exactly once here.
+async function loadCurrentV2(context: PipelineContext): Promise<ThemeJsonV2> {
+  const stored: AnyThemeJson | null =
+    context.themeStore.getTheme() ??
+    await context.storageBackend.loadTheme(context.userId, context.appId)
+  const { theme } = upgradeThemeJson(stored ?? { version: 1, base_app_version: 'v1' })
+  return theme
 }
 
-function translateMutationToV2(
-  mutation: Partial<ThemeJson>,
-  currentV2: ThemeJsonV2,
-): { translated: ThemeJsonV2; touchedSlots: boolean } | { error: string } {
-  const m = mutation as V1Mutation
+async function persistAndApply(context: PipelineContext, candidate: ThemeJsonV2): Promise<void> {
+  await context.storageBackend.saveTheme(context.userId, context.appId, candidate)
+  context.themeStore.setTheme(candidate)
+  applyAnyTheme(candidate, context.config)
+}
 
-  // Detect v1 inline-style slot fallback: slots keyed by slot name (not CSS vars)
-  if (m.theme?.slots) {
-    const slotKeys = Object.keys(m.theme.slots)
-    const hasInlineStyleSlots = slotKeys.some((k) => !k.startsWith('--'))
-    if (hasInlineStyleSlots) {
-      return {
-        error: 'This slot does not support style variables yet.',
-      }
-    }
-  }
-
-  // Translate globals → slots. The v2 theme.slots map uses the same --inv-* keys.
-  const newSlotEntries: Record<string, string> = {}
-  let touchedSlots = false
-
-  if (m.theme?.globals) {
-    for (const [key, value] of Object.entries(m.theme.globals)) {
-      if (typeof value === 'string') {
-        newSlotEntries[key] = value
-        touchedSlots = true
-      }
-    }
-  }
-
-  // Build the translated v2 document by merging onto the current v2 theme.
-  const mergedSlots = { ...(currentV2.theme?.slots ?? {}), ...newSlotEntries }
-  const translated: ThemeJsonV2 = {
-    // Keep version as literal 2 (schema literal — NOT incremented; v2 version is
-    // a schema version, not a per-save revision counter like v1 used it).
+// Builder mutations only carry the page-keyed sections; theme.* is owned by
+// the THEME and SLOT_F1 routes and passes through verbatim.
+function mergeSectionsIntoV2(current: ThemeJsonV2, mutation: SectionsMutation): ThemeJsonV2 {
+  const candidate: ThemeJsonV2 = {
     version: 2,
-    base_app_version: currentV2.base_app_version,
-    theme: {
-      roles: { ...(currentV2.theme?.roles ?? {}) },
-      slots: mergedSlots,
-      ...(currentV2.theme?.styleSpec ? { styleSpec: currentV2.theme.styleSpec } : {}),
-    },
+    base_app_version: current.base_app_version,
+    ...(current.theme !== undefined ? { theme: current.theme } : {}),
   }
-
-  // content/layout/components sections are shape-shared between v1 and v2;
-  // merge them directly from the original mutation.
-  // Use unknown as intermediate to satisfy exactOptionalPropertyTypes: the
-  // deepMerge result is structurally correct but typed as Record<string,unknown>.
-  const contentMutation = mutation.content
-  const layoutMutation = mutation.layout
-  const componentsMutation = mutation.components
-
-  if (contentMutation !== undefined) {
-    translated.content = deepMerge(
-      (currentV2.content ?? {}) as Record<string, unknown>,
-      contentMutation as unknown as Record<string, unknown>,
-    ) as unknown as ContentSection
-  } else if (currentV2.content !== undefined) {
-    translated.content = currentV2.content
+  const merged = <T>(cur: T | undefined, mut: T | undefined): T | undefined => {
+    if (mut === undefined) return cur
+    return deepMerge((cur ?? {}) as Record<string, unknown>, mut as Record<string, unknown>) as unknown as T
   }
-  if (layoutMutation !== undefined) {
-    translated.layout = deepMerge(
-      (currentV2.layout ?? {}) as Record<string, unknown>,
-      layoutMutation as unknown as Record<string, unknown>,
-    ) as unknown as LayoutSection
-  } else if (currentV2.layout !== undefined) {
-    translated.layout = currentV2.layout
-  }
-  if (componentsMutation !== undefined) {
-    translated.components = deepMerge(
-      (currentV2.components ?? {}) as Record<string, unknown>,
-      componentsMutation as unknown as Record<string, unknown>,
-    ) as unknown as ComponentsSection
-  } else if (currentV2.components !== undefined) {
-    translated.components = currentV2.components
-  }
-
-  return { translated, touchedSlots }
+  const content = merged(current.content, mutation.content)
+  if (content !== undefined) candidate.content = content
+  const layout = merged(current.layout, mutation.layout)
+  if (layout !== undefined) candidate.layout = layout
+  const components = merged(current.components, mutation.components)
+  if (components !== undefined) candidate.components = components
+  return candidate
 }
 
 // ---------------------------------------------------------------------------
 // Pipeline
 // ---------------------------------------------------------------------------
 
-// 'designer' and 'compiling' added for the THEME route
-export type PipelineStage = 'gatekeeper' | 'designer' | 'compiling' | 'builder' | 'verifying' | 'retry' | 'applying'
-
 export async function runPipeline(
   userMessage: string,
   conversationHistory: ConvTurn[],
-  context: {
-    registry: SlotRegistration[]
-    config: InvarianceConfig
-    themeStore: ThemeStore
-    storageBackend: StorageBackend
-    apiKey: string
-    userId: string
-    appId: string
-    componentLibrary?: string[]
-    fetchFn?: typeof fetch
-  },
+  context: PipelineContext,
   onProgress?: (stage: PipelineStage) => void,
 ): Promise<PipelineResult> {
   const maxRetries = 2
   const componentLibrary = context.componentLibrary ?? []
+
+  // Shared transport hooks for every agent call (test fetch / hosted endpoint / metering).
+  const agentOpts = {
+    ...(context.fetchFn ? { fetchFn: context.fetchFn } : {}),
+    ...(context.apiBaseUrl ? { baseUrl: context.apiBaseUrl } : {}),
+    ...(context.onUsage ? { onUsage: context.onUsage } : {}),
+  }
 
   // Step 1: Gatekeeper — classify intent, validate level
   onProgress?.('gatekeeper')
@@ -194,22 +140,14 @@ export async function runPipeline(
       config: context.config,
       apiKey: context.apiKey,
       componentLibrary,
-      ...(context.fetchFn ? { fetchFn: context.fetchFn } : {}),
+      ...agentOpts,
     },
   )
 
   // --- THEME route: Designer → compileTheme → verifyV2 → store + apply ---
   if (gatekeeperResult.kind === 'THEME') {
     const constraints = deriveConstraints(context.config)
-
-    // Load the current theme; prefer the in-memory store (already upgraded by
-    // the provider on load) then fall back to the storage backend.
-    const storedRaw: AnyThemeJson | null =
-      context.themeStore.getTheme() ??
-      await context.storageBackend.loadTheme(context.userId, context.appId)
-
-    // Upgrade v1 → v2 so the rest of the THEME path only handles v2 shapes.
-    const { theme: currentV2 } = upgradeThemeJson(storedRaw ?? { version: 1, base_app_version: 'v1' })
+    const currentV2 = await loadCurrentV2(context)
 
     // Read the current styleSpec for "more X" relativity in the Designer prompt.
     const currentSpec = currentV2.theme?.styleSpec
@@ -231,7 +169,7 @@ export async function runPipeline(
           ...(currentSpec !== undefined ? { currentSpec } : {}),
           constraints,
           apiKey: context.apiKey,
-          ...(context.fetchFn ? { fetchFn: context.fetchFn } : {}),
+          ...agentOpts,
         },
         retryFeedback,
       )
@@ -303,9 +241,7 @@ export async function runPipeline(
 
       // Store + apply.
       onProgress?.('applying')
-      await context.storageBackend.saveTheme(context.userId, context.appId, candidate)
-      context.themeStore.setTheme(candidate)
-      applyAnyTheme(candidate, context.config)
+      await persistAndApply(context, candidate)
 
       // Only include warnings when non-empty (exactOptionalPropertyTypes: never assign
       // undefined to an optional field explicitly).
@@ -328,7 +264,27 @@ export async function runPipeline(
     return { type: 'error', message: gatekeeperResult.message }
   }
 
-  // SLOT_F1 / F2 / F3 / F4: map to the intent shape the v5 Builder consumes
+  // --- SLOT_F1 route: constrained value pick + contrast solve (no Designer) ---
+  if (gatekeeperResult.kind === 'SLOT_F1') {
+    onProgress?.('slot-edit')
+    const constraints = deriveConstraints(context.config)
+    const currentV2 = await loadCurrentV2(context)
+    const outcome = await runSlotEdit({
+      intent: { slotName: gatekeeperResult.slotName, description: gatekeeperResult.description },
+      currentV2,
+      registry: context.registry,
+      constraints,
+      config: context.config,
+      apiKey: context.apiKey,
+      ...agentOpts,
+    })
+    if (!outcome.ok) return { type: 'error', message: outcome.error }
+    onProgress?.('applying')
+    await persistAndApply(context, outcome.candidate)
+    return { type: 'success', description: outcome.explanation, slotName: gatekeeperResult.slotName }
+  }
+
+  // --- F2 / F3 / F4 route: Builder produces page-keyed sections only ---
   const intent = {
     slotName: gatekeeperResult.slotName,
     level: gatekeeperResult.level,
@@ -336,133 +292,34 @@ export async function runPipeline(
     requirements: gatekeeperResult.requirements,
   }
 
-  // Step 2: Builder — produce theme.json mutation.
   onProgress?.('builder')
-  const currentTheme: AnyThemeJson | null = context.themeStore.getTheme()
-  const themeIsV2 = currentTheme !== null && isV2Theme(currentTheme)
+  const currentV2 = await loadCurrentV2(context)
+  const builderInput = {
+    currentTheme: currentV2,
+    intent,
+    slotRegistry: context.registry,
+    invariantConfig: context.config,
+    ...agentOpts,
+  }
+  let builderResult = await callBuilder(builderInput, context.apiKey)
 
-  // Builder always receives a v1-shaped theme view (it emits v1-shaped mutations).
-  // When the stored theme is v2, pass null so the Builder starts fresh rather than
-  // consuming an incompatible shape.
-  const currentThemeV1 = themeIsV2 ? null : (currentTheme as ThemeJson | null)
-
-  let builderResult = await callBuilder(
-    {
-      currentThemeJson: currentThemeV1,
-      intent,
-      slotRegistry: context.registry,
-      invariantConfig: context.config,
-      ...(context.fetchFn ? { fetchFn: context.fetchFn } : {}),
-    },
-    context.apiKey,
-  )
-
-  // Step 3: Merge + Verify (with retries to Builder on failure)
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     onProgress?.(attempt === 0 ? 'verifying' : 'retry')
+    if (!builderResult.ok) return { type: 'error', message: builderResult.error }
 
-    if (themeIsV2) {
-      // --- v2 path ---
-      // Translate the Builder's v1-shaped mutation into v2 before merging.
-      const translationResult = translateMutationToV2(builderResult.mutation, currentTheme as ThemeJsonV2)
-      if ('error' in translationResult) {
-        return { type: 'error', message: translationResult.error }
-      }
-      const { translated: candidateV2, touchedSlots } = translationResult
+    const candidate = mergeSectionsIntoV2(currentV2, builderResult.mutation)
+    // The v5 engine verifies the page-keyed sections; their shapes are shared
+    // between v1 and v2, so the cast is sound.
+    const verification = verify(candidate as unknown as ThemeJson, context.config, intent.level, context.registry, componentLibrary)
 
-      // Run v5 verify for F2/F3/F4 (content/layout/components are shape-shared).
-      // Also run verifyV2 when the mutation touched theme slots (CSS var changes).
-      // Cast to ThemeJson for the v5 verify engine which only inspects content/
-      // layout/components sections (same shape in v1 and v2).
-      const v5Verification = verify(
-        candidateV2 as unknown as ThemeJson,
-        context.config,
-        intent.level,
-        context.registry,
-        componentLibrary,
-      )
+    if (verification.passed) {
+      onProgress?.('applying')
+      await persistAndApply(context, candidate)
+      return { type: 'success', description: builderResult.explanation, slotName: intent.slotName }
+    }
 
-      const v2Verification = touchedSlots
-        ? verifyV2(candidateV2, context.config, deriveConstraints(context.config))
-        : { passed: true, results: [] }
-
-      const allPassed = v5Verification.passed && v2Verification.passed
-
-      if (allPassed) {
-        // Step 4 (v2 path): Store + Apply
-        onProgress?.('applying')
-        await context.storageBackend.saveTheme(context.userId, context.appId, candidateV2)
-        context.themeStore.setTheme(candidateV2)
-        applyAnyTheme(candidateV2, context.config)
-        return {
-          type: 'success',
-          description: builderResult.explanation,
-          slotName: intent.slotName,
-        }
-      }
-
-      if (attempt < maxRetries) {
-        const failedResults = [
-          ...v5Verification.results.filter((r) => !r.passed),
-          ...v2Verification.results.filter((r) => !r.passed),
-        ]
-        builderResult = await callBuilder(
-          {
-            currentThemeJson: currentThemeV1,
-            intent,
-            slotRegistry: context.registry,
-            invariantConfig: context.config,
-            retryFeedback: failedResults,
-            ...(context.fetchFn ? { fetchFn: context.fetchFn } : {}),
-          },
-          context.apiKey,
-        )
-      }
-    } else {
-      // --- v1 path (exact v5 behavior preserved) ---
-      // mergeTheme produces a v1 ThemeJson. We increment version as a per-save
-      // revision counter (v5 convention). We call applyThemeJson directly —
-      // NOT applyAnyTheme — so that a v5 revision counter at >= 2 can never
-      // misclassify as v2 inside applyAnyTheme's isV2Theme check.
-      const candidateTheme = mergeTheme(currentThemeV1, builderResult.mutation)
-      candidateTheme.version = (currentTheme?.version ?? 0) + 1
-
-      const verification = verify(
-        candidateTheme,
-        context.config,
-        intent.level,
-        context.registry,
-        componentLibrary,
-      )
-
-      if (verification.passed) {
-        // Step 4 (v1 path): Store + Apply
-        onProgress?.('applying')
-        await context.storageBackend.saveTheme(context.userId, context.appId, candidateTheme)
-        context.themeStore.setTheme(candidateTheme)
-        // Use applyThemeJson directly (not applyAnyTheme) to ensure a v5 revision
-        // counter >= 2 never trips the v2 dispatch path in applyAnyTheme.
-        applyThemeJson(candidateTheme, context.config)
-        return {
-          type: 'success',
-          description: builderResult.explanation,
-          slotName: intent.slotName,
-        }
-      }
-
-      if (attempt < maxRetries) {
-        builderResult = await callBuilder(
-          {
-            currentThemeJson: currentThemeV1,
-            intent,
-            slotRegistry: context.registry,
-            invariantConfig: context.config,
-            retryFeedback: verification.results.filter((r) => !r.passed),
-            ...(context.fetchFn ? { fetchFn: context.fetchFn } : {}),
-          },
-          context.apiKey,
-        )
-      }
+    if (attempt < maxRetries) {
+      builderResult = await callBuilder({ ...builderInput, retryFeedback: verification.results.filter((r) => !r.passed) }, context.apiKey)
     }
   }
 

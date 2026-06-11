@@ -1,23 +1,28 @@
-import type { ThemeJson, InvarianceConfig } from '../config/types'
+import type { ThemeJsonV2, InvarianceConfig, ContentSection, LayoutSection, ComponentsSection } from '../config/types'
 import type { SlotRegistration } from '../context/registry'
 import type { TestResult } from '../verify/types'
+import { callClaude, type UsageHandler } from './api'
 import { BUILDER_MODEL } from './models'
 
 // ---------------------------------------------------------------------------
-// Response type
+// Mutation + outcome types
+//
+// F2/F3/F4 only: the Builder never touches theme.* — the THEME route owns
+// roles, SLOT_F1 owns slot literals. Mutations are the page-keyed sections.
 // ---------------------------------------------------------------------------
 
-export interface BuilderConfigResult {
-  mutation: Partial<ThemeJson>
-  explanation: string
+export interface SectionsMutation {
+  content?: ContentSection
+  layout?: LayoutSection
+  components?: ComponentsSection
 }
 
-// ---------------------------------------------------------------------------
-// Input type
-// ---------------------------------------------------------------------------
+export type BuilderOutcome =
+  | { ok: true; mutation: SectionsMutation; explanation: string }
+  | { ok: false; error: string }
 
 export interface BuilderConfigInput {
-  currentThemeJson: ThemeJson | null
+  currentTheme: ThemeJsonV2 | null
   intent: {
     slotName: string
     level: number
@@ -27,8 +32,10 @@ export interface BuilderConfigInput {
   slotRegistry: SlotRegistration[]
   invariantConfig: InvarianceConfig
   retryFeedback?: TestResult[]
-  // injectable for keyless tests — defaults to globalThis.fetch
+  // injectable transport hooks (keyless tests / hosted endpoints / metering)
   fetchFn?: typeof fetch
+  baseUrl?: string
+  onUsage?: UsageHandler
 }
 
 // ---------------------------------------------------------------------------
@@ -58,19 +65,18 @@ function extractJson(text: string): unknown | undefined {
 export async function callBuilder(
   input: BuilderConfigInput,
   apiKey: string,
-): Promise<BuilderConfigResult> {
-  const systemPrompt = `You are the Builder agent for Invariance. You produce theme.json mutations (partial JSON) based on the Gatekeeper's intent.
+): Promise<BuilderOutcome> {
+  const systemPrompt = `You are the Builder agent for Invariance. You produce theme.json mutations (partial JSON) for content, layout, and component changes based on the Gatekeeper's intent.
 
 CURRENT THEME.JSON:
-${input.currentThemeJson ? JSON.stringify(input.currentThemeJson, null, 2) : '(empty — no customizations yet)'}
+${input.currentTheme ? JSON.stringify(input.currentTheme, null, 2) : '(empty — no customizations yet)'}
 
-SLOT REGISTRY (each slot may advertise cssVariables — a list of --inv-* CSS variables the scanner rewired into its source):
+SLOT REGISTRY:
 ${JSON.stringify(
   input.slotRegistry.map((r) => ({
     name: r.name,
     level: r.level,
     preserve: r.preserve,
-    cssVariables: r.cssVariables ?? [],
   })),
   null,
   2,
@@ -80,27 +86,11 @@ INVARIANT CONFIG:
 ${JSON.stringify(input.invariantConfig, null, 2)}
 
 RULES:
-1. Output ONLY valid JSON — a partial theme.json mutation object. No markdown fences, no commentary.
-2. The mutation will be deep-merged into the current theme.json.
-3. **For F1 (style) changes, PREFER setting theme.globals["--inv-<slot>-<prop>"] entries drawn from the target slot's cssVariables list.** The scanner wired these into the source; updating them repaints the slot automatically. Only fall back to theme.slots[slotName][cssProp] when the target slot has no cssVariables registered.
-4. Slot names in theme.slots must match registered slot names.
-5. Color values must be valid 6-digit hex (#RRGGBB).
-6. Use camelCase CSS property names in theme.slots overrides (e.g., backgroundColor, borderRight). CSS variable keys in theme.globals use kebab-case (e.g., --inv-sidebar-bg).
-7. When the config has palette mode, use colors from the palette.
-8. Do not add content/layout/component sections unless the intent level requires it.
-9. Include an "explanation" field describing what was changed.
-
-OUTPUT FORMAT (F1 style change via CSS variables — preferred):
-{
-  "mutation": { "theme": { "globals": { "--inv-sidebar-bg": "#1b2a4a" } } },
-  "explanation": "Changed sidebar background to dark blue"
-}
-
-OUTPUT FORMAT (F1 fallback for slots without cssVariables):
-{
-  "mutation": { "theme": { "slots": { "sidebar": { "backgroundColor": "#1b2a4a" } } } },
-  "explanation": "Changed sidebar background to dark blue"
-}
+1. Output ONLY valid JSON — an object with a "mutation" object and an "explanation" string. No markdown fences, no commentary.
+2. The mutation may contain ONLY "content", "layout", and/or "components" keys. Style changes (colors, fonts, radii) are handled by a different pipeline — NEVER emit a "theme" key.
+3. The mutation will be deep-merged into the current theme.json — include only what changes.
+4. Slot and section names must match registered slot names.
+5. Do not exceed the intent's level.
 
 For content changes (F2):
 {
@@ -133,60 +123,33 @@ ${retrySection}
 
 Produce the theme.json mutation now:`
 
-  // Use injectable fetch for keyless tests; fall back to the global for production.
-  const fetchFn = input.fetchFn ?? fetch
-  let response: Response
-  try {
-    response = await fetchFn('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: BUILDER_MODEL,
-        max_tokens: 4096,
-        temperature: 0.2,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
-    })
-  } catch {
-    return { mutation: {}, explanation: 'Connection error. Please try again.' }
+  // No outputSchema: the structured-outputs dialect requires additionalProperties:
+  // false on every object, and these sections are map-shaped (dynamic page and
+  // element keys) — inexpressible. Prompt-and-parse stays until the render-driven
+  // phase retypes mutations as typed op arrays.
+  const result = await callClaude({
+    apiKey,
+    model: BUILDER_MODEL,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userMessage }],
+    temperature: 0.2,
+    maxTokens: 4096,
+    ...(input.fetchFn ? { fetchFn: input.fetchFn } : {}),
+    ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
+    ...(input.onUsage ? { onUsage: input.onUsage } : {}),
+  })
+  if (!result.ok) return { ok: false, error: result.error }
+
+  const parsed = extractJson(result.text) as { mutation?: Record<string, unknown>; explanation?: string } | undefined
+  if (!parsed || typeof parsed !== 'object' || !parsed.mutation || typeof parsed.mutation !== 'object') {
+    return { ok: false, error: 'Could not produce a valid change. Please try again.' }
   }
 
-  if (!response.ok) {
-    return { mutation: {}, explanation: `API error (${response.status}). Please try again.` }
-  }
-
-  let data: unknown
-  try {
-    data = await response.json()
-  } catch {
-    return { mutation: {}, explanation: 'Failed to parse API response.' }
-  }
-
-  let text: string | undefined
-  try {
-    const typed = data as { content: Array<{ type: string; text: string }> }
-    text = typed.content.find((b) => b.type === 'text')?.text
-  } catch {
-    // fall through
-  }
-
-  if (!text) {
-    return { mutation: {}, explanation: 'Builder returned empty response.' }
-  }
-
-  const parsed = extractJson(text) as { mutation?: Partial<ThemeJson>; explanation?: string } | undefined
-  if (parsed && typeof parsed === 'object' && parsed.mutation) {
-    return {
-      mutation: parsed.mutation,
-      explanation: parsed.explanation ?? input.intent.description,
-    }
-  }
-
-  return { mutation: {}, explanation: 'Builder returned invalid output.' }
+  // Defense in depth: keep ONLY the three sections the Builder owns. A confused
+  // model that emits a "theme" key (style territory) has it dropped here.
+  const mutation: SectionsMutation = {}
+  if (parsed.mutation.content !== undefined) mutation.content = parsed.mutation.content as ContentSection
+  if (parsed.mutation.layout !== undefined) mutation.layout = parsed.mutation.layout as LayoutSection
+  if (parsed.mutation.components !== undefined) mutation.components = parsed.mutation.components as ComponentsSection
+  return { ok: true, mutation, explanation: parsed.explanation ?? input.intent.description }
 }

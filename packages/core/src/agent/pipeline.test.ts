@@ -5,11 +5,12 @@ import { ThemeJsonV2Schema } from '../config/schema'
 import { createMemoryStorage } from '../storage/memory'
 import { createThemeStore } from '../context/theme-store'
 import type { AnyThemeJson } from '../config/types'
+import type { SlotRegistration } from '../context/registry'
 
 const spec = THEME_PACKS.find((p) => p.id === 'retro-arcade')!.spec
 
-// fetch stub that answers calls in order (Gatekeeper first, then Designer calls).
-// The last reply repeats for any extra calls.
+// fetch stub that answers calls in order (Gatekeeper first, then Designer/Builder
+// /slot-edit calls). The last reply repeats for any extra calls.
 const scriptedFetch = (replies: unknown[]) => {
   let i = 0
   return vi.fn().mockImplementation(async () => ({
@@ -21,8 +22,21 @@ const scriptedFetch = (replies: unknown[]) => {
   })) as unknown as typeof fetch
 }
 
-const context = (fetchFn: typeof fetch) => ({
-  registry: [],
+// Registry carrying a 'sidebar' slot with the CSS variables slot-edit needs.
+const sidebarRegistry: SlotRegistration[] = [
+  {
+    name: 'sidebar',
+    level: 1,
+    pageName: '/',
+    preserve: false,
+    alternativesCount: 0,
+    type: 'slot',
+    cssVariables: ['--inv-sidebar-bg', '--inv-sidebar-text'],
+  },
+]
+
+const context = (fetchFn: typeof fetch, registry: SlotRegistration[] = []) => ({
+  registry,
   config: { app: 'demo', frontend: { pages: { '/': { level: 4 } } } },
   themeStore: createThemeStore(),
   storageBackend: createMemoryStorage(),
@@ -87,52 +101,46 @@ describe('runPipeline THEME route', () => {
     expect(stored.theme?.slots?.['--inv-header-bg']).toBe('#abcdef')
   })
 
-  it('routes CLARIFY straight through and slot kinds to the Builder path', async () => {
+  it('routes CLARIFY straight through', async () => {
     const clarify = scriptedFetch([{ kind: 'CLARIFY', message: 'which area?' }])
     expect((await runPipeline('hm', [], context(clarify))).type).toBe('clarification')
-    // SLOT_F1 reaches the Builder: builder responds with a mutation
-    const slotFlow = scriptedFetch([
-      { kind: 'SLOT_F1', slotName: 'sidebar', level: 1, description: 'blue sidebar', requirements: [] },
-      { mutation: { theme: { globals: { '--inv-sidebar-bg': '#0000ff' } } }, explanation: 'done' },
-    ])
-    const r = await runPipeline('make the sidebar blue', [], context(slotFlow))
-    expect(['success', 'error']).toContain(r.type)  // success if verify passes on empty config
   })
+})
 
-  it('SLOT_F1 globals mutation on a v2 current theme lands in slots and applies', async () => {
-    // Seed storage with a valid v2 theme (compiler-produced roles from a pack).
-    const corporatePack = THEME_PACKS.find((p) => p.id === 'corporate-trust')!
-    const { compileTheme } = await import('../compiler/compile')
-    const compiled = compileTheme(corporatePack.spec)
-    const seedTheme: AnyThemeJson = {
-      version: 2,
-      base_app_version: 'v1',
-      theme: {
-        roles: compiled.roles,
-        slots: { '--inv-sidebar-bg': '#111111' },
-        styleSpec: corporatePack.spec,
-      },
-    }
-
+describe('runPipeline SLOT_F1 + Builder routes', () => {
+  it('routes SLOT_F1 to the slot-edit micro-mutation and stores a v2 doc', async () => {
     const fetchFn = scriptedFetch([
-      { kind: 'SLOT_F1', slotName: 'sidebar', level: 1, description: 'blue sidebar', requirements: [] },
-      // Builder emits v1-style globals mutation with a valid hex color
-      { mutation: { theme: { globals: { '--inv-sidebar-bg': '#0000ff' } } }, explanation: 'blue sidebar' },
+      { kind: 'SLOT_F1', slotName: 'sidebar', level: 1, description: 'make the sidebar blue', requirements: [] },
+      { targetVar: '--inv-sidebar-bg', hue: 250, chromaLevel: 'medium', lightness: 'same', explanation: 'Made the sidebar blue' },
     ])
-    const ctx = context(fetchFn)
-    await ctx.storageBackend.saveTheme('u', 'a', seedTheme)
-    ctx.themeStore.setTheme(seedTheme)
+    const ctx = context(fetchFn, sidebarRegistry)
+    const result = await runPipeline('make the sidebar blue', [], ctx)
+    expect(result.type).toBe('success')
 
-    const r = await runPipeline('make the sidebar blue', [], ctx)
-    // The mutation should either succeed (verify passes) or error after retries
-    // but the stored doc must remain a valid v2 document.
     const stored = await ctx.storageBackend.loadTheme('u', 'a') as AnyThemeJson
+    expect(stored.version).toBe(2)
     const parsed = ThemeJsonV2Schema.safeParse(stored)
     expect(parsed.success).toBe(true)
-    if (r.type === 'success') {
-      // If it succeeded, the CSS var mutation must be present in theme.slots
-      const storedV2 = parsed.data!
-      expect(storedV2.theme?.slots?.['--inv-sidebar-bg']).toBe('#0000ff')
+    if (parsed.success) {
+      expect(parsed.data.theme?.slots?.['--inv-sidebar-bg']).toMatch(/^#[0-9a-f]{6}$/)
+    }
+  })
+
+  it('merges Builder sections onto the current v2 doc (fresh user gets v2, never v1)', async () => {
+    const fetchFn = scriptedFetch([
+      { kind: 'F3', slotName: 'banner', level: 3, description: 'hide the banner', requirements: [] },
+      { mutation: { layout: { pages: { '/': { hidden: ['banner'] } } } }, explanation: 'Hid the banner' },
+    ])
+    const ctx = context(fetchFn)
+    const result = await runPipeline('hide the banner', [], ctx)
+    expect(result.type).toBe('success')
+
+    const stored = await ctx.storageBackend.loadTheme('u', 'a') as AnyThemeJson
+    expect(stored.version).toBe(2)
+    const parsed = ThemeJsonV2Schema.safeParse(stored)
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.layout?.pages['/']?.hidden).toEqual(['banner'])
     }
   })
 })

@@ -131,6 +131,7 @@ const PROGRESS_LABELS: Record<PipelineStage, string> = {
   gatekeeper: 'Understanding your request...',
   designer: 'Designing the theme...',
   compiling: 'Compiling design tokens...',
+  'slot-edit': 'Adjusting colors...',
   builder: 'Producing changes...',
   verifying: 'Verifying invariants...',
   retry: 'Retrying...',
@@ -182,6 +183,8 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
     storageBackend,
     componentLibrary,
     initialTheme,
+    apiBaseUrl,
+    onUsage,
   } = useInvariance()
 
   const [input, setInput] = useState('')
@@ -241,6 +244,8 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
         userId,
         appId,
         componentLibrary: componentLibrary ? Object.keys(componentLibrary) : [],
+        ...(apiBaseUrl ? { apiBaseUrl } : {}),
+        ...(onUsage ? { onUsage } : {}),
       },
       (stage) => {
         setHistory((h) =>

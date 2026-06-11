@@ -10,6 +10,7 @@ import {
 } from 'react'
 
 import type { InvarianceConfig, AnyThemeJson } from '../config/types'
+import type { UsageHandler } from '../agent/api'
 import { createThemeStore, type ThemeStore } from './theme-store'
 import { createSlotRegistry, type SlotRegistry } from './registry'
 import { createMemoryStorage } from '../storage/memory'
@@ -34,6 +35,8 @@ interface InvarianceContextValue {
   registry: SlotRegistry
   storageBackend: StorageBackend
   componentLibrary: Record<string, React.ComponentType<any>> | undefined
+  apiBaseUrl?: string
+  onUsage?: UsageHandler
 }
 
 const InvarianceContext = createContext<InvarianceContextValue | null>(null)
@@ -50,6 +53,8 @@ interface InvarianceProviderProps {
   componentLibrary?: Record<string, React.ComponentType<any>>
   storage?: 'memory' | 'localStorage' | 'api'
   storageUrl?: string
+  apiBaseUrl?: string
+  onUsage?: UsageHandler
   children: ReactNode
 }
 
@@ -61,6 +66,8 @@ export function InvarianceProvider({
   componentLibrary,
   storage = 'memory',
   storageUrl,
+  apiBaseUrl,
+  onUsage,
   children,
 }: InvarianceProviderProps) {
   const themeStore = useMemo(() => createThemeStore(), [])
@@ -130,8 +137,10 @@ export function InvarianceProvider({
       registry,
       storageBackend,
       componentLibrary,
+      ...(apiBaseUrl ? { apiBaseUrl } : {}),
+      ...(onUsage ? { onUsage } : {}),
     }),
-    [config, apiKey, userId, themeStore, themeJson, initialTheme, registry, storageBackend, componentLibrary],
+    [config, apiKey, userId, themeStore, themeJson, initialTheme, registry, storageBackend, componentLibrary, apiBaseUrl, onUsage],
   )
 
   return (
