@@ -10,6 +10,7 @@ import {
 import { signBundle, type SigningKeyPair } from "@invariance/schema/signing";
 import { randomUUID } from "node:crypto";
 import type { MemoryStore, ModRecord } from "../store";
+import { verifyBundleAgainstManifest } from "./verification";
 
 export interface ModDraft {
   uiOps?: UiOp[];
@@ -98,7 +99,10 @@ export function publishBundle(
   const mods = store.subjectMods(bundle.appId, bundle.subjectId);
 
   const previous = store.latestMod(bundle.appId, bundle.subjectId);
-  if (previous && (previous.status === "active" || previous.status === "stale")) {
+  if (
+    previous &&
+    (previous.status === "active" || previous.status === "stale" || previous.status === "degraded")
+  ) {
     previous.status = "superseded";
   }
 
@@ -134,6 +138,57 @@ export function getPointer(store: MemoryStore, appId: string, subjectId: string)
     default:
       return { status: "none" };
   }
+}
+
+/**
+ * Lazy migration, triggered by the subject's next session after a developer
+ * release: rebind the stale bundle to the current manifest and re-run the
+ * full deterministic verifier. Pass -> re-signed new revision (prompts carry
+ * forward), pointer active again. Fail -> the record degrades with the
+ * verifier's reasons and the client offers the AI re-fix path.
+ */
+export function revalidateSubject(
+  store: MemoryStore,
+  keys: SigningKeyPair,
+  appId: string,
+  subjectId: string,
+): PointerView {
+  const mod = store.latestMod(appId, subjectId);
+  if (!mod || mod.status !== "stale") return getPointer(store, appId, subjectId);
+  const manifest = store.currentManifest(appId);
+  if (!manifest) return getPointer(store, appId, subjectId);
+
+  const stale = ModBundleSchema.parse(JSON.parse(mod.envelope.payload));
+  const rebound = assembleBundle(store, appId, subjectId, {
+    uiOps: stale.uiOps,
+    hooks: stale.hooks,
+    capabilities: stale.capabilities,
+  });
+  const verdict = verifyBundleAgainstManifest(rebound, manifest);
+  if (!verdict.ok) {
+    mod.status = "degraded";
+    mod.reasons = verdict.reasons;
+    store.app(appId).events.push({
+      type: "mod_degraded",
+      appId,
+      subjectId,
+      modId: mod.modId,
+      detail: { manifestVersion: manifest.version, reasons: verdict.reasons },
+      at: Date.now(),
+    });
+    return { status: "degraded", reasons: verdict.reasons };
+  }
+
+  const record = publishBundle(store, keys, rebound, mod.prompts);
+  store.app(appId).events.push({
+    type: "mod_migrated",
+    appId,
+    subjectId,
+    modId: record.modId,
+    detail: { from: mod.boundManifestVersion, to: manifest.version },
+    at: Date.now(),
+  });
+  return { status: "active", contentHash: record.contentHash };
 }
 
 export function setModStatus(

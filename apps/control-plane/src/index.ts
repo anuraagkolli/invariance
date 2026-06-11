@@ -6,7 +6,7 @@ export { loadKeys } from "./keys";
 export * as registry from "./modules/registry";
 export { verifyBundleAgainstManifest, analyzeHookSource } from "./modules/verification";
 export type { VerificationResult } from "./modules/verification";
-export { authorMod } from "./modules/authoring/pipeline";
+export { authorMod, refixMod } from "./modules/authoring/pipeline";
 export type { AuthoringResult } from "./modules/authoring/pipeline";
 export type { AgentInput, AuthoringAgent } from "./modules/authoring/agent";
 export { AnthropicAgent } from "./modules/authoring/anthropic";

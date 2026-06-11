@@ -10,13 +10,14 @@ import type { SigningKeyPair } from "@invariance/schema/signing";
 import { loadKeys } from "./keys";
 import type { AuthoringAgent } from "./modules/authoring/agent";
 import { AnthropicAgent } from "./modules/authoring/anthropic";
-import { authorMod } from "./modules/authoring/pipeline";
+import { authorMod, refixMod } from "./modules/authoring/pipeline";
 import {
   assembleBundle,
   getPointer,
   publishBundle,
   publishManifest,
   RegistryError,
+  revalidateSubject,
 } from "./modules/registry";
 import { verifyBundleAgainstManifest } from "./modules/verification";
 import { MemoryStore } from "./store";
@@ -127,6 +128,36 @@ export function createControlPlane(options: ControlPlaneOptions = {}): ControlPl
   app.get("/v1/apps/:appId/subjects/:subjectId/pointer", (c) =>
     c.json(getPointer(store, c.req.param("appId"), c.req.param("subjectId"))),
   );
+
+  /** Lazy migration: re-verify a stale modset against the current manifest. */
+  app.post("/v1/apps/:appId/subjects/:subjectId/revalidate", (c) =>
+    c.json(revalidateSubject(store, keys, c.req.param("appId"), c.req.param("subjectId"))),
+  );
+
+  /** AI repair of a degraded modset from the subject's original prompts. */
+  app.post("/v1/apps/:appId/subjects/:subjectId/refix", async (c) => {
+    if (!agent) {
+      return c.json({ error: "authoring agent not configured" }, 503);
+    }
+    const result = await refixMod({
+      store,
+      keys,
+      agent,
+      appId: c.req.param("appId"),
+      subjectId: c.req.param("subjectId"),
+    });
+    if (!result.ok) {
+      return c.json({ error: "re-fix failed verification", reasons: result.reasons }, 422);
+    }
+    return c.json(
+      {
+        modId: result.record.modId,
+        contentHash: result.record.contentHash,
+        attempts: result.attempts,
+      },
+      201,
+    );
+  });
 
   app.get("/v1/apps/:appId/bundles/:hash", (c) => {
     const envelope = store.app(c.req.param("appId")).bundlesByHash.get(c.req.param("hash"));

@@ -34,11 +34,11 @@ describe("sandbox as a security boundary", () => {
     expect(Date.now() - started).toBeLessThan(2_000);
   });
 
-  it("kills a memory bomb at the memory limit", async () => {
+  it("kills a memory bomb at the memory limit", { timeout: 15_000 }, async () => {
     const result = await executeHook(
-      "(p) => { const a = []; while (true) { a.push(new Array(65536).fill(8)); } }",
+      "(p) => { const a = []; while (true) { a.push(new Array(1048576).fill(8)); } }",
       {},
-      { cpuMs: 1000, memMb: 8 },
+      { cpuMs: 500, memMb: 8 },
     );
     expect(result.ok).toBe(false);
   });

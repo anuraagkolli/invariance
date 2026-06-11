@@ -39,8 +39,14 @@ export async function executeHook(
   const runtime = QuickJS.newRuntime();
   try {
     runtime.setMemoryLimit(budgets.memMb * 1024 * 1024);
+    // The deadline is wall-clock, but a busy host can deschedule us mid-eval,
+    // which would make a pure time check kill legitimate sub-millisecond
+    // hooks. The handler only fires while QuickJS is actually executing, so
+    // requiring several invocations first means we only interrupt code that
+    // is demonstrably still burning sandbox CPU past its budget.
     const deadline = Date.now() + budgets.cpuMs;
-    runtime.setInterruptHandler(() => Date.now() > deadline);
+    let interruptChecks = 0;
+    runtime.setInterruptHandler(() => ++interruptChecks > 8 && Date.now() > deadline);
     const context = runtime.newContext();
     try {
       const code =
