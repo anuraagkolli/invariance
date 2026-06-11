@@ -1,3 +1,14 @@
+export interface UsageEvent {
+  model: string
+  inputTokens: number
+  outputTokens: number
+}
+export type UsageHandler = (usage: UsageEvent) => void
+
+// Fallback base URL for the Anthropic API. Override via ClaudeCallOptions.baseUrl
+// to point the client at a proxy or hosted authoring endpoint instead.
+export const DEFAULT_API_BASE_URL = 'https://api.anthropic.com'
+
 export interface ClaudeCallOptions {
   apiKey: string
   model: string
@@ -7,6 +18,10 @@ export interface ClaudeCallOptions {
   maxTokens: number
   outputSchema?: Record<string, unknown>
   fetchFn?: typeof fetch
+  // Hostability: point the client at a proxy/authoring endpoint instead of the
+  // Anthropic API. Metering-readiness: onUsage reports tokens per call.
+  baseUrl?: string
+  onUsage?: UsageHandler
 }
 
 export type ClaudeCallResult = { ok: true; text: string } | { ok: false; error: string }
@@ -14,6 +29,7 @@ export type ClaudeCallResult = { ok: true; text: string } | { ok: false; error: 
 interface MessagesResponse {
   content?: Array<{ type: string; text?: string }>
   stop_reason?: string
+  usage?: { input_tokens?: number; output_tokens?: number }
 }
 
 // Raw fetch on purpose (no SDK — core thesis). Never throws: agents and the
@@ -22,9 +38,11 @@ export async function callClaude(opts: ClaudeCallOptions): Promise<ClaudeCallRes
   const fetchFn = opts.fetchFn ?? fetch
   if (!opts.apiKey) return { ok: false, error: 'Missing API key.' }
 
+  const baseUrl = opts.baseUrl ?? DEFAULT_API_BASE_URL
+
   let res: Response
   try {
-    res = await fetchFn('https://api.anthropic.com/v1/messages', {
+    res = await fetchFn(`${baseUrl}/v1/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -55,6 +73,16 @@ export async function callClaude(opts: ClaudeCallOptions): Promise<ClaudeCallRes
     data = (await res.json()) as MessagesResponse
   } catch {
     return { ok: false, error: 'Unreadable API response.' }
+  }
+
+  // Report token usage before branching on stop_reason — tokens are spent even
+  // on refusal or truncation, so the handler must fire regardless of outcome.
+  if (data.usage && opts.onUsage) {
+    opts.onUsage({
+      model: opts.model,
+      inputTokens: data.usage.input_tokens ?? 0,
+      outputTokens: data.usage.output_tokens ?? 0,
+    })
   }
 
   if (data.stop_reason === 'refusal') return { ok: false, error: 'The request was declined. Try rephrasing.' }

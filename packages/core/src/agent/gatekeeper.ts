@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { InvarianceConfig } from '../config/types'
 import type { SlotRegistration } from '../context/registry'
 import { callClaude } from './api'
+import type { UsageHandler } from './api'
 import { GATEKEEPER_MODEL } from './models'
 import { GATEKEEPER_WIRE_SCHEMA } from './wire-schemas'
 import { buildGatekeeperPrompt } from './gatekeeper-prompt'
@@ -78,6 +79,8 @@ export interface GatekeeperOptions {
   apiKey: string
   componentLibrary?: string[]
   fetchFn?: typeof fetch
+  baseUrl?: string
+  onUsage?: UsageHandler
 }
 
 const ERROR_RESULT = (message: string): GatekeeperResult => ({ kind: 'ERROR', message })
@@ -102,6 +105,8 @@ export async function callGatekeeper(
     maxTokens: 1024,
     outputSchema: GATEKEEPER_WIRE_SCHEMA as unknown as Record<string, unknown>,
     ...(opts.fetchFn ? { fetchFn: opts.fetchFn } : {}),
+    ...(opts.baseUrl ? { baseUrl: opts.baseUrl } : {}),
+    ...(opts.onUsage ? { onUsage: opts.onUsage } : {}),
   })
 
   if (!result.ok) {

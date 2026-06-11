@@ -92,3 +92,14 @@ describe('buildDesignerPrompt', () => {
     expect((prompt.match(/"rationale"/g) ?? []).length).toBe(3)
   })
 })
+
+describe('callDesigner baseUrl threading', () => {
+  it('sends to a custom base URL when provided', async () => {
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ content: [{ type: 'text', text: JSON.stringify(validSpec) }], stop_reason: 'end_turn' }),
+    } as unknown as Response)
+    await callDesigner({ request: 'make it retro', constraints: {}, apiKey: 'k', fetchFn, baseUrl: 'https://proxy.test' })
+    expect(fetchFn.mock.calls[0][0]).toBe('https://proxy.test/v1/messages')
+  })
+})

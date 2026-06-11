@@ -70,7 +70,7 @@ export { applyAnyTheme } from './runtime/apply'
 
 // Agent Pipeline (v6)
 export { callClaude } from './agent/api'
-export type { ClaudeCallOptions, ClaudeCallResult } from './agent/api'
+export type { ClaudeCallOptions, ClaudeCallResult, UsageEvent, UsageHandler } from './agent/api'
 export { GATEKEEPER_MODEL, DESIGNER_MODEL, BUILDER_MODEL } from './agent/models'
 export { callDesigner } from './agent/designer'
 export type { DesignerInput, DesignerResult } from './agent/designer'

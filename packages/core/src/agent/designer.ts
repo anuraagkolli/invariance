@@ -3,6 +3,7 @@ import type { StyleSpec, DesignConstraints } from '../compiler/style-spec'
 import { FONT_PAIRINGS } from '../registries/font-pairings'
 import { THEME_PACKS } from '../registries/theme-packs'
 import { callClaude } from './api'
+import type { UsageHandler } from './api'
 import { DESIGNER_MODEL } from './models'
 import { styleSpecWireSchema } from './wire-schemas'
 import { buildDesignerPrompt, selectFewShotPacks } from './designer-prompt'
@@ -13,6 +14,8 @@ export interface DesignerInput {
   constraints: DesignConstraints
   apiKey: string
   fetchFn?: typeof fetch
+  baseUrl?: string
+  onUsage?: UsageHandler
 }
 
 export type DesignerResult =
@@ -55,6 +58,8 @@ export async function callDesigner(input: DesignerInput, retryFeedback?: string[
     temperature: 0.7, maxTokens: 2048,
     outputSchema: styleSpecWireSchema(pairingIds),
     ...(input.fetchFn ? { fetchFn: input.fetchFn } : {}),
+    ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
+    ...(input.onUsage ? { onUsage: input.onUsage } : {}),
   })
 
   // Transport or HTTP failure — not retryable (the issue is not the model's output).

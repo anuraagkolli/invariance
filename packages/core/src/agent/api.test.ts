@@ -63,3 +63,41 @@ describe('callClaude', () => {
     await expect(callClaude({ ...baseOpts, fetchFn: bad })).resolves.toMatchObject({ ok: false })
   })
 })
+
+describe('callClaude baseUrl + usage', () => {
+  it('sends to a custom base URL when provided', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(okResponse({
+      content: [{ type: 'text', text: '{}' }], stop_reason: 'end_turn',
+    }))
+    await callClaude({ ...baseOpts, fetchFn, baseUrl: 'https://authoring.example.com' })
+    expect(fetchFn.mock.calls[0][0]).toBe('https://authoring.example.com/v1/messages')
+  })
+
+  it('reports usage when the response includes it', async () => {
+    const onUsage = vi.fn()
+    const fetchFn = vi.fn().mockResolvedValue(okResponse({
+      content: [{ type: 'text', text: '{}' }], stop_reason: 'end_turn',
+      usage: { input_tokens: 120, output_tokens: 45 },
+    }))
+    await callClaude({ ...baseOpts, fetchFn, onUsage })
+    expect(onUsage).toHaveBeenCalledWith({ model: baseOpts.model, inputTokens: 120, outputTokens: 45 })
+  })
+
+  it('reports usage even on refusal (tokens were still spent)', async () => {
+    const onUsage = vi.fn()
+    const fetchFn = vi.fn().mockResolvedValue(okResponse({
+      content: [], stop_reason: 'refusal', usage: { input_tokens: 80, output_tokens: 2 },
+    }))
+    await callClaude({ ...baseOpts, fetchFn, onUsage })
+    expect(onUsage).toHaveBeenCalledOnce()
+  })
+
+  it('does not call onUsage when the response has no usage block', async () => {
+    const onUsage = vi.fn()
+    const fetchFn = vi.fn().mockResolvedValue(okResponse({
+      content: [{ type: 'text', text: '{}' }], stop_reason: 'end_turn',
+    }))
+    await callClaude({ ...baseOpts, fetchFn, onUsage })
+    expect(onUsage).not.toHaveBeenCalled()
+  })
+})
