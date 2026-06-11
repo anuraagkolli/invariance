@@ -67,6 +67,7 @@ export async function runPipeline(
     userId: string
     appId: string
     componentLibrary?: string[]
+    fetchFn?: typeof fetch
   },
   onProgress?: (stage: PipelineStage) => void,
 ): Promise<PipelineResult> {
@@ -76,21 +77,38 @@ export async function runPipeline(
   // Step 1: Gatekeeper — classify intent, validate level
   onProgress?.('gatekeeper')
   const gatekeeperResult = await callGatekeeper(
+    userMessage,
+    conversationHistory,
     {
-      userMessage,
-      conversationHistory,
-      slotRegistry: context.registry,
-      invariantConfig: context.config,
+      registry: context.registry,
+      config: context.config,
+      apiKey: context.apiKey,
       componentLibrary,
+      ...(context.fetchFn ? { fetchFn: context.fetchFn } : {}),
     },
-    context.apiKey,
   )
 
-  if (gatekeeperResult.type === 'clarification' || gatekeeperResult.type === 'error') {
-    return gatekeeperResult
+  // --- v6 kind routing shim ---
+  // THEME: placeholder until Task 7 wires the Designer pipeline
+  if (gatekeeperResult.kind === 'THEME') {
+    return { type: 'error', message: 'Whole-app theming lands in the next task.' }
   }
 
-  const intent = gatekeeperResult
+  // Pass-through kinds that need no further processing
+  if (gatekeeperResult.kind === 'CLARIFY') {
+    return { type: 'clarification', message: gatekeeperResult.message }
+  }
+  if (gatekeeperResult.kind === 'REJECT' || gatekeeperResult.kind === 'ERROR') {
+    return { type: 'error', message: gatekeeperResult.message }
+  }
+
+  // SLOT_F1 / F2 / F3 / F4: map to the intent shape the v5 Builder consumes
+  const intent = {
+    slotName: gatekeeperResult.slotName,
+    level: gatekeeperResult.level,
+    description: gatekeeperResult.description,
+    requirements: gatekeeperResult.requirements,
+  }
 
   // Step 2: Builder — produce theme.json mutation
   onProgress?.('builder')

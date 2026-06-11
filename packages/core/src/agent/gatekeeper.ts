@@ -1,188 +1,159 @@
+import { z } from 'zod'
 import type { InvarianceConfig } from '../config/types'
 import type { SlotRegistration } from '../context/registry'
+import { callClaude } from './api'
 import { GATEKEEPER_MODEL } from './models'
+import { GATEKEEPER_WIRE_SCHEMA } from './wire-schemas'
+import { buildGatekeeperPrompt } from './gatekeeper-prompt'
 
 // ---------------------------------------------------------------------------
-// Response types
+// Result types
 // ---------------------------------------------------------------------------
+
+export type GateKind = 'THEME' | 'SLOT_F1' | 'F2' | 'F3' | 'F4' | 'CLARIFY' | 'REJECT'
 
 export type GatekeeperResult =
-  | {
-      type: 'intent'
-      slotName: string
-      level: number
-      description: string
-      requirements: string[]
-    }
-  | {
-      type: 'clarification'
-      message: string
-    }
-  | {
-      type: 'error'
-      message: string
-    }
+  | { kind: 'THEME'; description: string }
+  | { kind: 'SLOT_F1' | 'F2' | 'F3' | 'F4'; slotName: string; level: number; description: string; requirements: string[] }
+  | { kind: 'CLARIFY'; message: string }
+  | { kind: 'REJECT'; message: string }
+  | { kind: 'ERROR'; message: string }   // transport-level, never model-produced
 
 export type ConvTurn = { role: 'user' | 'assistant'; content: string }
 
 // ---------------------------------------------------------------------------
-// System prompt builder
+// Zod schema for the model's reply — per-kind superRefine enforces required
+// fields that the wire dialect cannot express with numeric bounds.
 // ---------------------------------------------------------------------------
 
-function buildSystemPrompt(
-  registry: SlotRegistration[],
-  config: InvarianceConfig,
-  componentLibrary: string[],
-): string {
-  return `You are the Gatekeeper agent for Invariance, a UI customization framework. You classify user intent, validate against slot levels, and produce structured intents for the Builder agent. You NEVER produce theme.json mutations or code.
+const SLOT_KINDS = ['SLOT_F1', 'F2', 'F3', 'F4'] as const
 
-AVAILABLE SLOTS:
-<slots>
-${JSON.stringify(registry, null, 2)}
-</slots>
-
-APP CONFIG:
-<config>
-${JSON.stringify(config, null, 2)}
-</config>
-
-COMPONENT LIBRARY (for F4 swaps):
-${componentLibrary.length > 0 ? componentLibrary.join(', ') : 'None registered'}
-
-LEVELS:
-- Level 1 (F1): Style — colors, fonts, spacing, borders, radii, backgrounds, shadows, opacity
-- Level 2 (F2): Content — text, labels, images, alt text
-- Level 3 (F3): Layout — show/hide sections, reorder, resize
-- Level 4 (F4): Components — swap components from approved library
-
-A slot can only receive changes AT OR BELOW its assigned level. Slots with preserve=true cannot be hidden or removed.
-
-RULES:
-1. If the request is clear and maps to a specific slot: output an intent with specific requirements for the Builder
-2. If the request affects multiple slots or is global: output an intent targeting the most relevant slot with global requirements
-3. If ambiguous: ask ONE specific clarifying question
-4. If not allowed (level too high, preserved slot): explain why in a friendly way
-5. For colors: convert color names to hex values
-6. Requirements must be specific enough for a Builder that produces theme.json mutations
-7. Each requirement should be one concrete change (e.g., "set sidebar backgroundColor to #1b2a4a")
-8. SLOT RESOLUTION: When a user mentions a UI area by name (e.g. "sidebar", "nav bar", "left panel"), match it against each slot's name, description, and aliases. Prefer the slot whose aliases or description best fit the user's wording AND that has cssVariables populated (style changes only work on slots that own CSS variables). If two slots are plausible, ask a clarifying question quoting both registered slot names. The slotName in your intent MUST be a canonical name from the registry — never an alias.
-
-RESPONSE FORMAT — respond with ONLY valid JSON, no markdown fences:
-
-Intent: {"type":"intent","slotName":"sidebar","level":1,"description":"Change sidebar background to dark blue","requirements":["Set theme.slots.sidebar.backgroundColor to #1b2a4a","Set theme.slots.sidebar.borderRight to 2px solid #e94560"]}
-
-Clarification: {"type":"clarification","message":"I can change the sidebar, header, dashboard cards, or footer. Which area would you like to update?"}
-
-Error: {"type":"error","message":"The sidebar is marked as preserved and cannot be hidden. I can help you restyle it instead."}`
-}
-
-// ---------------------------------------------------------------------------
-// JSON extraction helper
-// ---------------------------------------------------------------------------
-
-function extractJson(text: string): unknown | undefined {
-  try {
-    return JSON.parse(text.trim())
-  } catch {
-    const fenceMatch = /```(?:json)?\s*([\s\S]*?)```/.exec(text)
-    if (fenceMatch?.[1]) {
-      try {
-        return JSON.parse(fenceMatch[1].trim())
-      } catch {
-        // fall through
-      }
+const ModelReplySchema = z.object({
+  kind: z.enum(['THEME', 'SLOT_F1', 'F2', 'F3', 'F4', 'CLARIFY', 'REJECT']),
+  slotName: z.string().optional(),
+  level: z.number().int().optional(),
+  description: z.string().optional(),
+  requirements: z.array(z.string()).optional(),
+  message: z.string().optional(),
+}).superRefine((val, ctx) => {
+  if (val.kind === 'THEME') {
+    if (!val.description) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'THEME requires description', path: ['description'] })
     }
-    return undefined
+  } else if ((SLOT_KINDS as readonly string[]).includes(val.kind)) {
+    if (!val.slotName) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Slot kind requires slotName', path: ['slotName'] })
+    }
+    if (val.level === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Slot kind requires level', path: ['level'] })
+    }
+    if (!val.description) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Slot kind requires description', path: ['description'] })
+    }
+  } else if (val.kind === 'CLARIFY' || val.kind === 'REJECT') {
+    if (!val.message) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${val.kind} requires message`, path: ['message'] })
+    }
   }
+})
+
+// ---------------------------------------------------------------------------
+// Level gate: THEME requires at least one page with level >= 1.
+// Enforced deterministically here — never trust the model for permissions.
+// ---------------------------------------------------------------------------
+
+function isThemeAllowed(config: InvarianceConfig): boolean {
+  const pages = config.frontend?.pages
+  if (!pages) return false
+  return Object.values(pages).some((p) => typeof p === 'object' && p !== null && (p as { level?: number }).level !== undefined && (p as { level: number }).level >= 1)
 }
 
 // ---------------------------------------------------------------------------
 // Main function
 // ---------------------------------------------------------------------------
 
-export interface GatekeeperInput {
-  userMessage: string
-  conversationHistory: ConvTurn[]
-  slotRegistry: SlotRegistration[]
-  invariantConfig: InvarianceConfig
-  componentLibrary: string[]
+export interface GatekeeperOptions {
+  registry: SlotRegistration[]
+  config: InvarianceConfig
+  apiKey: string
+  componentLibrary?: string[]
+  fetchFn?: typeof fetch
 }
 
+const ERROR_RESULT = (message: string): GatekeeperResult => ({ kind: 'ERROR', message })
+
 export async function callGatekeeper(
-  input: GatekeeperInput,
-  apiKey: string,
+  userMessage: string,
+  history: ConvTurn[],
+  opts: GatekeeperOptions,
 ): Promise<GatekeeperResult> {
-  if (!apiKey) {
+  const system = buildGatekeeperPrompt(opts.registry, opts.config, opts.componentLibrary)
+  const messages: ConvTurn[] = [
+    ...history,
+    { role: 'user', content: userMessage },
+  ]
+
+  const result = await callClaude({
+    apiKey: opts.apiKey,
+    model: GATEKEEPER_MODEL,
+    system,
+    messages,
+    temperature: 0.1,
+    maxTokens: 1024,
+    outputSchema: GATEKEEPER_WIRE_SCHEMA as unknown as Record<string, unknown>,
+    ...(opts.fetchFn ? { fetchFn: opts.fetchFn } : {}),
+  })
+
+  if (!result.ok) {
+    // Preserve v5 error wording for connection/transport errors
+    return ERROR_RESULT('Connection error. Please try again.')
+  }
+
+  let raw: unknown
+  try {
+    raw = JSON.parse(result.text)
+  } catch {
+    return ERROR_RESULT('Something went wrong. Try rephrasing your request.')
+  }
+
+  const parsed = ModelReplySchema.safeParse(raw)
+  if (!parsed.success) {
+    return ERROR_RESULT('Something went wrong. Try rephrasing your request.')
+  }
+
+  const val = parsed.data
+
+  // THEME level gate: deterministic permission check, never delegated to the model
+  if (val.kind === 'THEME') {
+    if (!isThemeAllowed(opts.config)) {
+      return {
+        kind: 'REJECT',
+        message: 'All pages are locked (level 0); whole-app theming requires at least one page unlocked to level 1+.',
+      }
+    }
+    return { kind: 'THEME', description: val.description! }
+  }
+
+  if ((SLOT_KINDS as readonly string[]).includes(val.kind)) {
+    const kind = val.kind as 'SLOT_F1' | 'F2' | 'F3' | 'F4'
     return {
-      type: 'error',
-      message: 'Customization requires an API key. Contact the app developer to enable this feature.',
+      kind,
+      slotName: val.slotName!,
+      level: val.level!,
+      description: val.description!,
+      // Default requirements to [] per plan spec
+      requirements: val.requirements ?? [],
     }
   }
 
-  const systemPrompt = buildSystemPrompt(
-    input.slotRegistry,
-    input.invariantConfig,
-    input.componentLibrary,
-  )
-  const messages: ConvTurn[] = [
-    ...input.conversationHistory,
-    { role: 'user', content: input.userMessage },
-  ]
-
-  let response: Response
-  try {
-    response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: GATEKEEPER_MODEL,
-        max_tokens: 1024,
-        temperature: 0.2,
-        system: systemPrompt,
-        messages,
-      }),
-    })
-  } catch {
-    return { type: 'error', message: 'Connection error. Please try again.' }
+  if (val.kind === 'CLARIFY') {
+    return { kind: 'CLARIFY', message: val.message! }
   }
 
-  if (!response.ok) {
-    return { type: 'error', message: 'Connection error. Please try again.' }
+  if (val.kind === 'REJECT') {
+    return { kind: 'REJECT', message: val.message! }
   }
 
-  let data: unknown
-  try {
-    data = await response.json()
-  } catch {
-    return { type: 'error', message: 'Something went wrong. Try rephrasing your request.' }
-  }
-
-  let text: string | undefined
-  try {
-    const typed = data as { content: Array<{ type: string; text: string }> }
-    text = typed.content.find((b) => b.type === 'text')?.text
-  } catch {
-    return { type: 'error', message: 'Something went wrong. Try rephrasing your request.' }
-  }
-
-  if (!text) {
-    return { type: 'error', message: 'Something went wrong. Try rephrasing your request.' }
-  }
-
-  const parsed = extractJson(text) as GatekeeperResult | undefined
-  if (
-    parsed &&
-    typeof parsed === 'object' &&
-    'type' in parsed &&
-    (parsed.type === 'intent' || parsed.type === 'clarification' || parsed.type === 'error')
-  ) {
-    return parsed
-  }
-
-  return { type: 'error', message: 'Something went wrong. Try rephrasing your request.' }
+  // Unreachable — zod enum ensures kind is one of the 7 values
+  return ERROR_RESULT('Something went wrong. Try rephrasing your request.')
 }
