@@ -1,14 +1,13 @@
 import type { AnyThemeJson, InvarianceConfig, ThemeJson, ThemeJsonV2 } from '../config/types'
 import { isV2Theme } from '../config/types'
 import { applyGlobalTheme } from './apply-theme'
-import { applyContent } from './apply-content'
-import { applyLayout } from './apply-layout'
 
+// v1 path: tokens only. F2 (content) and F3 (layout) are now render-driven —
+// resolved inside React rendering by m.text / m.sections via resolve-overrides,
+// not by mutating the DOM (the deleted apply-content / apply-layout appliers).
 export function applyThemeJson(themeJson: ThemeJson | null, config?: InvarianceConfig): void {
   if (!themeJson) return
   applyGlobalTheme(themeJson.theme?.globals, config?.theme_prefix)
-  applyContent(themeJson.content)
-  applyLayout(themeJson.layout)
 }
 
 // Writes a v2 theme's roles then slots verbatim to :root via CSS custom

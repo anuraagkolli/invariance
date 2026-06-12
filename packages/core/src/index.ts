@@ -1,11 +1,13 @@
 import { Page } from './primitives/page'
 import { Slot } from './primitives/slot'
 import { Text } from './primitives/text'
+import { Sections } from './primitives/sections'
 
 export const m = {
   page: Page,
   slot: Slot,
   text: Text,
+  sections: Sections,
 }
 
 export { InvarianceProvider, useInvariance } from './context/provider'
@@ -45,6 +47,10 @@ export { verify } from './verify/engine'
 export type { TestResult, VerificationResult } from './verify/types'
 export { applyThemeJson } from './runtime/apply'
 export { applyGlobalTheme } from './runtime/apply-theme'
+
+// Render-driven F2/F3 resolution helpers — contracts of the render behavior,
+// exposed so the panel/verifier can reason about overrides without re-deriving.
+export { resolveTextOverride, orderSectionKeys, layoutForPage } from './runtime/resolve-overrides'
 
 // Theme Compiler (v6)
 export { compileTheme, InvalidStyleSpecError } from './compiler/compile'

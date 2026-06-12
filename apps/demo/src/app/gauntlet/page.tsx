@@ -11,6 +11,7 @@ import {
   FONT_PAIRINGS,
   compileTheme,
   applyAnyTheme,
+  useInvariance,
   type ThemeJsonV2,
 } from 'invariance'
 
@@ -73,6 +74,42 @@ function injectGoogleFont(displayStack: string, bodyStack: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// F2/F3 overrides demo (?demo=overrides)
+// ---------------------------------------------------------------------------
+
+// CAREFUL: the primitives resolve overrides against window.location.pathname,
+// which on this route is '/gauntlet' (not '/'). The content/layout pages maps
+// MUST be keyed by '/gauntlet' or the primitives will never match.
+//
+// content: rename the hero title (m.text name="hero-title") and the trending
+//   row heading (m.text name="heading-trending").
+// layout: reorder the carousel rows so acclaimed + trending lead, and hide the
+//   continue-watching row. Keys are the m.slot wrapper names (row-*).
+function buildOverridesTheme(roles: Record<string, string>): ThemeJsonV2 {
+  return {
+    version: 2,
+    base_app_version: 'v1',
+    theme: { roles },
+    content: {
+      pages: {
+        '/gauntlet': {
+          'hero-title': { text: 'STATIC OVERRIDE WORKS' },
+          'heading-trending': { text: 'Trending (Renamed)' },
+        },
+      },
+    },
+    layout: {
+      pages: {
+        '/gauntlet': {
+          sections: ['row-acclaimed', 'row-trending'],
+          hidden: ['row-continue'],
+        },
+      },
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Gauntlet index
 // ---------------------------------------------------------------------------
 
@@ -106,6 +143,14 @@ function GauntletIndex() {
             Sidebar Blue (slot override)
           </a>
         </li>
+        <li>
+          <a
+            href="/gauntlet?demo=overrides"
+            className="text-accent underline-offset-2 hover:underline font-body text-sm"
+          >
+            F2/F3 Overrides (content rename + section reorder/hide)
+          </a>
+        </li>
         {PACK_IDS.map((id) => {
           const pack = THEME_PACKS.find((p) => p.id === id)
           return (
@@ -132,14 +177,20 @@ function GauntletViewer() {
   const params = useSearchParams()
   const packId = params.get('pack') ?? null
   const sidebarBlue = params.get('sidebar') === 'blue'
+  // F2/F3 demo: exercises content + layout overrides on top of the tokens.
+  const overrides = params.get('demo') === 'overrides'
+
+  // F2/F3 are render-driven from CONTEXT, so the overrides theme must reach the
+  // primitives via the store — applyAnyTheme only writes tokens to :root.
+  const { themeStore } = useInvariance()
 
   const [ready, setReady] = useState(false)
-  // Track which pack/sidebar combo was last applied so the effect doesn't fire
-  // on unrelated re-renders.
+  // Track which pack/sidebar/demo combo was last applied so the effect doesn't
+  // fire on unrelated re-renders.
   const appliedKey = useRef<string>('')
 
   useEffect(() => {
-    const key = `${packId ?? 'none'}|${sidebarBlue}`
+    const key = `${packId ?? 'none'}|${sidebarBlue}|${overrides}`
     if (appliedKey.current === key) return
     appliedKey.current = key
 
@@ -153,55 +204,48 @@ function GauntletViewer() {
       ? { '--inv-sidebar-bg': '#1b2a4a', '--inv-sidebar-text': '#f2f3f5' }
       : {}
 
-    if (!pack) {
-      // Default or unknown: only apply sidebar slots if present.
-      if (sidebarBlue) {
-        const theme: ThemeJsonV2 = {
-          version: 2,
-          base_app_version: 'v1',
-          theme: { roles: {}, slots: sidebarSlots },
-        }
-        applyAnyTheme(theme, invarianceConfig)
-      }
-      setReady(true)
-      return
-    }
-
-    // --- compile the pack ---
-    // Omit font_registry: the gauntlet must allow every pairing in the registry.
-    // Omit allowed_modes: packs span both light and dark.
+    // --- compile the pack roles (empty when no pack: overrides ride defaults) ---
     let roles: Record<string, string> = {}
-    try {
-      const compiled = compileTheme(pack.spec, {
-        contrast: 4.5,
-        accent_chroma_max: 0.25,
-      })
-      roles = compiled.roles
-    } catch (err) {
-      console.error('[gauntlet] compileTheme failed for pack', packId, err)
-      setReady(true)
-      return
+    const styleSpec = pack?.spec
+    if (pack) {
+      // Omit font_registry: the gauntlet must allow every pairing in the
+      // registry. Omit allowed_modes: packs span both light and dark.
+      try {
+        const compiled = compileTheme(pack.spec, {
+          contrast: 4.5,
+          accent_chroma_max: 0.25,
+        })
+        roles = compiled.roles
+      } catch (err) {
+        console.error('[gauntlet] compileTheme failed for pack', packId, err)
+        setReady(true)
+        return
+      }
+      const pairing = FONT_PAIRINGS.find((fp) => fp.id === pack.spec.fontPairing)
+      if (pairing) injectGoogleFont(pairing.display, pairing.body)
     }
 
-    // --- inject font ---
-    const pairing = FONT_PAIRINGS.find((fp) => fp.id === pack.spec.fontPairing)
-    if (pairing) {
-      injectGoogleFont(pairing.display, pairing.body)
+    // --- tokens to :root (roles + any slot overrides) ---
+    if (pack || sidebarBlue || overrides) {
+      const tokenTheme: ThemeJsonV2 = {
+        version: 2,
+        base_app_version: 'v1',
+        theme: {
+          roles,
+          slots: sidebarSlots,
+          ...(styleSpec ? { styleSpec } : {}),
+        },
+      }
+      applyAnyTheme(tokenTheme, invarianceConfig)
     }
 
-    // --- build + apply v2 theme (pack roles merged with any slot overrides) ---
-    const theme: ThemeJsonV2 = {
-      version: 2,
-      base_app_version: 'v1',
-      theme: {
-        roles,
-        slots: sidebarSlots,
-        styleSpec: pack.spec,
-      },
+    // --- F2/F3 overrides via the store so the primitives resolve them ---
+    if (overrides) {
+      themeStore.setTheme(buildOverridesTheme(roles))
     }
-    applyAnyTheme(theme, invarianceConfig)
+
     setReady(true)
-  }, [packId, sidebarBlue])
+  }, [packId, sidebarBlue, overrides, themeStore])
 
   return (
     <div data-gauntlet-ready={ready ? 'true' : undefined}>
@@ -220,8 +264,9 @@ function GauntletContent() {
   const params = useSearchParams()
   const hasPack = params.has('pack')
   const hasSidebar = params.has('sidebar')
+  const hasDemo = params.has('demo')
 
-  if (!hasPack && !hasSidebar) {
+  if (!hasPack && !hasSidebar && !hasDemo) {
     return <GauntletIndex />
   }
   return <GauntletViewer />

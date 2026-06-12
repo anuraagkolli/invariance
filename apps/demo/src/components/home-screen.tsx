@@ -23,23 +23,28 @@ const ROW_META: Record<string, { description: string; aliases: string[] }> = {
   'row-acclaimed': { description: 'Critically Acclaimed carousel of titles', aliases: ['acclaimed', 'critically acclaimed', 'top rated'] },
 }
 
-function Row({ row }: { row: TitleRow }) {
+// m.sections keys each direct child by its `name` prop to apply F3
+// ordering/hiding, so Row carries `name={row.slot}` — it must equal the slot
+// name the layout references. The m.slot wrapper is Row's root element and the
+// heading m.text rides inside it (the heading is part of the row, not a
+// separately ordered section).
+function Row({ name, row }: { name: string; row: TitleRow }) {
   const meta = ROW_META[row.slot]!
   const shape = shapeForRow(row.id)
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="font-display text-lg font-semibold tracking-tight text-textPrimary sm:text-xl">
-        <m.text name={`heading-${row.id}`}>{row.heading}</m.text>
-      </h2>
-      <m.slot
-        name={row.slot}
-        level={4}
-        description={meta.description}
-        aliases={meta.aliases}
-      >
+    <m.slot
+      name={name}
+      level={4}
+      description={meta.description}
+      aliases={meta.aliases}
+    >
+      <section className="flex flex-col gap-3">
+        <h2 className="font-display text-lg font-semibold tracking-tight text-textPrimary sm:text-xl">
+          <m.text name={`heading-${row.id}`}>{row.heading}</m.text>
+        </h2>
         <CarouselRow titles={row.titles} shape={shape} />
-      </m.slot>
-    </section>
+      </section>
+    </m.slot>
   )
 }
 
@@ -86,9 +91,13 @@ export function HomeScreen() {
               className="flex flex-col px-6 py-10 sm:px-10"
               style={{ gap: 'calc(var(--inv-density-unit) * 11)' }}
             >
-              {ROWS.map((row) => (
-                <Row key={row.id} row={row} />
-              ))}
+              {/* Only the carousel rows are reorderable (F3). Hero/header/
+                  sidebar/footer stay outside m.sections — not reorderable. */}
+              <m.sections>
+                {ROWS.map((row) => (
+                  <Row key={row.id} name={row.slot} row={row} />
+                ))}
+              </m.sections>
             </div>
 
             <m.slot

@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 
 import { useInvariance } from '../context/provider'
+import { resolveTextOverride } from '../runtime/resolve-overrides'
 
 interface TextProps {
   name: string
@@ -12,7 +13,7 @@ interface TextProps {
 }
 
 export function Text({ name, children, maxLength, required }: TextProps) {
-  const { registry } = useInvariance()
+  const { registry, themeJson } = useInvariance()
 
   useEffect(() => {
     const textConfig: { maxLength?: number; required?: boolean } = {}
@@ -31,6 +32,10 @@ export function Text({ name, children, maxLength, required }: TextProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Content overrides are applied at the DOM level via data-inv-id
-  return <span data-inv-text={name} data-inv-id={name}>{children}</span>
+  // F2 is render-driven: the override resolves from theme context here, so React
+  // owns the text node. The old DOM applier (data-inv-id query + textContent set)
+  // was reverted on any re-render; resolving in render makes the override stick.
+  const page = typeof window !== 'undefined' ? window.location.pathname : '/'
+  const override = resolveTextOverride(themeJson, page, name)
+  return <span data-inv-text={name} data-inv-id={name}>{override ?? children}</span>
 }
