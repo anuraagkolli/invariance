@@ -1,6 +1,6 @@
-import { ThemeJsonV2Schema } from 'invariance/headless'
 import type { RoleAssignment, StyleSpec, ThemeJsonV2 } from 'invariance/headless'
 import { canonicalStringify } from '@invariance/schema'
+import { isValidV2Theme } from './validate'
 
 // ---------------------------------------------------------------------------
 // export: serialize the snippet's current theme as a downloadable theme.json v2.
@@ -8,8 +8,9 @@ import { canonicalStringify } from '@invariance/schema'
 // This is the BRIDGE artifact (DESIGN 2.2): a theme demoed in Trial Mode must
 // drop into Product Mode after a scan. buildExportTheme emits the exact v2 shape
 // the SDK consumes — roles from the cluster assignment, empty slots, and the
-// styleSpec provenance when a Designer run produced one — and validates it against
-// ThemeJsonV2Schema so a malformed seed fails here, at export, not silently on the
+// styleSpec provenance when a Designer run produced one — and validates it with
+// isValidV2Theme (the snippet's hand-rolled gate, same safe-CSS value allowlist as
+// the SDK schema) so a malformed seed fails here, at export, not silently on the
 // other side. base_app_version is 'trial' to mark provenance until a real scan
 // stamps the app's version.
 // ---------------------------------------------------------------------------
@@ -24,9 +25,8 @@ export function buildExportTheme(assignment: RoleAssignment, styleSpec?: StyleSp
       ...(styleSpec ? { styleSpec } : {}),
     },
   }
-  const result = ThemeJsonV2Schema.safeParse(theme)
-  if (!result.success) {
-    throw new Error(`buildExportTheme produced an invalid v2 theme: ${result.error.message}`)
+  if (!isValidV2Theme(theme)) {
+    throw new Error('buildExportTheme produced an invalid v2 theme (unsafe role/slot value)')
   }
   return theme
 }

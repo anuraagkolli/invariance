@@ -56,6 +56,32 @@ describe('applyVirtualTokens', () => {
     expect(t.style.getPropertyValue('border-color')).toBe('var(--inv-border)')
   })
 
+  it('binds an accent-bg element even when the cluster registered the accent as text', () => {
+    // A button uses the accent as a BACKGROUND, but the cluster only saw the accent
+    // as TEXT (icons), so varToRole has text:#E94560 and NOT bg:#E94560. The accent
+    // cross-kind fallback must still bind the button's background to --inv-accent.
+    document.body.innerHTML =
+      '<button id="b" style="background-color: rgb(233, 69, 96)">play</button>'
+    const scan = miniScan(document)
+    const a = assignment(
+      { '--inv-accent': '#E94560' },
+      [['text:#E94560', '--inv-accent']], // text-only registration
+    )
+    applyVirtualTokens(document, a, scan)
+    expect(document.getElementById('b')!.style.getPropertyValue('background-color')).toBe('var(--inv-accent)')
+  })
+
+  it('does NOT cross-bind a surface hex used in the wrong kind', () => {
+    // A white TEXT colour must not bind to the white surface role: surfaces are
+    // kind-specific. Only the accent family cross-binds.
+    document.body.innerHTML = '<div id="w" style="color: rgb(255, 255, 255)">w</div>'
+    const scan = miniScan(document)
+    const a = assignment({ '--inv-surface-0': '#FFFFFF' }, [['bg:#FFFFFF', '--inv-surface-0']])
+    applyVirtualTokens(document, a, scan)
+    // color stayed literal — no surface role leaked across kinds.
+    expect(document.getElementById('w')!.style.getPropertyValue('color')).toBe('rgb(255, 255, 255)')
+  })
+
   it('leaves elements whose value matched no role untouched', () => {
     document.body.innerHTML = '<div id="x" style="background-color: rgb(1, 2, 3)">x</div>'
     const scan = miniScan(document)

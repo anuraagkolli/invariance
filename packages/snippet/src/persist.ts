@@ -1,6 +1,6 @@
-import { ThemeJsonV2Schema } from 'invariance/headless'
 import type { ThemeJsonV2 } from 'invariance/headless'
 import { canonicalStringify } from '@invariance/schema'
+import { isValidV2Theme } from './validate'
 
 // ---------------------------------------------------------------------------
 // persist: per-origin localStorage for the snippet's current theme.
@@ -12,8 +12,10 @@ import { canonicalStringify } from '@invariance/schema'
 //
 // Save canonicalizes (sorted keys) so equal themes serialize to identical bytes.
 // Load is defensive: localStorage is user-editable, so a stored value is parsed
-// and re-validated against ThemeJsonV2Schema (the same value-allowlist gate the
-// SDK uses) — any failure yields null rather than applying untrusted CSS.
+// and re-validated by isValidV2Theme — which reuses the SAME per-value safe-CSS
+// allowlist the SDK's schema wraps — any failure yields null rather than applying
+// untrusted CSS. (Hand-rolled instead of the zod schema for bundle weight; the
+// security-relevant value check is byte-for-byte identical.)
 // ---------------------------------------------------------------------------
 
 const KEY_PREFIX = 'invariance-snippet:'
@@ -42,6 +44,5 @@ export function loadSnippetTheme(): ThemeJsonV2 | null {
   } catch {
     return null
   }
-  const result = ThemeJsonV2Schema.safeParse(parsed)
-  return result.success ? (result.data as ThemeJsonV2) : null
+  return isValidV2Theme(parsed) ? parsed : null
 }

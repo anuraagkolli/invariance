@@ -37,6 +37,17 @@ export function buildRootVars(assignment: RoleAssignment): string {
   return `:root{${decls}}`
 }
 
+// The accent is the one role legitimately used across CSS kinds: a button consumes
+// it as a background while an icon or link consumes the SAME hex as text. The
+// per-kind cluster only registers varToRole for the kind it sampled the accent from
+// (e.g. text, if icons outnumber the one button), so a literal-coloured button would
+// be left unbound and wouldn't repaint on a theme swap. We close that gap by binding
+// any bg/text element whose hex equals an accent-FAMILY role's scanned value,
+// regardless of which kind the cluster picked. Restricted to the accent family
+// (accent + accent-hover): surfaces/text/border ARE kind-specific, and cross-binding
+// them would mis-paint (a white text colour must not bind a white surface).
+const ACCENT_FAMILY = ['--inv-accent', '--inv-accent-hover'] as const
+
 export function applyVirtualTokens(
   root: Document | Element,
   assignment: RoleAssignment,
@@ -45,6 +56,15 @@ export function applyVirtualTokens(
   const doc = root instanceof Document ? root : root.ownerDocument
   const view = doc?.defaultView
   if (!doc || !view) return () => {}
+
+  // Reverse map of accent-family scanned hex -> role token, for the cross-kind
+  // accent fallback. First writer wins so --inv-accent beats --inv-accent-hover on
+  // a shared hex (the cluster seeds accent-hover with the accent value).
+  const accentHexToRole = new Map<string, string>()
+  for (const role of ACCENT_FAMILY) {
+    const hex = assignment.roles[role]
+    if (hex && !accentHexToRole.has(hex.toUpperCase())) accentHexToRole.set(hex.toUpperCase(), role)
+  }
 
   // Snapshot prior inline style for every element we mutate, so undo is exact.
   const snapshots: Array<{ el: HTMLElement; style: string | null }> = []
@@ -56,7 +76,11 @@ export function applyVirtualTokens(
     for (const kind of ['bg', 'text', 'border'] as const) {
       const hex = colors[kind]
       if (!hex) continue
-      const role = assignment.varToRole.get(`${kind}:${hex}`)
+      // Primary: the exact (kind, hex) binding the cluster registered. Fallback
+      // (bg/text only): the accent family, matched cross-kind by hex.
+      const role =
+        assignment.varToRole.get(`${kind}:${hex}`) ??
+        (kind === 'border' ? undefined : accentHexToRole.get(hex.toUpperCase()))
       if (!role) continue
       // Snapshot once, before the first mutation, so undo restores the true prior
       // inline style (not an already-mutated intermediate).

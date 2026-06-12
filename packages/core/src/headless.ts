@@ -51,6 +51,18 @@ export { isV2Theme } from './config/types'
 export { prepareStoredTheme } from './runtime/load-theme'
 export type { PreparedTheme } from './runtime/load-theme'
 
+// The single safe-CSS-token-value predicate (a pure regex allowlist, no zod). The
+// snippet imports THIS rather than ThemeJsonV2Schema for its persist/export gate so
+// it can hand-roll a v2 validator without dragging the full zod theme schema into a
+// browser bundle — see packages/snippet/src/validate.ts.
+export { isSafeCssTokenValue } from '@invariance/schema'
+
 // Shared :root entry ordering (roles then slots), so the snippet's virtual
 // stylesheet matches the SDK/SSR token order exactly.
 export { themeToCssEntries } from './runtime/apply'
+
+// On-demand Google Fonts <link> injection for a registry pairing (idempotent,
+// SSR-guarded). The snippet reuses the SDK's own font loader so a pack/prompt that
+// names a pairing paints in its real faces, not a fallback — the same DOM side
+// effect the SDK's apply path performs.
+export { ensureFontsLoaded, googleFontsUrlFor } from './fonts/loader'

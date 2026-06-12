@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nebula — static demo (no Invariance)</title>
+  <!--
+    A STATIC, SDK-FREE copy of the Nebula demo home screen. This stands in for
+    "any rendered site" the Trial snippet themes: it uses PLAIN hardcoded hex
+    colours (the demo's real palette) and ZERO --inv-* vars and ZERO Invariance.
+    The snippet scans these computed colours, clusters them into roles, binds
+    elements to var(--inv-*), and a pack click swaps the role values. Nothing here
+    references the snippet's tokens — that's the whole point of the proof.
+  -->
+  <style>
+    /* Hardcoded literals (the demo's role palette, inlined as a real site would
+       have them). NO --inv-* indirection: the snippet must DISCOVER these. */
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: #0a0b0d;                 /* page surface (surface-0) */
+      color: #f4f9ff;                      /* text-primary */
+      font-family: 'Inter', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { text-decoration: none; color: inherit; }
+
+    .layout { min-height: 100vh; }
+
+    /* --- sidebar (surface-1 panel) --- */
+    .sidebar {
+      position: fixed; inset: 0 auto 0 0; width: 230px;
+      display: flex; flex-direction: column;
+      background: #1f2225;                 /* surface-1 */
+      color: #f4f9ff;
+      border-right: 1px solid #707883;     /* border */
+      padding: 24px 0;
+    }
+    .brand {
+      font-size: 22px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.3em; padding: 0 24px 24px; color: #f4f9ff;
+    }
+    .nav { display: flex; flex-direction: column; gap: 2px; padding: 0 12px; }
+    .nav a {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 12px; border-radius: 4px; font-size: 14px;
+      color: #9099a5;                      /* text-secondary */
+    }
+    .nav a.active { background: #393e43; color: #f4f9ff; } /* surface-2 raised */
+    .nav a .icon { color: #ee4c6e; width: 16px; text-align: center; } /* accent */
+    .section-label {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.22em;
+      color: #707883; padding: 24px 24px 8px;
+    }
+    .avatar {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; border-radius: 50%;
+      background: #ee4c6e; color: #1b212b;  /* accent + accent-contrast */
+      font-size: 12px; font-weight: 700;
+    }
+
+    /* --- main column --- */
+    .main { margin-left: 230px; }
+
+    .header {
+      position: sticky; top: 0; z-index: 5;
+      display: flex; align-items: center; justify-content: space-between;
+      background: #0a0b0d;                 /* surface-0 */
+      color: #f4f9ff;
+      padding: 14px 40px; border-bottom: 1px solid #707883;
+    }
+    .search {
+      background: #1f2225; color: #9099a5; border: 1px solid #707883;
+      border-radius: 6px; padding: 8px 14px; width: 320px; font-size: 13px;
+    }
+
+    /* --- hero billboard --- */
+    .hero {
+      position: relative; overflow: hidden;
+      padding: 80px 40px;
+      background:
+        radial-gradient(90% 120% at 78% 8%, rgba(120, 90, 200, 0.25) 0%, transparent 50%),
+        linear-gradient(105deg, #3a2a66 0%, #0a0b0d 62%);
+    }
+    .hero .eyebrow {
+      font-family: ui-monospace, monospace; font-size: 12px;
+      text-transform: uppercase; letter-spacing: 0.34em; color: #ee4c6e;
+    }
+    .hero h1 {
+      font-size: clamp(40px, 6vw, 72px); line-height: 0.95;
+      text-transform: uppercase; margin: 16px 0; color: #f4f9ff; max-width: 640px;
+    }
+    .hero p { max-width: 560px; font-size: 17px; color: #c7cdd6; margin: 0 0 24px; }
+    .cta-row { display: flex; gap: 12px; }
+    .btn-primary {
+      background: #ee4c6e; color: #1b212b;  /* accent + accent-contrast */
+      border: none; border-radius: 4px; padding: 10px 24px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .btn-secondary {
+      background: #393e43; color: #f4f9ff;  /* surface-2 */
+      border: 1px solid #707883; border-radius: 4px; padding: 10px 24px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+
+    /* --- card rows --- */
+    .rows { padding: 40px; display: flex; flex-direction: column; gap: 36px; }
+    .row h2 { font-size: 20px; margin: 0 0 14px; color: #f4f9ff; }
+    .cards { display: flex; gap: 16px; flex-wrap: wrap; }
+    .card {
+      width: 200px; background: #1f2225;    /* surface-1 (card-bg) */
+      border: 1px solid #707883; border-radius: 8px; overflow: hidden;
+    }
+    .card .thumb { height: 112px; background: #393e43; } /* surface-2 */
+    .card .meta { padding: 10px 12px; }
+    .card .meta .t { font-size: 14px; font-weight: 600; color: #f4f9ff; }
+    .card .meta .s { font-size: 12px; color: #9099a5; margin-top: 4px; }
+
+    /* --- footer --- */
+    .footer {
+      background: #0a0b0d; color: #9099a5;
+      border-top: 1px solid #707883; padding: 32px 40px; font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">Nebula</div>
+      <nav class="nav">
+        <a class="active" href="#"><span class="icon">◇</span> Home</a>
+        <a href="#"><span class="icon">⌕</span> Search</a>
+        <a href="#"><span class="icon">+</span> My List</a>
+        <a href="#"><span class="icon">▦</span> Movies</a>
+        <a href="#"><span class="icon">☰</span> Series</a>
+      </nav>
+      <div class="section-label">My Library</div>
+      <nav class="nav">
+        <a href="#">Late Night Sci-Fi</a>
+        <a href="#">Cozy Mysteries</a>
+        <a href="#">Weekend Epics</a>
+      </nav>
+      <div style="margin-top:auto; padding: 16px 12px 0;">
+        <a href="#" style="display:flex; align-items:center; gap:12px; padding:8px 12px; color:#f4f9ff; font-size:14px;">
+          <span class="avatar">R</span> Rae Kelso
+        </a>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="header">
+        <input class="search" type="text" placeholder="Search titles, people, genres" />
+        <span style="color:#9099a5; font-size:13px;">Rae Kelso</span>
+      </header>
+
+      <section class="hero">
+        <div class="eyebrow">Featured Today</div>
+        <h1>The Long Drift</h1>
+        <p>A derelict colony ship wakes one passenger a century early. A Nebula Original event, streaming now.</p>
+        <div class="cta-row">
+          <button class="btn-primary">▶ Play</button>
+          <button class="btn-secondary">+ My List</button>
+        </div>
+      </section>
+
+      <div class="rows">
+        <div class="row">
+          <h2>Trending Now</h2>
+          <div class="cards">
+            <div class="card"><div class="thumb"></div><div class="meta"><div class="t">Ashfall</div><div class="s">2024 · Thriller</div></div></div>
+            <div class="card"><div class="thumb"></div><div class="meta"><div class="t">Paper Moon</div><div class="s">2023 · Drama</div></div></div>
+            <div class="card"><div class="thumb"></div><div class="meta"><div class="t">Cold Harbor</div><div class="s">2024 · Mystery</div></div></div>
+            <div class="card"><div class="thumb"></div><div class="meta"><div class="t">Vela</div><div class="s">2022 · Sci-Fi</div></div></div>
+          </div>
+        </div>
+        <div class="row">
+          <h2>Nebula Originals</h2>
+          <div class="cards">
+            <div class="card"><div class="thumb"></div><div class="meta"><div class="t">The Long Drift</div><div class="s">2024 · Sci-Fi</div></div></div>
+            <div class="card"><div class="thumb"></div><div class="meta"><div class="t">Saltwater</div><div class="s">2023 · Drama</div></div></div>
+            <div class="card"><div class="thumb"></div><div class="meta"><div class="t">Nightjar</div><div class="s">2024 · Horror</div></div></div>
+            <div class="card"><div class="thumb"></div><div class="meta"><div class="t">Greenwood</div><div class="s">2022 · Comedy</div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="footer">
+        Nebula · Privacy · Terms · Help · © 2026 Nebula Streaming
+      </footer>
+    </div>
+  </div>
+
+  <!-- The Trial snippet, built by esbuild to a single IIFE (global name: invariance). -->
+  <script src="../dist/invariance.js"></script>
+  <script>invariance.mountTrial({})</script>
+</body>
+</html>
