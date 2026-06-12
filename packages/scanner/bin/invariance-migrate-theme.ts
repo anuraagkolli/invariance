@@ -8,6 +8,7 @@ import { parseConfig } from 'invariance'
 
 import { migrateTheme } from '../src/migrate-theme'
 import type { ThemeMigrationReport } from '../src/migrate-theme'
+import { readJsonIfExists, slotTokensFromTheme } from '../src/check/theme-tokens'
 
 interface ParsedArgs {
   themePath: string | null
@@ -90,37 +91,6 @@ function resolveConfigPath(input: string): string {
 }
 
 /**
- * Read the --inv-* SLOT token keys a theme advertises (v1 or v2). Excludes
- * theme.roles — role tokens belong to the role registry, not the slot one. A
- * v1 theme has no split: its globals partition into slots on upgrade.
- */
-function slotTokensFromThemeDoc(theme: unknown): string[] {
-  const out: string[] = []
-  if (typeof theme !== 'object' || theme === null) return out
-  const t = (theme as { theme?: unknown }).theme
-  if (typeof t !== 'object' || t === null) return out
-  const slots = (t as Record<string, unknown>).slots
-  if (typeof slots === 'object' && slots !== null) {
-    for (const key of Object.keys(slots)) if (key.startsWith('--inv-')) out.push(key)
-  }
-  const globals = (t as { globals?: unknown }).globals
-  if (typeof globals === 'object' && globals !== null) {
-    for (const key of Object.keys(globals)) if (key.startsWith('--inv-')) out.push(key)
-  }
-  return out
-}
-
-async function readJsonIfExists(filePath: string): Promise<unknown | undefined> {
-  let raw: string
-  try {
-    raw = await fs.readFile(filePath, 'utf-8')
-  } catch {
-    return undefined
-  }
-  return JSON.parse(raw) as unknown
-}
-
-/**
  * Build the current slot-token registry. The config itself only carries slot
  * NAMES, not their --inv-* tokens, so the source of truth for known slot tokens
  * is the app's committed initial theme.json. We read both the explicit
@@ -140,7 +110,7 @@ async function buildSlotRegistry(
   for (const file of ['invariance.theme.initial.json', 'invariance.theme.json']) {
     const theme = await readJsonIfExists(path.join(appDir, file))
     if (theme !== undefined) {
-      for (const tok of slotTokensFromThemeDoc(theme)) slots.add(tok)
+      for (const tok of slotTokensFromTheme(theme)) slots.add(tok)
       committedFound = true
       break
     }
@@ -151,7 +121,7 @@ async function buildSlotRegistry(
   // stored theme's own non-role slot tokens rather than dropping everything.
   if (!committedFound) {
     const roleSet = new Set<string>(ROLE_TOKENS)
-    for (const tok of slotTokensFromThemeDoc(storedTheme)) {
+    for (const tok of slotTokensFromTheme(storedTheme)) {
       if (!roleSet.has(tok)) slots.add(tok)
     }
   }
@@ -190,17 +160,30 @@ async function main(): Promise<void> {
       renames = JSON.parse(renamesRaw) as Record<string, string>
     }
 
-    // Resolve the config to derive the slot registry. Validate it parses (same
-    // loader the unlock command uses) so a broken config fails loudly.
+    // Resolve the config path. The slot registry is built from the app's theme
+    // files independently of the config (see buildSlotRegistry), so a missing
+    // config is fine — migrate-theme stays usable standalone (e.g. piping a
+    // theme through a rename map). But a config that IS present yet doesn't
+    // parse signals a broken app: warn to stderr so it isn't silently ignored,
+    // then proceed (the registry doesn't depend on the parsed result).
     const configPath = resolveConfigPath(parsed.configPath ?? process.cwd())
+    let configRaw: string | undefined
     try {
-      const configRaw = await fs.readFile(configPath, 'utf-8')
-      const config: InvarianceConfig = parseConfig(configRaw)
-      void config
+      configRaw = await fs.readFile(configPath, 'utf-8')
     } catch {
-      // No committed config (or unreadable): fall back to ROLE_TOKENS for roles
-      // and the stored theme's own slot tokens for slots. migrate-theme stays
-      // usable standalone (e.g. piping a theme through a rename map).
+      // Absent/unreadable: legitimate standalone use; nothing to warn about.
+      configRaw = undefined
+    }
+    if (configRaw !== undefined) {
+      try {
+        const config: InvarianceConfig = parseConfig(configRaw)
+        void config
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        process.stderr.write(
+          `invariance-migrate-theme: warning: config at ${configPath} did not parse (${msg}); proceeding with theme-file-derived registry\n`,
+        )
+      }
     }
 
     const slots = await buildSlotRegistry(configPath, storedTheme)

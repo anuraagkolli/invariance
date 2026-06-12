@@ -21,7 +21,7 @@ export interface ThemeMigrationReport {
 
 export interface ThemeRegistry {
   /** Known role token keys now. Defaults to ROLE_TOKENS when omitted. */
-  roles: string[]
+  roles?: string[]
   /** Known slot token keys now (the --inv-* vars the source still references). */
   slots: string[]
 }
@@ -38,7 +38,7 @@ export interface ThemeRegistry {
  */
 export function migrateTheme(
   storedTheme: unknown,
-  currentRegistry: { roles?: string[]; slots: string[] },
+  currentRegistry: ThemeRegistry,
   renames: Record<string, string> = {},
 ): ThemeMigrationReport {
   // Upgrade v1 -> v2 first so we always operate on roles/slots records.

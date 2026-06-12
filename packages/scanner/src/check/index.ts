@@ -6,6 +6,7 @@ import type { InvarianceConfig } from 'invariance'
 
 import { scanMigratedSource } from './scan-source'
 import type { SourceInventory } from './scan-source'
+import { readJsonIfExists, slotTokensFromTheme } from './theme-tokens'
 
 // ---------------------------------------------------------------------------
 // invariance-check: a CI guard.
@@ -44,48 +45,6 @@ interface Registry {
 function routeToPageName(route: string): string {
   if (route === '/' || route === '') return 'home'
   return route.replace(/^\/+/, '').replace(/\//g, '-')
-}
-
-async function readJsonIfExists(filePath: string): Promise<unknown | undefined> {
-  let raw: string
-  try {
-    raw = await fs.readFile(filePath, 'utf-8')
-  } catch {
-    return undefined
-  }
-  return JSON.parse(raw) as unknown
-}
-
-/**
- * Collect the --inv-* SLOT token keys from a theme.json (v1 or v2 shape).
- *
- * WHY slots only: slot tokens are the ones the scanner wires into source as
- * var(--inv-*) references — those are what a "missing-token" regression removes.
- * Role tokens (theme.roles) live on :root via the runtime/compiler and are
- * never referenced by name in source, so requiring them to appear in source
- * would false-positive on every healthy app. A v1 theme has no roles/slots
- * split: its globals partition into slots on upgrade, so we read globals here.
- */
-function slotTokensFromTheme(theme: unknown): Set<string> {
-  const out = new Set<string>()
-  if (typeof theme !== 'object' || theme === null) return out
-  const t = (theme as { theme?: unknown }).theme
-  if (typeof t !== 'object' || t === null) return out
-  // v2: theme.slots is a flat { '--inv-*': value } record.
-  const slots = (t as Record<string, unknown>).slots
-  if (typeof slots === 'object' && slots !== null) {
-    for (const key of Object.keys(slots)) {
-      if (key.startsWith('--inv-')) out.add(key)
-    }
-  }
-  // v1: theme.globals carries flat --inv-* keys (these become slots on upgrade).
-  const globals = (t as { globals?: unknown }).globals
-  if (typeof globals === 'object' && globals !== null) {
-    for (const key of Object.keys(globals)) {
-      if (key.startsWith('--inv-')) out.add(key)
-    }
-  }
-  return out
 }
 
 /**
