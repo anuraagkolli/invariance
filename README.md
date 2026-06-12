@@ -35,8 +35,19 @@ apps/demo         Netflix-style demo app, living integration test for every phas
 ```sh
 pnpm install
 
-# 1. Control plane (set ANTHROPIC_API_KEY to enable natural-language authoring)
+# 1. Control plane — pick one authoring backend:
+#    a) any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio, OpenRouter).
+#       Large context matters: the app manifest is embedded in the prompt, so
+#       run Ollama with OLLAMA_CONTEXT_LENGTH=16384 or it truncates silently.
+INVARIANCE_LLM_BASE_URL=http://localhost:11434/v1 \
+INVARIANCE_LLM_MODEL=qwen2.5-coder:14b \
+INVARIANCE_AUTHORING_MAX_ATTEMPTS=5 \
+pnpm -F @invariance/control-plane dev
+#    b) Anthropic API:
 ANTHROPIC_API_KEY=sk-... pnpm -F @invariance/control-plane dev
+#    Storage: in-memory by default; set DATABASE_URL (Postgres/Neon) for a
+#    durable registry. Pair it with INVARIANCE_SIGNING_* keys so bundles
+#    survive restarts.
 
 # 2. Demo API (Express + Invariance middleware) and web app
 pnpm -F @invariance/demo seed       # publish manifest + a seeded mod

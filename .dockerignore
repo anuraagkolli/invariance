@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+.git
+.turbo
+**/.turbo
+dist
+**/dist
+*.log
+.env
+.env.*
+docs
+apps/console
+apps/demo
+packages/client
+packages/server
+packages/cli
