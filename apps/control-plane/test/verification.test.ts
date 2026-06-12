@@ -73,6 +73,44 @@ describe("verifyBundleAgainstManifest", () => {
     expect(verdict).toEqual({ ok: true, reasons: [] });
   });
 
+  it("rejects request-phase hooks on GET endpoints", () => {
+    const verdict = verifyBundleAgainstManifest(
+      bundle({
+        hooks: [
+          {
+            id: "h1",
+            trigger: { endpointId: "list-items", phase: "request" },
+            language: "js",
+            source: "(payload) => { payload.items.sort(); return payload; }",
+          },
+        ],
+        capabilities: {
+          reads: [],
+          writes: [{ endpointId: "list-items", fields: ["items.*.order"] }],
+          budgets: { cpuMs: 50, memMb: 32 },
+        },
+      }),
+      manifest,
+    );
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reasons.join()).toContain("no request body");
+  });
+
+  it("rejects write capabilities with an empty fields list", () => {
+    const verdict = verifyBundleAgainstManifest(
+      bundle({
+        capabilities: {
+          reads: [],
+          writes: [{ endpointId: "list-items", fields: [] }],
+          budgets: { cpuMs: 50, memMb: 32 },
+        },
+      }),
+      manifest,
+    );
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reasons.join()).toContain("empty fields list");
+  });
+
   it("rejects unknown tokens and stale bindings", () => {
     const verdict = verifyBundleAgainstManifest(
       bundle({
@@ -204,7 +242,13 @@ describe("analyzeHookSource", () => {
     ["(p) => p['__proto__']", "forbidden member access: __proto__"],
     ["import x from 'y'", "imports are not allowed"],
     ["async (p) => p", "must be plain synchronous"],
-    ["(p) => { while(true){} }", null],
+    ["(p) => { while(true){} return p; }", null],
+    ["(p) => p.items = p.items.sort()", "must return the full payload object"],
+    ["(p) => p.items.sort()", "must return the full payload object"],
+    ["(p) => { p.items.sort(); }", "must return the full payload object"],
+    ["(p) => { p.items.sort((a, b) => { return b.r - a.r; }); return p; }", null],
+    ["(p) => (p.items.sort(), p)", null],
+    ["(p) => { if (p.items) { return p; } return { ...p, items: [] }; }", null],
   ])("flags %s", (source, expected) => {
     const reasons = analyzeHookSource(source);
     if (expected === null) {

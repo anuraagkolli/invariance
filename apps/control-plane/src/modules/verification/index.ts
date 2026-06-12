@@ -100,10 +100,29 @@ export function verifyBundleAgainstManifest(
     }
   }
 
+  // `fields: []` grants nothing: the runtime would discard every write the
+  // hook makes. Models emit it when they forget which fields they touch, so
+  // spell out the repair.
+  for (const write of bundle.capabilities.writes) {
+    if (write.fields !== undefined && write.fields.length === 0) {
+      reasons.push(
+        `write capability on ${write.endpointId} declares an empty fields list — list the` +
+          ' field paths the hooks write (e.g. ["items"]); a hook may only change declared fields',
+      );
+    }
+  }
+
   for (const hook of bundle.hooks) {
-    if (!endpointsById.has(hook.trigger.endpointId)) {
+    const endpoint = endpointsById.get(hook.trigger.endpointId);
+    if (!endpoint) {
       reasons.push(`hook ${hook.id} targets unknown endpoint: ${hook.trigger.endpointId}`);
       continue;
+    }
+    if (hook.trigger.phase === "request" && endpoint.method === "GET") {
+      reasons.push(
+        `hook ${hook.id} uses phase "request" on GET endpoint ${endpoint.id}, which has no` +
+          ' request body — use phase "response" to transform the data it returns',
+      );
     }
     if (deniedPhases.get(hook.trigger.endpointId)?.has(hook.trigger.phase)) {
       reasons.push(
