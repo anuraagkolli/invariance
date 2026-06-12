@@ -14,7 +14,7 @@ export const invarianceConfig: InvarianceConfig = {
         allowed_modes: ['light', 'dark'],
       },
     },
-    pages: { '/': { level: 4 } },
+    pages: { '/': { level: 4 }, '/series': { level: 4 } },
   },
 }
 

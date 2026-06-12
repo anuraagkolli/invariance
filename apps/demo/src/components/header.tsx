@@ -1,9 +1,16 @@
+'use client'
+
+import { useSearch } from './search-context'
+
 // Sticky top bar: a search input and an avatar. Uses header slot tokens so a
-// theme can repaint the bar independently of the page surface.
+// theme can repaint the bar independently of the page surface. The search input
+// is wired to the search context so typing/focusing opens the results overlay.
 export function Header() {
+  const { query, setQuery, openSearch, inputRef } = useSearch()
+
   return (
     <header
-      className="sticky top-0 z-10 flex items-center gap-4 border-b bg-[var(--inv-header-bg)]/85 px-5 py-3 text-[var(--inv-header-text)] backdrop-blur-md sm:px-8"
+      className="sticky top-0 z-40 flex items-center gap-4 border-b bg-[var(--inv-header-bg)]/85 px-5 py-3 text-[var(--inv-header-text)] backdrop-blur-md sm:px-8"
       style={{ borderColor: 'var(--inv-border)' }}
     >
       <span className="font-display text-lg font-bold uppercase tracking-[0.3em] text-[var(--inv-header-text)] lg:hidden">
@@ -15,7 +22,11 @@ export function Header() {
           ⌕
         </span>
         <input
+          ref={inputRef}
           type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={openSearch}
           placeholder="Search titles, genres, people"
           aria-label="Search"
           className="w-full rounded-base border bg-surface1 py-2 pl-9 pr-3 text-sm text-textPrimary placeholder:text-textDisabled focus:outline-none focus:ring-2 focus:ring-ring"

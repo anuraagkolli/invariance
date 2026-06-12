@@ -2,10 +2,8 @@
 
 import { m } from 'invariance'
 
-import { Sidebar } from './sidebar'
-import { Header } from './header'
+import { Shell } from './shell'
 import { Hero } from './hero'
-import { Footer } from './footer'
 import { CarouselRow } from './title-row'
 import { ROWS, HERO_TITLE, type TitleRow } from '../lib/titles'
 
@@ -52,70 +50,34 @@ function Row({ name, row }: { name: string; row: TitleRow }) {
   )
 }
 
-// The full home-page composition: sidebar + header + hero + carousels + footer.
+// The full home-page composition: shell chrome + hero + reorderable carousels.
 // Used by both the main page and the gauntlet, which wraps it in a theme-
 // applying effect to preview packs without touching any stored theme.
 export function HomeScreen() {
   return (
-    <m.page name="home">
-      <div className="min-h-screen bg-surface0">
-        <m.slot
-          name="sidebar"
-          level={1}
-          cssVariables={['--inv-sidebar-bg', '--inv-sidebar-text', '--inv-sidebar-border']}
-          description="Left vertical navigation"
-          aliases={['nav', 'left nav', 'navigation']}
-        >
-          <Sidebar />
-        </m.slot>
+    <Shell pageName="home">
+      <m.slot
+        name="hero"
+        level={3}
+        cssVariables={['--inv-hero-text']}
+        description="Featured title billboard"
+        aliases={['billboard', 'banner', 'featured']}
+      >
+        <Hero title={HERO_TITLE} />
+      </m.slot>
 
-        <div className="lg:pl-[230px]">
-          <m.slot
-            name="header"
-            level={1}
-            cssVariables={['--inv-header-bg', '--inv-header-text']}
-            description="Sticky top bar with search and avatar"
-            aliases={['top bar', 'search bar']}
-          >
-            <Header />
-          </m.slot>
-
-          <main className="flex flex-col">
-            <m.slot
-              name="hero"
-              level={3}
-              cssVariables={['--inv-hero-text']}
-              description="Featured title billboard"
-              aliases={['billboard', 'banner', 'featured']}
-            >
-              <Hero title={HERO_TITLE} />
-            </m.slot>
-
-            <div
-              className="flex flex-col px-6 py-10 sm:px-10"
-              style={{ gap: 'calc(var(--inv-density-unit) * 11)' }}
-            >
-              {/* Only the carousel rows are reorderable (F3). Hero/header/
-                  sidebar/footer stay outside m.sections — not reorderable. */}
-              <m.sections>
-                {ROWS.map((row) => (
-                  <Row key={row.id} name={row.slot} row={row} />
-                ))}
-              </m.sections>
-            </div>
-
-            <m.slot
-              name="footer"
-              level={1}
-              cssVariables={['--inv-footer-bg', '--inv-footer-text']}
-              description="Page footer with link columns"
-              aliases={['bottom', 'site footer']}
-            >
-              <Footer />
-            </m.slot>
-          </main>
-        </div>
+      <div
+        className="flex flex-col px-6 py-10 sm:px-10"
+        style={{ gap: 'calc(var(--inv-density-unit) * 11)' }}
+      >
+        {/* Only the carousel rows are reorderable (F3). Hero/header/sidebar/
+            footer stay outside m.sections — not reorderable. */}
+        <m.sections>
+          {ROWS.map((row) => (
+            <Row key={row.id} name={row.slot} row={row} />
+          ))}
+        </m.sections>
       </div>
-    </m.page>
+    </Shell>
   )
 }

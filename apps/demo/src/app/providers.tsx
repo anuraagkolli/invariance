@@ -7,6 +7,10 @@ import {
 } from 'invariance'
 
 import { CarouselRow, GridRow } from '../components/title-row'
+import { TitleModalProvider } from '../components/title-modal-context'
+import { TitleDetailModal } from '../components/title-detail-modal'
+import { SearchProvider } from '../components/search-context'
+import { SearchOverlay } from '../components/search-overlay'
 import { invarianceConfig as config, llmProviderProps } from '../lib/invariance-config'
 
 // The F4 swap path looks components up here by name; both render a row of
@@ -25,7 +29,16 @@ export function Providers({ children }: { children: ReactNode }) {
       componentLibrary={componentLibrary}
       {...llm}
     >
-      {children}
+      {/* Search + modal contexts live INSIDE InvarianceProvider so the modal's
+          m.slot/m.text resolve theme context and the modal re-themes live. The
+          single TitleDetailModal + SearchOverlay render once at the root. */}
+      <SearchProvider>
+        <TitleModalProvider>
+          {children}
+          <TitleDetailModal />
+          <SearchOverlay />
+        </TitleModalProvider>
+      </SearchProvider>
       <CustomizationPanel />
     </InvarianceProvider>
   )

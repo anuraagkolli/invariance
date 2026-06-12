@@ -39,6 +39,10 @@
   --inv-card-text: var(--inv-text-primary);
   --inv-footer-bg: var(--inv-surface-0);
   --inv-footer-text: var(--inv-text-secondary);
+  /* Title-detail modal panel. Defaults to the elevated surface so the popup
+     reads as floating above the page; a theme can recolor it independently. */
+  --inv-modal-bg: var(--inv-surface-1);
+  --inv-modal-text: var(--inv-text-primary);
 }
 
 * {

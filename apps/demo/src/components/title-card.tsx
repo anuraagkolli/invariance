@@ -1,5 +1,8 @@
+'use client'
+
 import type { Title } from '../lib/titles'
 import { ProgressBar } from './progress-bar'
+import { useTitleModal } from './title-modal-context'
 
 interface TitleCardProps {
   title: Title
@@ -26,30 +29,38 @@ function posterStyle(hue: number): React.CSSProperties {
 
 export function TitleCard({ title, shape = 'standard' }: TitleCardProps) {
   const aspect = shape === 'wide' ? 'aspect-[16/9]' : 'aspect-[2/3]'
+  const { openTitle } = useTitleModal()
   return (
-    <article
-      className="group/card flex w-full flex-col gap-2"
-      data-title-id={title.id}
-    >
-      <div
-        className={`relative ${aspect} w-full overflow-hidden rounded-lg2 shadow-inv1 ring-1 ring-inset ring-border/40 transition-all duration-200 ease-out group-hover/card:-translate-y-1 group-hover/card:shadow-inv2 group-hover/card:ring-2 group-hover/card:ring-ring`}
-        style={posterStyle(title.hue)}
+    <article className="group/card flex w-full flex-col gap-2" data-title-id={title.id}>
+      {/* The poster is a real button: keyboard-focusable, opens the detail modal.
+          The hover lift/ring lives on the inner div (group-hover) so the focus
+          ring from focus-visible reads cleanly without fighting the hover ring. */}
+      <button
+        type="button"
+        onClick={() => openTitle(title.id)}
+        aria-label={`View details for ${title.title}`}
+        className="block w-full rounded-lg2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface0"
       >
-        {/* maturity badge */}
-        <span className="absolute right-2 top-2 rounded-base bg-surface0/70 px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-wide text-textPrimary backdrop-blur-sm">
-          {title.maturity}
-        </span>
+        <div
+          className={`relative ${aspect} w-full overflow-hidden rounded-lg2 shadow-inv1 ring-1 ring-inset ring-border/40 transition-all duration-200 ease-out group-hover/card:-translate-y-1 group-hover/card:shadow-inv2 group-hover/card:ring-2 group-hover/card:ring-ring`}
+          style={posterStyle(title.hue)}
+        >
+          {/* maturity badge */}
+          <span className="absolute right-2 top-2 rounded-base bg-surface0/70 px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-wide text-textPrimary backdrop-blur-sm">
+            {title.maturity}
+          </span>
 
-        {/* bottom scrim + title */}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent p-3">
-          <h3 className="font-display text-sm font-semibold uppercase leading-tight tracking-[0.14em] text-white drop-shadow-sm">
-            {title.title}
-          </h3>
-          <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white/70">
-            {title.genre} · {title.year}
-          </p>
+          {/* bottom scrim + title */}
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent p-3">
+            <h3 className="font-display text-sm font-semibold uppercase leading-tight tracking-[0.14em] text-white drop-shadow-sm">
+              {title.title}
+            </h3>
+            <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white/70">
+              {title.genre} · {title.year}
+            </p>
+          </div>
         </div>
-      </div>
+      </button>
 
       {typeof title.progress === 'number' && (
         <div className="flex flex-col gap-1 px-0.5">
