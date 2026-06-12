@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 import { useSearch } from './search-context'
 
 // Sticky top bar: a search input and an avatar. Uses header slot tokens so a
@@ -33,6 +35,14 @@ export function Header() {
           style={{ borderColor: 'var(--inv-border)' }}
         />
       </div>
+
+      {/* Developer dashboard: edit history + invariant locks. */}
+      <Link
+        href="/dev"
+        className="hidden items-center rounded-base px-2 py-1.5 font-mono text-xs text-textSecondary transition-colors hover:bg-surface2 hover:text-textPrimary sm:flex"
+      >
+        /dev
+      </Link>
 
       <button
         type="button"
