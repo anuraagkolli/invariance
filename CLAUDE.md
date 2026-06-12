@@ -134,17 +134,17 @@ Unchanged from v5: strict TS, named exports, no `any`, async/await only, single 
 1. ✅ Theme Compiler + registries (pure, no UI) with golden tests
 2. ✅ theme.json v2 + v1 upgrade path
 3. ✅ Designer agent + structured-outputs client; Gatekeeper routing update
-4. Slot-edit micro-mutation path; Builder cleanup (F2-F4 only — theme.slots fallback, the v1 pipeline path, and slot.tsx inline-style machinery all deleted); platform-readiness retrofits (usage hook + injectable base URL in the API client, canonical theme.json serialization, verify-on-load); `@invariance/schema` extraction. *Exit: "make the sidebar blue" lands as a contrast-solved slot literal; no inline-style path remains; schema package builds standalone.*
-5. Demo app — resurrect the v5 demo from git history, wire the panel end-to-end. **Moved up from phase 10**: the quality thesis needs rendered pixels, and later phases need an app to validate against. *Exit: ten-vibe gauntlet judged visually; "sidebar blue" works live.*
-   → **Decision gate before 6-7:** settle the scanner-vs-overlay integration question (cofounder); phases 6-7 are the work at risk under an overlay architecture.
-6. Render-driven F2/F3 (m.text from context, m.sections); delete DOM appliers. *Exit: overrides survive React re-render with the appliers gone.*
-7. Scanner: role clustering + role-tier emission. *Exit: scanning the demo emits the role tier + slot var() refs.*
-8. SSR theme inlining + font loader. **Constraint: SSR needs a server-readable theme channel (cookie mirror or api storage backend — localStorage alone cannot SSR).** *Exit: themed first paint, no flash.*
-9. `invariance check` + `migrate-theme` CLIs. *Exit: a removed slot blocks CI.*
+4. ✅ Slot-edit micro-mutation path; Builder cleanup (F2-F4 only — theme.slots fallback, the v1 pipeline path, and slot.tsx inline-style machinery all deleted); platform-readiness retrofits (usage hook + injectable base URL in the API client, canonical theme.json serialization, verify-on-load); `@invariance/schema` extraction. *Exit: "make the sidebar blue" lands as a contrast-solved slot literal; no inline-style path remains; schema package builds standalone.*
+5. ✅ Demo app ("Nebula", `apps/demo`) — Netflix-class media browser on the two-tier token system + `/gauntlet` visual harness. *Exit met: ten-vibe gauntlet judged visually distinct/coherent/readable; "sidebar blue" works live.*
+   → **Decision gate before 6-7 (UNRESOLVED):** the scanner-vs-overlay integration question with the cofounder. Phases 6-7 were built on the scanner bet; revisit if that argument reopens.
+6. ✅ Render-driven F2/F3 (m.text from context, m.sections); DOM appliers deleted. *Exit met: text override + reorder/hide survive React re-render (proven via `/gauntlet?demo=overrides`).*
+7. ✅ Scanner: deterministic role clustering + v2 initial-theme emission with var() slot refs; verifier completeness/font checks gated on styleSpec presence so partial scanner seeds pass verify-on-load. *Exit met: fixture scan round-trips through ThemeJsonV2Schema + verifyV2.*
+8. ✅ SSR theme inlining (cookie-mirror channel) + runtime font loader + hydration-safe page resolution; token values constrained to a safe CSS grammar (closes a cookie CSS-injection vector). *Exit met: themed first paint proven via curl with no flash.*
+9. ✅ `invariance-check` (CI guard) + `invariance-migrate-theme` CLIs. *Exit met: removing a wrapped slot makes check exit non-zero naming the slot.*
 10. Trial Mode snippet, built as importable engine modules (mini-scan/virtual-tokens/observe are libraries, not a monolithic IIFE). *Exit: snippet themes an unmodified demo copy; exported theme.json round-trips post-scan.*
 11. Demo polish: theme packs in panel, full gauntlet sign-off, Playwright visual QA harness.
 
-> **Note:** `apps/` is currently empty — the v5 demo app was dropped (recoverable from git history). It returns at phase 5; phases 1-4 stay demo-independent (compiler-level gauntlet via golden tests). The v5-era scanner spec is archived at `docs/scanner-v5.md` and predates the role-tier model.
+> **Note:** `apps/demo` is the live Nebula demo (built phase 5). The v5-era scanner spec is archived at `docs/scanner-v5.md` and predates the role-tier model. Per-phase implementation plans live in `docs/superpowers/plans/`.
 
 ### Success criteria
 
