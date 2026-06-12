@@ -27,10 +27,12 @@ describe("init + manifest publish + dev (against a real local control plane)", (
   });
 
   it("init scaffolds a valid manifest and refuses to overwrite", async () => {
-    const file = await init({ app: "acme" }, dir);
+    const file = await init({ app: "acme", "no-ai": "true" }, dir);
     const manifest = JSON.parse(await readFile(file, "utf8")) as { appId: string };
     expect(manifest.appId).toBe("acme");
-    await expect(init({ app: "acme" }, dir)).rejects.toThrow(/refusing to overwrite/);
+    await expect(init({ app: "acme", "no-ai": "true" }, dir)).rejects.toThrow(
+      /refusing to overwrite/,
+    );
   });
 
   it("manifest publish pushes the file to the registry", async () => {

@@ -4,6 +4,10 @@ import { AppManifestSchema } from "@invariance/schema";
 import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { draftManifest, type JsonLlm } from "./draft";
+import { renderGuide } from "./guide";
+import { llmFromEnv } from "./llm";
+import { scanRepo } from "./scan";
 
 /** Tiny flag parser: `--name value` and `--name=value`; no dependencies. */
 export function parseFlags(args: string[]): { flags: Record<string, string>; rest: string[] } {
@@ -70,58 +74,53 @@ export async function publishManifest(flags: Record<string, string>): Promise<Pu
   return { appId, version: body.version, staleMods: body.staleMods };
 }
 
-const MANIFEST_TEMPLATE = {
-  appId: "my-app",
-  version: "1.0.0",
-  designTokens: [
-    { name: "--accent", kind: "color", value: "#7c5cff", description: "Primary accent" },
-  ],
-  components: [],
-  endpoints: [],
-  policies: [],
-};
-
-/** `invariance init [--app <id>]`: scaffold a manifest + integration notes. */
-export async function init(flags: Record<string, string>, cwd = process.cwd()): Promise<string> {
-  const file = resolve(cwd, "invariance.manifest.json");
-  if (existsSync(file)) {
-    throw new CliError(`refusing to overwrite existing ${file}`);
-  }
-  const manifest = {
-    ...MANIFEST_TEMPLATE,
-    appId: flags.app ?? MANIFEST_TEMPLATE.appId,
-    createdAt: new Date().toISOString(),
-  };
-  await writeFile(file, `${JSON.stringify(manifest, null, 2)}\n`);
-  return file;
+export interface InitOutcome {
+  manifestFile: string;
+  guideFile: string;
+  source: "ai" | "scan";
+  counts: { tokens: number; endpoints: number; components: number };
 }
 
-export const INIT_INSTRUCTIONS = `
-Next steps:
+/**
+ * `invariance init [--app <id>] [--no-ai]`: scan the repo, draft the App
+ * Manifest (model-refined when one is configured, deterministic otherwise),
+ * and emit INVARIANCE.md with framework-specific SDK wiring. Files are
+ * written for review/commit — init never edits existing source.
+ */
+export async function init(flags: Record<string, string>, cwd = process.cwd()): Promise<string> {
+  return (await initDetailed(flags, cwd)).manifestFile;
+}
 
-1. Describe your app in invariance.manifest.json:
-   - designTokens: the CSS custom properties users may restyle
-   - components/slots: the UI areas users may override
-   - endpoints: the API seam hooks may transform
-   - policies: the invariants every mod must respect
+export async function initDetailed(
+  flags: Record<string, string>,
+  cwd = process.cwd(),
+  llmOverride?: JsonLlm | null,
+): Promise<InitOutcome> {
+  const manifestFile = resolve(cwd, "invariance.manifest.json");
+  if (existsSync(manifestFile)) {
+    throw new CliError(`refusing to overwrite existing ${manifestFile}`);
+  }
 
-2. Wire the client SDK (React):
-     import { InvarianceProvider, PromptWidget } from "@invariance/client/react";
-     <InvarianceProvider config={{ registryUrl, appId, subjectId }}>
-       <App />
-       <PromptWidget />
-     </InvarianceProvider>
+  const scan = scanRepo(cwd);
+  const appId = flags.app ?? scan.packageName ?? "my-app";
+  const llm = flags["no-ai"] === "true" ? null : (llmOverride !== undefined ? llmOverride : llmFromEnv());
+  const draft = await draftManifest(scan, appId, llm);
 
-3. Wire the server SDK (Express):
-     import { createInvarianceMiddleware } from "@invariance/server";
-     app.use(createInvarianceMiddleware({ registryUrl, appId }));
+  await writeFile(manifestFile, `${JSON.stringify(draft.manifest, null, 2)}\n`);
+  const guideFile = resolve(cwd, "INVARIANCE.md");
+  await writeFile(guideFile, renderGuide(scan, draft.manifest));
 
-4. Publish the manifest on every release:
-     invariance manifest publish --file invariance.manifest.json
-
-5. Start a local control plane for development:
-     invariance dev
-`;
+  return {
+    manifestFile,
+    guideFile,
+    source: draft.source,
+    counts: {
+      tokens: draft.manifest.designTokens.length,
+      endpoints: draft.manifest.endpoints.length,
+      components: draft.manifest.components.length,
+    },
+  };
+}
 
 export interface DevServer {
   port: number;
@@ -158,14 +157,17 @@ export async function dev(flags: Record<string, string>): Promise<DevServer> {
 export const USAGE = `invariance — control-plane tooling
 
 Usage:
-  invariance init [--app <id>]                          scaffold invariance.manifest.json
+  invariance init [--app <id>] [--no-ai]                scan the repo, draft the manifest,
+                                                        and emit INVARIANCE.md wiring guide
   invariance manifest publish [--file <path>]           publish a manifest version
                               [--registry <url>] [--app <id>]
   invariance dev [--port <port>] [--manifest <path>]    run a local control plane
 
 Environment:
-  INVARIANCE_REGISTRY   default registry url (http://localhost:4400)
-  ANTHROPIC_API_KEY     enables the authoring agent in \`invariance dev\`
+  INVARIANCE_REGISTRY        default registry url (http://localhost:4400)
+  INVARIANCE_LLM_BASE_URL    OpenAI-compatible endpoint for init drafting + dev authoring
+  INVARIANCE_LLM_MODEL       model id for the endpoint above
+  ANTHROPIC_API_KEY          alternative model backend
 `;
 
 export async function run(argv: string[]): Promise<number> {
@@ -174,9 +176,19 @@ export async function run(argv: string[]): Promise<number> {
   try {
     switch (command) {
       case "init": {
-        const file = await init(flags);
-        console.log(`created ${file}`);
-        console.log(INIT_INSTRUCTIONS);
+        const outcome = await initDetailed(flags);
+        console.log(`created ${outcome.manifestFile}`);
+        console.log(`created ${outcome.guideFile}`);
+        console.log(
+          `manifest drafted from ${outcome.source === "ai" ? "repo scan + model refinement" : "repo scan"}: ` +
+            `${outcome.counts.tokens} tokens, ${outcome.counts.endpoints} endpoints, ${outcome.counts.components} components`,
+        );
+        if (outcome.source === "scan" && flags["no-ai"] !== "true") {
+          console.log(
+            "tip: set INVARIANCE_LLM_BASE_URL (or ANTHROPIC_API_KEY) and re-run for a model-refined draft",
+          );
+        }
+        console.log("\nnext: review both files, then follow INVARIANCE.md");
         return 0;
       }
       case "manifest": {
@@ -195,9 +207,11 @@ export async function run(argv: string[]): Promise<number> {
         const server = await dev(flags);
         console.log(`invariance control plane on ${server.url} (keyId ${server.keyId})`);
         console.log(
-          process.env.ANTHROPIC_API_KEY
-            ? "authoring agent: Anthropic API"
-            : "authoring agent: disabled (set ANTHROPIC_API_KEY to enable prompts)",
+          process.env.INVARIANCE_LLM_BASE_URL
+            ? `authoring agent: ${process.env.INVARIANCE_LLM_BASE_URL} (${process.env.INVARIANCE_LLM_MODEL ?? "default model"})`
+            : process.env.ANTHROPIC_API_KEY
+              ? "authoring agent: Anthropic API"
+              : "authoring agent: disabled (set INVARIANCE_LLM_BASE_URL or ANTHROPIC_API_KEY to enable prompts)",
         );
         return -1; // keep the process alive
       }
