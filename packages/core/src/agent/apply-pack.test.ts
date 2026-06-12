@@ -76,6 +76,21 @@ describe('applyPack', () => {
     }
     expect(stored.theme?.roles?.['--inv-accent']).toBe('#e94560')
   })
+
+  it('rejects a disallowed pack even when called directly (UI filter is cosmetic; the gate is applyPack)', async () => {
+    // retro-arcade is a dark pack; a light-only config must reject it.
+    // This is the load-bearing regression: availablePacks hides the chip in the UI
+    // but applyPack itself is the real enforcement gate — nothing should persist.
+    const ctx = ioContext({
+      app: 'demo',
+      frontend: { design: { constraints: { allowed_modes: ['light'] } } },
+    })
+    const result = await applyPack('retro-arcade', ctx)
+    expect(result.type).toBe('error')
+    // Nothing must reach the store — the gate fired before persistAndApply.
+    expect(ctx.themeStore.getTheme()).toBeNull()
+    expect(await ctx.storageBackend.loadTheme('u', 'a')).toBeNull()
+  })
 })
 
 describe('availablePacks', () => {

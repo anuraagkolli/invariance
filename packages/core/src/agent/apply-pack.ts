@@ -2,6 +2,7 @@ import type { ThemeJsonV2, InvarianceConfig } from '../config/types'
 import { compileTheme, InvalidStyleSpecError } from '../compiler/compile'
 import { deriveConstraints } from '../config/derive-constraints'
 import { verifyV2 } from '../verify/compiled-tests'
+import { ThemeJsonV2Schema } from '../config/schema'
 import { THEME_PACKS } from '../registries/theme-packs'
 import { loadCurrentV2, persistAndApply, type PipelineIoContext } from './pipeline-io'
 import type { PipelineResult } from './pipeline'
@@ -57,6 +58,15 @@ export async function applyPack(
       .filter((r) => !r.passed)
       .map((r) => `${r.name}: ${r.message}`)
     return { type: 'error', message: `Theme pack failed verification: ${failures.join('; ')}` }
+  }
+
+  // Schema-check parity with the THEME route: a failure here is a compiler bug
+  // (programmer error), not a constraint violation — throw so it surfaces loudly.
+  const schemaCheck = ThemeJsonV2Schema.safeParse(candidate)
+  if (!schemaCheck.success) {
+    throw new Error(
+      `pack compiled to an invalid v2 doc: ${schemaCheck.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
+    )
   }
 
   await persistAndApply(context, candidate)
