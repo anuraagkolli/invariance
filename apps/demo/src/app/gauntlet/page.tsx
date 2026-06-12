@@ -223,16 +223,17 @@ function GauntletViewer() {
     }
 
     // --- tokens to :root (roles + any slot overrides) ---
+    // Hoist tokenTheme so the F4 branch can spread it (needs roles+slots+styleSpec).
+    const tokenTheme: ThemeJsonV2 = {
+      version: 2,
+      base_app_version: 'v1',
+      theme: {
+        roles,
+        slots: sidebarSlots,
+        ...(styleSpec ? { styleSpec } : {}),
+      },
+    }
     if (pack || sidebarBlue || overrides || f4swap) {
-      const tokenTheme: ThemeJsonV2 = {
-        version: 2,
-        base_app_version: 'v1',
-        theme: {
-          roles,
-          slots: sidebarSlots,
-          ...(styleSpec ? { styleSpec } : {}),
-        },
-      }
       applyAnyTheme(tokenTheme, invarianceConfig)
     }
 
@@ -244,8 +245,11 @@ function GauntletViewer() {
     // --- F4 component-swap: push theme with components map into the store ---
     // m.slot reads themeJson.components.pages[pathname][name] and swaps to
     // componentLibrary[selection.component] when level >= 4.
+    // Spread tokenTheme first so the store holds the same roles/slots/styleSpec
+    // that were applied to :root; buildF4Theme only carries roles, so we take
+    // only its components section to avoid clobbering the token-bearing theme field.
     if (f4swap) {
-      themeStore.setTheme(buildF4Theme(roles))
+      themeStore.setTheme({ ...tokenTheme, components: buildF4Theme(roles).components })
     }
 
     setReady(true)

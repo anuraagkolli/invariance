@@ -149,7 +149,11 @@ async function clickPackChipAndAssert(page, packId, packName, baseAccent, output
     },
     chipSelector,
     { timeout: 8000 },
-  ).catch(() => { /* timeout OK — proceed to assertions */ })
+  ).catch(() => {
+    // Log so a stuck chip surfaces in CI output; assertions below will fail if
+    // the pack was never actually applied.
+    console.warn('[visual-qa] chip re-enable wait timed out for', packId)
+  })
 
   // (a) --inv-accent must have changed from the default (applyPack calls applyAnyTheme)
   const newAccent = await page.evaluate(() =>
@@ -211,9 +215,11 @@ async function runPanelPackScene(browser, outputDir, rows) {
     { id: 'neobrutalist', name: 'Neobrutalist' },
   ]
 
-  let currentBase = baseAccent
+  // Compare each pack against baseAccent (the pre-panel default) rather than a
+  // rolling currentBase, so two consecutive packs with the same accent don't
+  // produce a false negative — each pack only needs to differ from the default.
   for (const pack of PANEL_PACKS) {
-    const result = await clickPackChipAndAssert(page, pack.id, pack.name, currentBase, outputDir)
+    const result = await clickPackChipAndAssert(page, pack.id, pack.name, baseAccent, outputDir)
     rows.push({
       scene: `panel:${pack.id}`,
       accent: result.newAccent,
@@ -223,8 +229,6 @@ async function runPanelPackScene(browser, outputDir, rows) {
       accentChanged: result.accentChanged,
       storedOk: result.storedOk,
     })
-    // After each click the accent is the new baseline (we want distinct per-pack changes)
-    currentBase = result.newAccent
     if (!result.pass) {
       console.error(
         `[panel-pack] FAIL ${pack.id}: accentChanged=${result.accentChanged} storedOk=${result.storedOk}`,
