@@ -13,6 +13,7 @@ import { verify } from '../verify/engine'
 import { verifyV2 } from '../verify/compiled-tests'
 import { deriveConstraints } from '../config/derive-constraints'
 import { applyAnyTheme } from '../runtime/apply'
+import { mirrorThemeCookie } from '../storage/cookie-mirror'
 import type { UsageHandler } from './api'
 
 // ---------------------------------------------------------------------------
@@ -87,6 +88,9 @@ async function persistAndApply(context: PipelineContext, candidate: ThemeJsonV2)
   await context.storageBackend.saveTheme(context.userId, context.appId, candidate)
   context.themeStore.setTheme(candidate)
   applyAnyTheme(candidate, context.config)
+  // Mirror the just-applied theme to the cookie so the next SSR request paints
+  // it on first byte. The storage backend above stays the source of truth.
+  mirrorThemeCookie(context.appId, candidate)
 }
 
 // Builder mutations only carry the page-keyed sections; theme.* is owned by

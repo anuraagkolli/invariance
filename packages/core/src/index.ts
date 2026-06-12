@@ -48,6 +48,14 @@ export type { TestResult, VerificationResult } from './verify/types'
 export { applyThemeJson } from './runtime/apply'
 export { applyGlobalTheme } from './runtime/apply-theme'
 
+// SSR theme inlining: render the :root token block server-side from the cookie
+// mirror so first paint is themed (same verify-on-load gate as the client).
+export { renderThemeCss, themeFromCookieHeader } from './runtime/ssr'
+export { mirrorThemeCookie } from './storage/cookie-mirror'
+
+// Runtime font loader: inject a Google Fonts <link> for a registry pairing.
+export { googleFontsUrlFor, ensureFontsLoaded } from './fonts/loader'
+
 // Render-driven F2/F3 resolution helpers — contracts of the render behavior,
 // exposed so the panel/verifier can reason about overrides without re-deriving.
 export { resolveTextOverride, orderSectionKeys, layoutForPage } from './runtime/resolve-overrides'

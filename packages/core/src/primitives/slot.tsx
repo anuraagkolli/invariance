@@ -4,6 +4,7 @@ import React, { useEffect, type ReactNode } from 'react'
 
 import type { Level } from '../levels/index'
 import { useInvariance } from '../context/provider'
+import { useCurrentPage } from '../context/use-current-page'
 import { ErrorBoundary } from './error-boundary'
 
 interface SlotProps {
@@ -38,6 +39,10 @@ export function Slot({
   source,
 }: SlotProps) {
   const { themeJson, componentLibrary, registry, themeStore } = useInvariance()
+  // Hook called unconditionally at the top (the F4 read below is conditional).
+  // '/' on server + first client render → the F4 swap can't cause a hydration
+  // mismatch; the page-keyed component swap applies one frame after mount.
+  const page = useCurrentPage()
 
   useEffect(() => {
     registry.register({
@@ -58,7 +63,6 @@ export function Slot({
 
   // F4: check for component swap
   if (level >= 4 && themeJson?.components && componentLibrary) {
-    const page = typeof window !== 'undefined' ? window.location.pathname : '/'
     const selection = themeJson.components.pages?.[page]?.[name]
     if (selection) {
       const SwappedComponent = componentLibrary[selection.component]

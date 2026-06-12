@@ -16,6 +16,7 @@ import { createSlotRegistry, type SlotRegistry } from './registry'
 import { createMemoryStorage } from '../storage/memory'
 import { createLocalStorage } from '../storage/local-storage'
 import { createApiStorage } from '../storage/api'
+import { mirrorThemeCookie } from '../storage/cookie-mirror'
 import type { StorageBackend } from '../storage/types'
 import { applyAnyTheme } from '../runtime/apply'
 import { prepareStoredTheme } from '../runtime/load-theme'
@@ -101,6 +102,9 @@ export function InvarianceProvider({
       }
       themeStore.setTheme(prepared.theme)
       applyAnyTheme(prepared.theme, config)
+      // Mirror to the cookie so the SSR helper can inline this theme on the next
+      // request's first paint. Canonical store remains the storage backend.
+      mirrorThemeCookie(config.app, prepared.theme)
     }
     async function loadTheme(): Promise<void> {
       try {

@@ -3,6 +3,7 @@
 import React, { type ReactNode } from 'react'
 
 import { useInvariance } from '../context/provider'
+import { useCurrentPage } from '../context/use-current-page'
 import { layoutForPage, orderSectionKeys } from '../runtime/resolve-overrides'
 
 interface SectionsProps {
@@ -18,7 +19,9 @@ interface SectionsProps {
 // unordered, and are never hidden (defensive: we only reorder what we can key).
 export function Sections({ children }: SectionsProps) {
   const { themeJson } = useInvariance()
-  const page = typeof window !== 'undefined' ? window.location.pathname : '/'
+  // useCurrentPage = '/' on server + first client render so SSR and hydration
+  // produce the same section order; a real-path reorder/hide swaps in a frame later.
+  const page = useCurrentPage()
   const layout = layoutForPage(themeJson, page)
 
   const childArray = React.Children.toArray(children)
