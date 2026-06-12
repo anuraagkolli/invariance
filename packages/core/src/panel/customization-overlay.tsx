@@ -68,6 +68,32 @@ function CloseIcon() {
   )
 }
 
+// Same 4-point spark as the empty-state glyph, sized for the loading veil.
+function SparkIcon() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 2 L13.5 9 L20 10.5 L13.5 12 L12 19 L10.5 12 L4 10.5 L10.5 9 Z"
+        fill="#ffffff"
+      />
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M20 6 L9 17 L4 12"
+        stroke="#ffffff"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // HistoryCard
 // ---------------------------------------------------------------------------
@@ -153,6 +179,40 @@ const PROGRESS_LABELS: Record<PipelineStage, string> = {
 }
 
 // ---------------------------------------------------------------------------
+// Smooth theme reveal
+// ---------------------------------------------------------------------------
+
+// Module-level (not per-instance) because the class lives on <html>, outside
+// any one overlay's lifecycle: an unmount must not strand it, and rapid calls
+// (pack-chip mashing) should extend the window rather than stack removals.
+let themeTransitionTimer: ReturnType<typeof setTimeout> | undefined
+
+// Briefly arms a global transition class so the token swap — a synchronous
+// batch of :root style writes — morphs colors instead of snapping. Call this
+// immediately BEFORE the write; the class self-clears once the .55s
+// transitions have finished.
+export function beginSmoothThemeTransition(): void {
+  if (typeof document === 'undefined') return
+  document.documentElement.classList.add('inv-theme-transition')
+  if (themeTransitionTimer !== undefined) clearTimeout(themeTransitionTimer)
+  themeTransitionTimer = setTimeout(() => {
+    document.documentElement.classList.remove('inv-theme-transition')
+    themeTransitionTimer = undefined
+  }, 700)
+}
+
+// Veiled-run phase machine: 'chat' is the normal dialog; 'loading' minimizes
+// the dialog under a full-screen progress veil while the pipeline runs;
+// 'revealing' is the brief post-success beat before the veil fades and the
+// panel closes. Errors/clarifications return to 'chat' so their bubbles are
+// what the user sees — raw failure text never renders on the veil.
+type PanelPhase = 'chat' | 'loading' | 'revealing'
+
+// null = veil steady (or entering); 'fast' = quick exit back to chat on
+// error/clarification; 'slow' = the lingering success fade-out.
+type VeilExit = null | 'fast' | 'slow'
+
+// ---------------------------------------------------------------------------
 // Overlay
 // ---------------------------------------------------------------------------
 
@@ -209,9 +269,36 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
   const [history, setHistory] = useState<HistoryItem[]>(saved.history)
   const [convHistory, setConvHistory] = useState<ConvTurn[]>(saved.convHistory)
   const [isThinking, setIsThinking] = useState(false)
+  const [phase, setPhase] = useState<PanelPhase>('chat')
+  const [veilExit, setVeilExit] = useState<VeilExit>(null)
+  const [veilStage, setVeilStage] = useState('Thinking...')
+  const [revealText, setRevealText] = useState('')
 
   const historyRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Phase-machine timers must die with the component: if the host unmounts the
+  // overlay mid-run, a surviving timeout would setState (or onClose) on a dead
+  // instance. The component stays MOUNTED while veiled precisely so the
+  // in-flight pipeline keeps its state machine — this guard covers the case
+  // where the parent itself goes away.
+  const mountedRef = useRef(true)
+  const phaseTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      for (const t of phaseTimersRef.current) clearTimeout(t)
+      phaseTimersRef.current = []
+    }
+  }, [])
+
+  function schedulePhaseStep(fn: () => void, ms: number) {
+    const t = setTimeout(() => {
+      if (mountedRef.current) fn()
+    }, ms)
+    phaseTimersRef.current.push(t)
+  }
 
   // Persist chat history to localStorage whenever it changes
   useEffect(() => {
@@ -222,10 +309,30 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
     inputRef.current?.focus()
   }, [])
 
+  // Refocus once the dialog actually comes back from a veiled run — at the
+  // moment the error/clarification lands the input is still visibility:hidden,
+  // so focusing inside the result handler itself would be a no-op.
+  const prevPhaseRef = useRef<PanelPhase>('chat')
+  useEffect(() => {
+    if (prevPhaseRef.current !== 'chat' && phase === 'chat') inputRef.current?.focus()
+    prevPhaseRef.current = phase
+  }, [phase])
+
   useEffect(() => {
     const el = historyRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [history])
+
+  // Errors and clarifications belong in the chat: drop the veil quickly and
+  // bring the dialog back so the bubble handleSubmit already wrote into
+  // history is what greets the user.
+  function dismissVeilToChat() {
+    setVeilExit('fast')
+    schedulePhaseStep(() => {
+      setPhase('chat')
+      setVeilExit(null)
+    }, 250)
+  }
 
   // `override` lets a seeded-prompt chip submit its text directly without
   // round-tripping through the `input` state (a setState + immediate submit
@@ -251,6 +358,13 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
       setIsThinking(false)
       return
     }
+
+    // Veil the run: the dialog minimizes and pipeline progress plays out over
+    // the live app. Entered only past the keyless guard above so the
+    // missing-key error stays in the still-visible dialog.
+    setVeilStage('Thinking...')
+    setVeilExit(null)
+    setPhase('loading')
 
     const result = await runPipeline(
       message,
@@ -278,6 +392,10 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
               : item,
           ),
         )
+        setVeilStage(PROGRESS_LABELS[stage] ?? 'Working...')
+        // 'applying' fires immediately before the pipeline writes the new
+        // tokens to :root — arm the transition now so the swap morphs.
+        if (stage === 'applying') beginSmoothThemeTransition()
       },
     )
 
@@ -295,6 +413,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
         { role: 'assistant' as const, content: result.message },
       ])
       setIsThinking(false)
+      dismissVeilToChat()
       return
     }
 
@@ -305,6 +424,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
         ),
       )
       setIsThinking(false)
+      dismissVeilToChat()
       return
     }
 
@@ -322,6 +442,15 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
       { role: 'assistant' as const, content: JSON.stringify({ type: 'success', description: result.description }) },
     ])
     setIsThinking(false)
+
+    // Hold the veil briefly with the result, then fade everything away and
+    // close — the user lands directly on the freshly themed app.
+    setRevealText(result.description)
+    setPhase('revealing')
+    schedulePhaseStep(() => {
+      setVeilExit('slow')
+      schedulePhaseStep(() => { onClose() }, 600)
+    }, 900)
   }
 
   // One-tap theme packs: the keyless quality-preview path (DESIGN 1.6c). Packs
@@ -342,6 +471,9 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
       { id, userMessage: packName, status: 'thinking', progressText: PROGRESS_LABELS.compiling },
     ])
 
+    // Packs land in <100ms — no veil, but the token swap should still morph
+    // instead of snapping.
+    beginSmoothThemeTransition()
     const result = await applyPack(packId, { config, themeStore, storageBackend, userId, appId })
 
     // applyPack only ever returns success | error (it skips the Gatekeeper, so
@@ -386,7 +518,9 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
       e.preventDefault()
       void handleSubmit()
     }
-    if (e.key === 'Escape') {
+    // The veil is not dismissible: runs are short and closing mid-pipeline
+    // would desync the in-flight state machine from what the user sees.
+    if (e.key === 'Escape' && phase === 'chat') {
       onClose()
     }
   }
@@ -424,15 +558,26 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop. While veiled it animates out with a forwards fill (held at
+          opacity 0 / visibility hidden) but stays MOUNTED — unmounting would
+          tear down the component (and the in-flight pipeline) with it. The
+          inv-panel-exit class only exists for the reduced-motion fallback. */}
       <div
         onClick={onClose}
+        data-inv-backdrop="true"
+        className={phase === 'chat' ? undefined : 'inv-panel-exit'}
         style={{
           position: 'fixed',
           inset: 0,
           background: 'rgba(0,0,0,0.35)',
           zIndex: 9998,
-          animation: 'invariance-fade-in 0.15s ease',
+          // Swapping animation-name restarts the animation, so returning to
+          // 'chat' after an error replays the entrance without a re-mount.
+          animation:
+            phase === 'chat'
+              ? 'invariance-fade-in 0.15s ease'
+              : 'invariance-fade-out 0.25s ease forwards',
+          pointerEvents: phase === 'chat' ? 'auto' : 'none',
         }}
       />
 
@@ -442,6 +587,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
         aria-modal="true"
         aria-label="Customization panel"
         data-inv-overlay="true"
+        className={phase === 'chat' ? undefined : 'inv-panel-exit'}
         style={{
           position: 'fixed',
           bottom: '88px',
@@ -456,7 +602,11 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          animation: 'invariance-slide-up 0.2s ease',
+          animation:
+            phase === 'chat'
+              ? 'invariance-slide-up 0.2s ease'
+              : 'invariance-card-out 0.25s ease forwards',
+          pointerEvents: phase === 'chat' ? 'auto' : 'none',
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         }}
       >
@@ -778,6 +928,107 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
         </div>
       </div>
 
+      {/* Loading veil: a frosted scrim over the live app while the pipeline
+          runs ('loading'), then a brief success beat ('revealing') before the
+          whole thing fades and the panel closes. Rendered AFTER the backdrop
+          (same z-index) so it paints on top; the card above it is held
+          invisible by its exit animation. */}
+      {phase !== 'chat' && (
+        <div
+          data-inv-veil="true"
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9998,
+            background: 'rgba(10, 11, 13, 0.45)',
+            backdropFilter: 'blur(7px) saturate(1.15)',
+            WebkitBackdropFilter: 'blur(7px) saturate(1.15)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '14px',
+            animation:
+              veilExit === null
+                ? 'invariance-fade-in 0.3s ease'
+                : veilExit === 'slow'
+                  ? 'invariance-fade-out 0.6s ease forwards'
+                  : 'invariance-fade-out 0.25s ease forwards',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          }}
+        >
+          {phase === 'loading' ? (
+            <>
+              <div
+                style={{
+                  display: 'flex',
+                  animation: 'invariance-veil-pulse 1.6s ease-in-out infinite alternate',
+                }}
+              >
+                <SparkIcon />
+              </div>
+              {/* Keyed by the label so each stage change re-mounts the node
+                  and replays the fade-in — a cheap crossfade. */}
+              <div
+                key={veilStage}
+                style={{
+                  fontSize: '13px',
+                  color: 'rgba(255,255,255,0.85)',
+                  letterSpacing: '0.02em',
+                  animation: 'invariance-fade-in 0.3s ease',
+                }}
+              >
+                {veilStage}
+              </div>
+              <div
+                style={{
+                  position: 'relative',
+                  width: '160px',
+                  height: '2px',
+                  borderRadius: '999px',
+                  background: 'rgba(255,255,255,0.18)',
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '56px',
+                    height: '100%',
+                    borderRadius: '999px',
+                    background:
+                      'linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.9) 50%, rgba(255,255,255,0) 100%)',
+                    animation: 'invariance-veil-shimmer 1.4s linear infinite',
+                  }}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <CheckIcon />
+              <div
+                style={{
+                  fontSize: '13px',
+                  color: 'rgba(255,255,255,0.85)',
+                  letterSpacing: '0.02em',
+                  maxWidth: 'min(420px, 80vw)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  animation: 'invariance-fade-in 0.3s ease',
+                }}
+              >
+                {revealText}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Keyframe animations */}
       <style>{`
         @keyframes invariance-fade-in {
@@ -787,6 +1038,46 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
         @keyframes invariance-slide-up {
           from { opacity: 0; transform: translateY(12px); }
           to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes invariance-fade-out {
+          from { opacity: 1; visibility: visible; }
+          to   { opacity: 0; visibility: hidden; }
+        }
+        @keyframes invariance-card-out {
+          from { opacity: 1; transform: translateY(0) scale(1); visibility: visible; }
+          to   { opacity: 0; transform: translateY(12px) scale(0.98); visibility: hidden; }
+        }
+        @keyframes invariance-veil-pulse {
+          from { transform: scale(0.9); opacity: 0.7; }
+          to   { transform: scale(1.08); opacity: 1; }
+        }
+        @keyframes invariance-veil-shimmer {
+          from { transform: translateX(-56px); }
+          to   { transform: translateX(160px); }
+        }
+        html.inv-theme-transition,
+        html.inv-theme-transition *,
+        html.inv-theme-transition *::before,
+        html.inv-theme-transition *::after {
+          transition: background-color .55s ease, color .55s ease, border-color .55s ease, fill .55s ease, stroke .55s ease, box-shadow .55s ease !important;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          [data-inv-veil],
+          [data-inv-veil] *,
+          [data-inv-overlay],
+          [data-inv-backdrop] {
+            animation: none !important;
+          }
+          .inv-panel-exit {
+            opacity: 0 !important;
+            visibility: hidden !important;
+          }
+          html.inv-theme-transition,
+          html.inv-theme-transition *,
+          html.inv-theme-transition *::before,
+          html.inv-theme-transition *::after {
+            transition: none !important;
+          }
         }
       `}</style>
     </>
