@@ -25,7 +25,8 @@ export function Providers({ children }: { children: ReactNode }) {
     <InvarianceProvider
       config={config}
       userId="demo-user"
-      storage="localStorage"
+      storage="api"
+      storageUrl="/api/themes"
       componentLibrary={componentLibrary}
       {...llm}
     >
