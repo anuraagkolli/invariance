@@ -114,6 +114,14 @@ function GauntletIndex() {
       <ul className="mt-10 flex flex-col gap-2">
         <li>
           <a
+            href="/showcase"
+            className="text-accent underline-offset-2 hover:underline font-body text-sm font-semibold"
+          >
+            ✦ Vibe Wall (all ten themed at once, wrapper-scoped)
+          </a>
+        </li>
+        <li>
+          <a
             href="/gauntlet?pack=default"
             className="text-accent underline-offset-2 hover:underline font-body text-sm"
           >

@@ -48,3 +48,33 @@ JSON-ish text works through the existing revalidation path.
 Open the customization panel and type a vibe ("make it retro"). To swap back to
 Claude, unset `NEXT_PUBLIC_LLM_PROVIDER` (and set the Anthropic key). If the local
 model's themes feel weak, bump the model id (e.g. `qwen2.5:14b`) — no code change.
+
+## Vibe wall (`/showcase`)
+
+`http://localhost:4321/showcase` renders all ten theme packs at once, each on a
+scaled-down Nebula card themed independently. The mechanism is wrapper-scoped
+custom properties: each card sets the compiled `--inv-*` role tokens on its own
+wrapper element (not `:root`), and because CSS custom properties cascade, the
+card's subtree themes from those vars while its neighbours stay on theirs. It is
+the "ten coherent vibes at a glance" shot for decks and screen recordings — no
+LLM is involved, every card is `compileTheme(pack.spec)`.
+
+## Designer smoke proof (`designer-smoke`)
+
+`pnpm --filter @invariance/demo designer-smoke` runs the ten canonical vibe
+prompts through the **real Designer against a live Ollama** and asserts each
+returns a zod-valid StyleSpec that compiles to an AA-clean theme. It is the proof
+that the OSS model produces coherent themes, not just that the compiler is sound.
+
+This is a **manual proof, not part of `pnpm test`** — it is standalone, imported
+by nothing, and skips cleanly (exit 0) when Ollama is unreachable. To run it,
+have Ollama serving with the model pulled (see the Local LLM section), then:
+
+```sh
+pnpm --filter @invariance/demo designer-smoke
+```
+
+It reads `LLM_BASE_URL` (default `http://localhost:11434/v1`), `LLM_MODEL`
+(default `qwen2.5`), `LLM_PROVIDER` (default `openai-compatible`), and
+`LLM_STRUCTURED_MODE` (default `json_schema`). It prints a per-vibe table and
+exits non-zero only if a vibe actually failed while Ollama was up.

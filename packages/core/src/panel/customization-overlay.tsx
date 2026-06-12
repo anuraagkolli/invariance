@@ -34,6 +34,18 @@ interface CustomizationOverlayProps {
   onClose: () => void
 }
 
+// Example vibe prompts shown as one-tap chips in the empty state. They guide a
+// first-time viewer toward the live vibe->repaint and showcase the Designer's
+// range. Unlike the pack chips (known-good StyleSpecs, keyless), these run the
+// full Gatekeeper+Designer pipeline, so they are gated on having an apiKey.
+const EXAMPLE_PROMPTS = [
+  'make it retro',
+  'cyberpunk terminal',
+  'warm editorial magazine',
+  'midnight ocean',
+  'brutalist mono',
+] as const
+
 // ---------------------------------------------------------------------------
 // Icons
 // ---------------------------------------------------------------------------
@@ -215,9 +227,12 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
     if (el) el.scrollTop = el.scrollHeight
   }, [history])
 
-  async function handleSubmit(e?: FormEvent) {
+  // `override` lets a seeded-prompt chip submit its text directly without
+  // round-tripping through the `input` state (a setState + immediate submit
+  // would race the not-yet-flushed value). Falls back to the typed input.
+  async function handleSubmit(e?: FormEvent, override?: string) {
     e?.preventDefault()
-    const message = input.trim()
+    const message = (override ?? input).trim()
     if (!message || isThinking) return
     setInput('')
     setIsThinking(true)
@@ -349,6 +364,21 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
       )
     }
     setIsThinking(false)
+  }
+
+  // Seeded prompt chip: fill the input (so the viewer sees the text land) and
+  // submit it through the SAME pipeline path as a typed prompt. Pass the prompt
+  // as an override so the submit doesn't race the input's setState.
+  function handlePromptChip(prompt: string) {
+    if (isThinking) return
+    setInput(prompt)
+    void handleSubmit(undefined, prompt)
+  }
+
+  function handleSurpriseMe() {
+    if (isThinking) return
+    const pick = EXAMPLE_PROMPTS[Math.floor(Math.random() * EXAMPLE_PROMPTS.length)]
+    if (pick) handlePromptChip(pick)
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
@@ -483,7 +513,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                height: '120px',
+                padding: '24px 8px',
                 color: '#d1d5db',
                 fontSize: '13px',
                 textAlign: 'center',
@@ -497,6 +527,100 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
                 />
               </svg>
               <span>No changes yet. Describe what you want to change.</span>
+
+              {/* Seeded example prompts. These run the full LLM pipeline, so they
+                  are shown only when an apiKey is configured — without one they
+                  would always error (the pack chips below remain the keyless path).
+                  Styled to match the pack chips' fixed-light palette. */}
+              {apiKey && (
+                <div style={{ marginTop: '14px', width: '100%' }}>
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: '#9ca3af',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    Try a vibe
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '6px',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {EXAMPLE_PROMPTS.map((prompt) => (
+                      <button
+                        key={prompt}
+                        type="button"
+                        onClick={() => handlePromptChip(prompt)}
+                        disabled={isThinking}
+                        data-inv-prompt={prompt}
+                        style={{
+                          background: '#f3f4f6',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '999px',
+                          padding: '5px 11px',
+                          fontSize: '12px',
+                          color: '#374151',
+                          cursor: isThinking ? 'default' : 'pointer',
+                          transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+                          whiteSpace: 'nowrap',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isThinking) {
+                            ;(e.currentTarget as HTMLButtonElement).style.background = '#eef2ff'
+                            ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#c7d2fe'
+                            ;(e.currentTarget as HTMLButtonElement).style.color = '#4338ca'
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          ;(e.currentTarget as HTMLButtonElement).style.background = '#f3f4f6'
+                          ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#e5e7eb'
+                          ;(e.currentTarget as HTMLButtonElement).style.color = '#374151'
+                        }}
+                      >
+                        {prompt}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={handleSurpriseMe}
+                      disabled={isThinking}
+                      data-inv-surprise="true"
+                      style={{
+                        background: '#6366f1',
+                        border: '1px solid #6366f1',
+                        borderRadius: '999px',
+                        padding: '5px 12px',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        color: '#ffffff',
+                        cursor: isThinking ? 'default' : 'pointer',
+                        transition: 'background 0.15s, border-color 0.15s',
+                        whiteSpace: 'nowrap',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isThinking) {
+                          ;(e.currentTarget as HTMLButtonElement).style.background = '#4f46e5'
+                          ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#4f46e5'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        ;(e.currentTarget as HTMLButtonElement).style.background = '#6366f1'
+                        ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#6366f1'
+                      }}
+                    >
+                      ✨ Surprise me
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {history.map((item) => (
