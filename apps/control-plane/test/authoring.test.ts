@@ -94,22 +94,21 @@ describe("authorMod pipeline", () => {
     expect(agent.inputs[1]?.feedback.join()).toContain("token --inv-accent");
   });
 
-  it("re-warns about drops when another rejection intervenes", async () => {
+  it("warns about drops only once so retries can converge on the request", async () => {
     const store = new MemoryStore();
     await publishManifest(store, "app1", manifest);
     await authorMod({
       store, keys, agent: new MockAgent([goodDraft]), appId: "app1", subjectId: "u1", prompt: "teal",
     });
     const hookOnlyDraft = { hooks: [sortHook], capabilities: hookCapabilities };
-    const agent = new MockAgent([hookOnlyDraft, badDraft, hookOnlyDraft, hookOnlyDraft]);
+    const agent = new MockAgent([hookOnlyDraft, badDraft, hookOnlyDraft]);
     const result = await authorMod({
       store, keys, agent, appId: "app1", subjectId: "u1", prompt: "sort my items", maxAttempts: 5,
     });
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.attempts).toBe(4);
-    // The bad attempt consumed the first warning; the drop must be re-warned,
-    // not silently accepted, before the final resubmission counts as intent.
-    expect(agent.inputs[3]?.feedback.join()).toContain("dropped existing customizations");
+    if (result.ok) expect(result.attempts).toBe(3);
+    expect(agent.inputs[1]?.feedback.join()).toContain("dropped existing customizations");
+    expect(agent.inputs[2]?.feedback.join()).toContain("unknown design token");
   });
 
   it("treats a resubmitted drop as intentional removal", async () => {

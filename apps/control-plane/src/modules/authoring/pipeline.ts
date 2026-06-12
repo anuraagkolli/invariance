@@ -86,11 +86,8 @@ export async function authorMod(params: AuthorModParams): Promise<AuthoringResul
   const currentBundle = current ? ModBundleSchema.parse(JSON.parse(current.envelope.payload)) : null;
 
   let feedback: string[] = params.seedFeedback ?? [];
-  /** Ops the previous attempt was warned about dropping (null = no warning). */
-  let pendingDropConfirmation: string[] | null = null;
+  let dropWarned = false;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const priorDropWarning: string[] | null = pendingDropConfirmation;
-    pendingDropConfirmation = null;
     const input: AgentInput = { prompt, manifest, currentBundle, feedback };
     let draft: ModDraft;
     try {
@@ -132,20 +129,17 @@ export async function authorMod(params: AuthorModParams): Promise<AuthoringResul
     }
 
     // Models routinely answer with only the new request's ops, silently
-    // dropping the user's existing customizations. A dropping draft is
-    // rejected with the missing ops named; the drop is accepted only when the
-    // immediately preceding rejection was this same warning and the model
-    // still omitted them (intentional removal). Skipped for re-fix, where the
+    // dropping the user's existing customizations. A drop is rejected once
+    // with the missing ops named; after that warning the draft is trusted —
+    // a guard that keeps insisting can block small models from ever
+    // converging on the new request itself. Skipped for re-fix, where the
     // degraded modset legitimately loses ops the new manifest no longer
     // supports.
-    if (currentBundle && !params.seedFeedback) {
+    if (currentBundle && !params.seedFeedback && !dropWarned) {
       const draftIds = opIdentities(bundle);
       const dropped = [...opIdentities(currentBundle)].filter((id) => !draftIds.has(id));
-      const warnedIds: Set<string> = new Set(priorDropWarning ?? []);
-      const confirmedRemoval: boolean =
-        priorDropWarning !== null && dropped.every((id: string): boolean => warnedIds.has(id));
-      if (dropped.length > 0 && !confirmedRemoval) {
-        pendingDropConfirmation = dropped;
+      if (dropped.length > 0) {
+        dropWarned = true;
         feedback = [
           `your draft dropped existing customizations the request did not ask to remove: ${dropped.join(
             ", ",
