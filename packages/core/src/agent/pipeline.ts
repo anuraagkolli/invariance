@@ -1,4 +1,4 @@
-import type { AnyThemeJson, ThemeJson, ThemeJsonV2, InvarianceConfig } from '../config/types'
+import type { ThemeJson, ThemeJsonV2, InvarianceConfig } from '../config/types'
 import type { SlotRegistration } from '../context/registry'
 import type { ThemeStore } from '../context/theme-store'
 import type { StorageBackend } from '../storage/types'
@@ -7,13 +7,11 @@ import { callBuilder, type SectionsMutation } from './builder'
 import { callDesigner } from './designer'
 import { runSlotEdit } from './slot-edit'
 import { compileTheme, InvalidStyleSpecError } from '../compiler/compile'
-import { upgradeThemeJson } from '../config/upgrade'
 import { ThemeJsonV2Schema } from '../config/schema'
 import { verify } from '../verify/engine'
 import { verifyV2 } from '../verify/compiled-tests'
 import { deriveConstraints } from '../config/derive-constraints'
-import { applyAnyTheme } from '../runtime/apply'
-import { mirrorThemeCookie } from '../storage/cookie-mirror'
+import { loadCurrentV2, persistAndApply } from './pipeline-io'
 import type { UsageHandler } from './api'
 
 // ---------------------------------------------------------------------------
@@ -74,24 +72,10 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
 // ---------------------------------------------------------------------------
 // v2-native helpers
 // ---------------------------------------------------------------------------
-
-// Every route operates on v2: stored v1 (or nothing) upgrades exactly once here.
-async function loadCurrentV2(context: PipelineContext): Promise<ThemeJsonV2> {
-  const stored: AnyThemeJson | null =
-    context.themeStore.getTheme() ??
-    await context.storageBackend.loadTheme(context.userId, context.appId)
-  const { theme } = upgradeThemeJson(stored ?? { version: 1, base_app_version: 'v1' })
-  return theme
-}
-
-async function persistAndApply(context: PipelineContext, candidate: ThemeJsonV2): Promise<void> {
-  await context.storageBackend.saveTheme(context.userId, context.appId, candidate)
-  context.themeStore.setTheme(candidate)
-  applyAnyTheme(candidate, context.config)
-  // Mirror the just-applied theme to the cookie so the next SSR request paints
-  // it on first byte. The storage backend above stays the source of truth.
-  mirrorThemeCookie(context.appId, candidate)
-}
+//
+// loadCurrentV2 / persistAndApply live in pipeline-io.ts so the LLM-free pack
+// path (apply-pack.ts) shares the exact same store/apply sequence. PipelineContext
+// is a structural superset of PipelineIoContext, so passing it directly type-checks.
 
 // Builder mutations only carry the page-keyed sections; theme.* is owned by
 // the THEME and SLOT_F1 routes and passes through verbatim.

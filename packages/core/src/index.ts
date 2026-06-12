@@ -40,6 +40,10 @@ export { createLocalStorage } from './storage/local-storage'
 export { createApiStorage } from './storage/api'
 export { runPipeline } from './agent/pipeline'
 export type { PipelineResult, PipelineStage, PipelineContext } from './agent/pipeline'
+// One-tap theme packs: LLM-free quality-preview path (no apiKey). Shares the
+// pipeline's compile→verify→persist sequence via pipeline-io.
+export { applyPack, availablePacks } from './agent/apply-pack'
+export type { PipelineIoContext } from './agent/pipeline-io'
 export { callGatekeeper } from './agent/gatekeeper'
 export type { GatekeeperResult, GateKind, ConvTurn } from './agent/gatekeeper'
 export { GATEKEEPER_WIRE_SCHEMA } from './agent/wire-schemas'

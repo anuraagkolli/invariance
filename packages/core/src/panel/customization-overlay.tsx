@@ -4,12 +4,14 @@ import {
   useState,
   useRef,
   useEffect,
+  useMemo,
   type KeyboardEvent,
   type FormEvent,
 } from 'react'
 
 import { useInvariance } from '../context/provider'
 import { runPipeline, type PipelineStage } from '../agent/pipeline'
+import { applyPack, availablePacks } from '../agent/apply-pack'
 import type { ConvTurn } from '../agent/gatekeeper'
 import { applyAnyTheme } from '../runtime/apply'
 import { upgradeThemeJson } from '../config/upgrade'
@@ -301,6 +303,48 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
     setIsThinking(false)
   }
 
+  // One-tap theme packs: the keyless quality-preview path (DESIGN 1.6c). Packs
+  // are known-good StyleSpecs, so applyPack skips the Gatekeeper+Designer and
+  // needs NO apiKey — the chips stay clickable even when no key is configured.
+  // availablePacks pre-filters to packs the app's constraints permit, so a
+  // forbidden mode/font never renders a broken chip. Compute once (config is
+  // stable for the panel's lifetime).
+  const packs = useMemo(() => availablePacks(config), [config])
+
+  async function handleApplyPack(packId: string, packName: string) {
+    if (isThinking) return
+    setIsThinking(true)
+
+    const id = Math.random().toString(36).slice(2)
+    setHistory((h) => [
+      ...h,
+      { id, userMessage: packName, status: 'thinking', progressText: PROGRESS_LABELS.compiling },
+    ])
+
+    const result = await applyPack(packId, { config, themeStore, storageBackend, userId, appId })
+
+    // applyPack only ever returns success | error (it skips the Gatekeeper, so
+    // there is no clarification path), but PipelineResult is the shared union —
+    // narrow on success so the description access type-checks.
+    if (result.type === 'success') {
+      setHistory((h) =>
+        h.map((item) =>
+          item.id === id
+            ? { ...item, status: 'success' as const, description: result.description }
+            : item,
+        ),
+      )
+    } else {
+      const reason = result.type === 'error' ? result.message : ''
+      setHistory((h) =>
+        h.map((item) =>
+          item.id === id ? { ...item, status: 'error' as const, reason } : item,
+        ),
+      )
+    }
+    setIsThinking(false)
+  }
+
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -458,6 +502,64 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
         <div
           style={{ padding: '12px 16px 16px', borderTop: '1px solid #f3f4f6', flexShrink: 0 }}
         >
+          {/* Starting points: one-tap packs. Keyless quality preview (DESIGN 1.6c) —
+              NOT disabled when apiKey is absent (only the prompt input needs a key).
+              Hidden entirely if the app's constraints forbid every pack. The panel
+              UI is fixed-light (NOT themed by --inv vars), so the chips use the
+              same inline palette as the rest of the panel (#f3f4f6 / #111827). */}
+          {packs.length > 0 && (
+            <div style={{ marginBottom: '12px' }}>
+              <div
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: '#9ca3af',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  marginBottom: '8px',
+                }}
+              >
+                Starting points
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {packs.map((pack) => (
+                  <button
+                    key={pack.id}
+                    type="button"
+                    onClick={() => { void handleApplyPack(pack.id, pack.name) }}
+                    disabled={isThinking}
+                    data-inv-pack={pack.id}
+                    style={{
+                      background: '#f3f4f6',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '999px',
+                      padding: '5px 11px',
+                      fontSize: '12px',
+                      color: '#374151',
+                      cursor: isThinking ? 'default' : 'pointer',
+                      transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+                      whiteSpace: 'nowrap',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isThinking) {
+                        ;(e.currentTarget as HTMLButtonElement).style.background = '#eef2ff'
+                        ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#c7d2fe'
+                        ;(e.currentTarget as HTMLButtonElement).style.color = '#4338ca'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      ;(e.currentTarget as HTMLButtonElement).style.background = '#f3f4f6'
+                      ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#e5e7eb'
+                      ;(e.currentTarget as HTMLButtonElement).style.color = '#374151'
+                    }}
+                  >
+                    {pack.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <form
             onSubmit={(e) => { void handleSubmit(e) }}
             style={{ display: 'flex', gap: '8px', alignItems: 'center' }}
