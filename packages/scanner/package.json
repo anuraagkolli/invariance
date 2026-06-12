@@ -6,7 +6,9 @@
   "types": "./dist/src/index.d.ts",
   "bin": {
     "invariance-scan": "./dist/bin/invariance-scan.js",
-    "invariance-unlock": "./dist/bin/invariance-unlock.js"
+    "invariance-unlock": "./dist/bin/invariance-unlock.js",
+    "invariance-check": "./dist/bin/invariance-check.js",
+    "invariance-migrate-theme": "./dist/bin/invariance-migrate-theme.js"
   },
   "exports": {
     ".": {
@@ -20,7 +22,9 @@
     "test": "vitest run",
     "lint": "tsc --noEmit",
     "scan": "tsx bin/invariance-scan.ts",
-    "unlock": "tsx bin/invariance-unlock.ts"
+    "unlock": "tsx bin/invariance-unlock.ts",
+    "check": "tsx bin/invariance-check.ts",
+    "migrate-theme": "tsx bin/invariance-migrate-theme.ts"
   },
   "dependencies": {
     "culori": "^4",
