@@ -193,6 +193,26 @@ export function renderReport(
   lines.push('')
 
   // ---------------------------------------------------------------------------
+  // Role assignments — the v6 two-tier token seed (theme.roles). Slot tokens
+  // that reference a role were rewritten to var(--inv-<role>); the rest stay
+  // literals. Unfilled roles are supplied by the compiler on the first theme edit.
+  // ---------------------------------------------------------------------------
+  const roles = plan.initialTheme.theme?.roles ?? {}
+  const roleEntries = Object.entries(roles)
+  lines.push('## Role Assignments')
+  lines.push('')
+  if (roleEntries.length === 0) {
+    lines.push('_No roles assigned — the compiler will supply the full token set._')
+  } else {
+    lines.push('| Role | Value |')
+    lines.push('|------|-------|')
+    for (const [role, value] of roleEntries) {
+      lines.push(`| \`${role}\` | \`${value}\` |`)
+    }
+  }
+  lines.push('')
+
+  // ---------------------------------------------------------------------------
   // Warnings
   // ---------------------------------------------------------------------------
   lines.push('## Warnings')
@@ -237,6 +257,19 @@ export function renderReport(
       lines.push('')
       for (const slot of slotsWithoutVars) {
         lines.push(`- **\`${slot.name}\`** (\`${rel(slot.file)}\` → \`${slot.jsxPath}\`)`)
+      }
+      lines.push('')
+    }
+
+    // Role-clustering warnings (unfilled roles, dropped dark panels, missing
+    // fonts) are not collision/no-var warnings, so list them plainly. These
+    // explain which roles the compiler — not the scanner — will supply.
+    const clusteringWarnings = plan.warnings.filter((w) => w.startsWith('Role clustering:'))
+    if (clusteringWarnings.length > 0) {
+      lines.push('### Role clustering')
+      lines.push('')
+      for (const w of clusteringWarnings) {
+        lines.push(`- ${w.replace(/^Role clustering:\s*/, '')}`)
       }
       lines.push('')
     }

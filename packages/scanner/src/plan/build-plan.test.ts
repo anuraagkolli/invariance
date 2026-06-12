@@ -63,7 +63,10 @@ describe('buildMigrationPlan — naming + variables', () => {
       semantics: [semantic([{ name: 'sidebar', jsxPath: 'div>aside' }])],
     })
     expect(plan.slotCssVariables['sidebar']).toEqual(['--inv-sidebar-bg'])
-    expect(plan.initialTheme.theme?.globals?.['--inv-sidebar-bg']).toBe('#111111')
+    // v2: the single bg becomes surface-0 (only background observed); the slot
+    // token references the role and the literal lives in the role tier.
+    expect(plan.initialTheme.theme?.roles?.['--inv-surface-0']).toBe('#111111')
+    expect(plan.initialTheme.theme?.slots?.['--inv-sidebar-bg']).toBe('var(--inv-surface-0)')
   })
 
   it('normalizes hex to uppercase 6-digit form', () => {
@@ -73,7 +76,8 @@ describe('buildMigrationPlan — naming + variables', () => {
       extractions: [extraction([{ jsxPath: 'div>aside', values: [value('bg', '#abc')] }])],
       semantics: [semantic([{ name: 'sidebar', jsxPath: 'div>aside' }])],
     })
-    expect(plan.initialTheme.theme?.globals?.['--inv-sidebar-bg']).toBe('#AABBCC')
+    // Normalization is observable in the role tier (the clustered value).
+    expect(plan.initialTheme.theme?.roles?.['--inv-surface-0']).toBe('#AABBCC')
   })
 
   it('deduplicates repeated (role, value) pairs to one variable', () => {

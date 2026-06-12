@@ -97,6 +97,9 @@ importers:
 
   packages/scanner:
     dependencies:
+      culori:
+        specifier: ^4
+        version: 4.0.2
       invariance:
         specifier: workspace:*
         version: link:../core

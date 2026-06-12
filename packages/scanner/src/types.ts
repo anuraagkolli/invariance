@@ -1,4 +1,4 @@
-import type { InvarianceConfig, ThemeJson } from 'invariance'
+import type { InvarianceConfig, ThemeJsonV2 } from 'invariance'
 
 // ---------------------------------------------------------------------------
 // Shared types used across scanner modules
@@ -87,7 +87,9 @@ export interface SourceEdit {
 /** The final migration plan assembled from extraction + semantic analysis. */
 export interface MigrationPlan {
   config: InvarianceConfig
-  initialTheme: ThemeJson
+  /** theme.json v2: clustered `roles` + slot tokens (`var(--inv-<role>)` refs
+   *  where the observed value belongs to a role cluster, literals otherwise). */
+  initialTheme: ThemeJsonV2
   sourceEdits: SourceEdit[]
   /** slotName -> list of CSS variable names rewired into its source. */
   slotCssVariables: Record<string, string[]>

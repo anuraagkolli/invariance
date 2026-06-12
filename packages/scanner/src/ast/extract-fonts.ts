@@ -21,6 +21,31 @@ function getNamedAttribute(opening: OpeningLike, name: string): JsxAttribute | n
   return null
 }
 
+/** Read inline-style object literal property/string-value pairs (mirrors
+ *  extract-colors): only string-literal values are captured. */
+function readInlineStyleObject(
+  attr: JsxAttribute,
+): Array<{ property: string; value: string }> {
+  const out: Array<{ property: string; value: string }> = []
+  const init = attr.getInitializer()
+  if (!init || init.getKind() !== SyntaxKind.JsxExpression) return out
+  const objLit = init.getFirstChildByKind(SyntaxKind.ObjectLiteralExpression)
+  if (!objLit) return out
+  for (const prop of objLit.getProperties()) {
+    if (prop.getKind() !== SyntaxKind.PropertyAssignment) continue
+    const pa = prop.asKindOrThrow(SyntaxKind.PropertyAssignment)
+    const nameNode = pa.getNameNode()
+    let propName: string
+    if (nameNode.getKind() === SyntaxKind.Identifier) propName = nameNode.getText()
+    else if (nameNode.getKind() === SyntaxKind.StringLiteral) propName = nameNode.getText().slice(1, -1)
+    else continue
+    const init2 = pa.getInitializer()
+    if (!init2 || init2.getKind() !== SyntaxKind.StringLiteral) continue
+    out.push({ property: propName, value: init2.getText().slice(1, -1) })
+  }
+  return out
+}
+
 function getClassNameString(attr: JsxAttribute): string | null {
   const init = attr.getInitializer()
   if (!init) return null
@@ -52,6 +77,27 @@ function extractNextFontFamilies(sourceFile: SourceFile): string[] {
 export function extractFonts(sourceFile: SourceFile, tw: TailwindMaps): ObservedValue[] {
   const out: ObservedValue[] = []
   const filePath = sourceFile.getFilePath()
+
+  // 0. Inline style={{ fontFamily: '...' }}. Apps commonly set the base font
+  // this way (the fixture's <body> does); without this the font role would
+  // never be observed and the scanner could not seed --inv-font-body.
+  for (const opening of getOpeningElements(sourceFile)) {
+    const styleAttr = getNamedAttribute(opening, 'style')
+    if (!styleAttr) continue
+    const line = sourceFile.getLineAndColumnAtPos(opening.getStart()).line
+    for (const { property, value } of readInlineStyleObject(styleAttr)) {
+      if (property !== 'fontFamily') continue
+      const family = value.trim()
+      if (family.length === 0) continue
+      out.push({
+        role: 'font',
+        value: family,
+        source: { kind: 'inline-style', property: 'fontFamily' },
+        file: filePath,
+        line,
+      })
+    }
+  }
 
   // 1. Next.js font import families.
   const nextFonts = extractNextFontFamilies(sourceFile)

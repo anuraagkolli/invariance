@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import path from 'path'
+import { ThemeJsonV2Schema, verifyV2, deriveConstraints, prepareStoredTheme } from 'invariance'
 import { migrate } from './migrate'
 import type { ScannerAgent } from './migrate'
 import type { SemanticResult } from './types'
@@ -73,18 +74,65 @@ describe('migrate — end-to-end on fixture', () => {
     const required = result.plan.config.frontend?.structure?.required_sections ?? []
     expect(required).toEqual(expect.arrayContaining(['sidebar', 'main-content']))
 
-    // Initial theme stores fixture colors under sidebar's --inv-* keys. Values
-    // are aggregated across child/ancestor sections today (see scanner todo),
-    // so assert the sidebar's set of observed colors is a subset of the palette
-    // rather than pinning specific keys.
-    const globals = result.plan.initialTheme.theme?.globals ?? {}
-    const sidebarValues = (result.plan.slotCssVariables['sidebar'] ?? []).map(
-      (v) => globals[v as `--inv-${string}`],
-    )
-    expect(sidebarValues.length).toBeGreaterThan(0)
-    // At least one of sidebar's rewired vars holds an observed color (hex value).
-    const hasHex = sidebarValues.some((v) => typeof v === 'string' && /^#[0-9A-F]{6}$/.test(v))
-    expect(hasHex).toBe(true)
+    // v2 initial theme: at least one sidebar slot var resolves to a role ref.
+    // The slot var holding the white page bg references surface-0; the dark
+    // panel (#1A1A2E, coherence-dropped from surface roles — see clusterer)
+    // stays a literal.
+    const slots = result.plan.initialTheme.theme?.slots ?? {}
+    const sidebarVars = result.plan.slotCssVariables['sidebar'] ?? []
+    expect(sidebarVars.length).toBeGreaterThan(0)
+    const sidebarInits = result.plan.slotVariableInitialValues['sidebar'] ?? {}
+    const whiteVar = sidebarVars.find((v) => sidebarInits[v] === '#FFFFFF')
+    expect(whiteVar && slots[whiteVar]).toBe('var(--inv-surface-0)')
+    const darkVar = sidebarVars.find((v) => sidebarInits[v] === '#1A1A2E')
+    expect(darkVar && slots[darkVar]).toBe('#1A1A2E') // literal, not a surface ref
+  })
+
+  it('emits a v2 initial theme that round-trips through schema, verify, and the provider path', async () => {
+    const result = await migrate({
+      appRoot: FIXTURE_ROOT,
+      apiKey: '',
+      dryRun: true,
+      agent: stubAgent,
+    })
+    const theme = result.plan.initialTheme
+
+    // (a) parses as v2
+    const parsed = ThemeJsonV2Schema.safeParse(theme)
+    expect(parsed.success, JSON.stringify(parsed.success ? null : parsed.error.issues)).toBe(true)
+    expect(theme.version).toBe(2)
+
+    // (b) roles carry the clustered fixture values (the load-bearing ones)
+    const roles = theme.theme?.roles ?? {}
+    expect(roles['--inv-surface-0']).toBe('#FFFFFF') // white page background
+    expect(roles['--inv-surface-1']).toBe('#F3F4F6') // nearest-L neutral
+    expect(roles['--inv-text-primary']).toBe('#1A1A2E') // 17:1 body copy on white
+    expect(roles['--inv-accent']).toBe('#E94560') // the chromatic button
+    // accent-contrast solved to black (5.48) over white (3.83) on #e94560
+    expect(roles['--inv-accent-contrast']).toBe('#000000')
+    // the app's own font is seeded as body, never invented
+    expect(roles['--inv-font-body']).toBe('Inter, system-ui')
+    // surface-2 is intentionally NOT filled: #1A1A2E is the body ink, so reusing
+    // it as the darkest surface would break text-primary's cross-surface
+    // contrast. The compiler supplies surface-2 on the first theme edit.
+    expect(roles['--inv-surface-2']).toBeUndefined()
+
+    // (c) at least one slot is a var() reference into an assigned role
+    const slots = theme.theme?.slots ?? {}
+    const varRefs = Object.values(slots).filter((v) => /^var\(--inv-[a-z0-9-]+\)$/.test(v))
+    expect(varRefs.length).toBeGreaterThan(0)
+
+    // (d) verifyV2 passes (works because completeness/font checks are gated on
+    // styleSpec presence, which a scanner seed deliberately omits)
+    const verification = verifyV2(theme, result.plan.config, deriveConstraints(result.plan.config))
+    expect(
+      verification.passed,
+      JSON.stringify(verification.results.filter((r) => !r.passed)),
+    ).toBe(true)
+
+    // (e) the provider's verify-on-load path accepts the stored theme as-is
+    const prepared = prepareStoredTheme(theme, result.plan.config)
+    expect(prepared.ok, prepared.ok ? '' : JSON.stringify(prepared.failures)).toBe(true)
   })
 
   it('refuses to re-scan a source that already imports from invariance', async () => {

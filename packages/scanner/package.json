@@ -23,6 +23,7 @@
     "unlock": "tsx bin/invariance-unlock.ts"
   },
   "dependencies": {
+    "culori": "^4",
     "invariance": "workspace:*",
     "js-yaml": "^4.1.0",
     "ts-morph": "^22.0.0",

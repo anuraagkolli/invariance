@@ -1,7 +1,7 @@
 import yaml from 'js-yaml'
 
-import { ConfigValidationError, parseConfig } from 'invariance'
-import type { InvarianceConfig, ThemeGlobals, ThemeJson } from 'invariance'
+import { ConfigValidationError, parseConfig, ThemeJsonV2Schema } from 'invariance'
+import type { InvarianceConfig, ThemeJsonV2 } from 'invariance'
 
 import type {
   MigrationPlan,
@@ -12,6 +12,8 @@ import type {
 } from '../types'
 import { buildSlotPlan } from './slot-plan'
 import { buildTextPlan } from './text-plan'
+import { clusterColors } from '../roles/cluster'
+import type { ColorKind, ColorObservation } from '../roles/cluster'
 
 // ---------------------------------------------------------------------------
 // Naming helpers (inline fallback until ../emit/variable-naming lands)
@@ -135,8 +137,16 @@ export function buildMigrationPlan(params: BuildMigrationPlanParams): MigrationP
   const allSlotNames = new Set<string>()
   const slotCssVariables: Record<string, string[]> = {}
   const slotVariableInitialValues: Record<string, Record<string, string>> = {}
-  const themeGlobals: Record<string, string> = {}
   const sourceEdits: SourceEdit[] = []
+
+  // Role clustering inputs/side-data:
+  //  - colorObservations: every observed color with its CSS property kind, the
+  //    raw material the deterministic clusterer turns into role tokens.
+  //  - slotVarMeta: each emitted slot variable's (kind, normalized hex), so we
+  //    can rewrite its initial value to a var(--inv-<role>) reference when the
+  //    value belongs to a role cluster.
+  const colorObservations: ColorObservation[] = []
+  const slotVarMeta = new Map<string, { kind: ColorKind; hex: string }>()
 
   // Track first/last from the first page's sectionOrder for section_order hints.
   let firstSlot: string | undefined
@@ -205,8 +215,18 @@ export function buildMigrationPlan(params: BuildMigrationPlanParams): MigrationP
 
           slotCssVariables[slotName]!.push(varName)
           slotVariableInitialValues[slotName]![varName] = canonical
-          themeGlobals[varName] = canonical
+
+          // Record the (kind, hex) for color variables so role-clustering can
+          // later rewrite this slot var to a var(--inv-<role>) reference.
+          const kind = colorKind(value.role)
+          if (kind) slotVarMeta.set(varName, { kind, hex: canonical })
         }
+
+        // Feed every color observation (with its kind) into the clusterer. We
+        // count per-occurrence (not per unique var) so the most-used value wins
+        // representative selection — e.g. white observed on two backgrounds.
+        const obsKind = colorKind(value.role)
+        if (obsKind) colorObservations.push({ hex: canonical, kind: obsKind })
 
         sourceEdits.push({
           file: value.file,
@@ -266,6 +286,14 @@ export function buildMigrationPlan(params: BuildMigrationPlanParams): MigrationP
             : { mode: 'any' },
         ...(fonts.length > 0 ? { fonts: { allowed: fonts } } : {}),
         ...(spacings.length > 0 ? { spacing: { scale: spacings } } : {}),
+        // v6 relational constraints: these (not exact-hex allowlists) are the
+        // default. They let an unlocked F1 immediately produce high-quality,
+        // AA-compliant themes — the compiler reads them as floors/ceilings.
+        constraints: {
+          contrast: '>= 4.5',
+          accent_chroma_max: 0.25,
+          font_registry: 'default',
+        },
       },
       structure: {
         required_sections: requiredSections,
@@ -299,13 +327,66 @@ export function buildMigrationPlan(params: BuildMigrationPlanParams): MigrationP
     config = relaxConfig(config, warnings)
   }
 
-  // ---- Build initial theme.json -------------------------------------------
-  const globals: ThemeGlobals = { ...themeGlobals }
-  const initialTheme: ThemeJson = {
-    version: 1,
-    base_app_version: 'v1',
-    theme: { globals },
+  // ---- Cluster colors into roles ------------------------------------------
+  const assignment = clusterColors(colorObservations)
+  for (const w of assignment.warnings) warnings.push(`Role clustering: ${w}`)
+
+  const roles: Record<string, string> = { ...assignment.roles }
+
+  // Fonts: seed --inv-font-body from the primary observed family, and
+  // --inv-font-display only when a distinct heading family is also observed.
+  // We NEVER invent a font we didn't see — an app with no font observations
+  // leaves both unfilled (the compiler supplies them on the first theme edit).
+  // `fonts` is the deduped, sorted set of observed families (computed above);
+  // the aggregation does not track per-family counts, so we take the first as
+  // body and the next distinct family as display. (Single-font apps — the
+  // common case and the fixture — fill only body.)
+  const families = fonts
+  if (families.length > 0) {
+    const body = families[0]!
+    roles['--inv-font-body'] = body
+    const display = families.find((f) => f !== body)
+    if (display) roles['--inv-font-display'] = display
+  } else {
+    warnings.push('Role clustering: no font family observed — font roles unfilled (compiler will supply them)')
   }
+
+  // ---- Build slot tokens: var(--inv-<role>) refs where the value clustered --
+  // For every slot variable holding a color, if its (kind, hex) belongs to a
+  // role cluster, the slot token becomes a var() reference into the role tier;
+  // otherwise it keeps its literal. Fonts/spacing slot vars stay literals.
+  const slots: Record<string, string> = {}
+  for (const [slotName, vars] of Object.entries(slotCssVariables)) {
+    const initials = slotVariableInitialValues[slotName] ?? {}
+    for (const varName of vars) {
+      const literal = initials[varName]
+      if (literal === undefined) continue
+      const meta = slotVarMeta.get(varName)
+      const role = meta ? assignment.varToRole.get(`${meta.kind}:${meta.hex}`) : undefined
+      slots[varName] = role ? `var(${role})` : literal
+    }
+  }
+
+  // ---- Build initial theme.json v2 ----------------------------------------
+  // Set roles/slots only when non-empty; exactOptionalPropertyTypes forbids
+  // assigning `undefined` to these optional fields explicitly.
+  const themeSection: ThemeJsonV2['theme'] = {}
+  if (Object.keys(roles).length > 0) themeSection!.roles = roles
+  if (Object.keys(slots).length > 0) themeSection!.slots = slots
+  const initialThemeCandidate: ThemeJsonV2 = {
+    version: 2,
+    base_app_version: 'v1',
+    theme: themeSection,
+  }
+  // Validate the emitted theme against the canonical schema — a malformed
+  // initial theme would be rejected by the provider's verify-on-load anyway, so
+  // fail loudly here at scan time instead of shipping a broken artifact.
+  const parsed = ThemeJsonV2Schema.safeParse(initialThemeCandidate)
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
+    throw new Error(`Scanner: emitted initial theme failed ThemeJsonV2Schema: ${issues}`)
+  }
+  const initialTheme: ThemeJsonV2 = initialThemeCandidate
 
   return {
     config,
@@ -315,6 +396,13 @@ export function buildMigrationPlan(params: BuildMigrationPlanParams): MigrationP
     slotVariableInitialValues,
     warnings,
   }
+}
+
+// Narrow an observed CSS role to the color kinds the clusterer understands.
+// Non-color roles (font, pad, radius, margin) return undefined.
+function colorKind(role: string): ColorKind | undefined {
+  if (role === 'bg' || role === 'text' || role === 'border') return role
+  return undefined
 }
 
 // ---------------------------------------------------------------------------
