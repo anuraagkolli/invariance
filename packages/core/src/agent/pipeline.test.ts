@@ -140,7 +140,13 @@ describe('runPipeline SLOT_F1 + Builder routes', () => {
       { kind: 'F3', slotName: 'banner', level: 3, description: 'hide the banner', requirements: [] },
       { mutation: { layout: { pages: { '/': { hidden: ['banner'] } } } }, explanation: 'Hid the banner' },
     ])
-    const ctx = context(fetchFn)
+    // The gatekeeper's deterministic gate requires a registered slot at a
+    // sufficient level — F3 implies level 3, and the page must allow it too.
+    const bannerRegistry: SlotRegistration[] = [{
+      name: 'banner', level: 3, pageName: '/', preserve: false,
+      alternativesCount: 0, type: 'slot', cssVariables: [],
+    }]
+    const ctx = context(fetchFn, bannerRegistry)
     const result = await runPipeline('hide the banner', [], ctx)
     expect(result.type).toBe('success')
 
