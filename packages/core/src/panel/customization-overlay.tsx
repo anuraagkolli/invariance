@@ -366,12 +366,12 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
     setIsThinking(false)
   }
 
-  // Seeded prompt chip: fill the input (so the viewer sees the text land) and
-  // submit it through the SAME pipeline path as a typed prompt. Pass the prompt
-  // as an override so the submit doesn't race the input's setState.
+  // Seeded prompt chip: submit through the SAME pipeline path as a typed prompt.
+  // The prompt is passed as an override so the submit doesn't race the input's
+  // setState; the chip text shows up as the history card's userMessage (the input
+  // box itself stays empty — handleSubmit clears it).
   function handlePromptChip(prompt: string) {
     if (isThinking) return
-    setInput(prompt)
     void handleSubmit(undefined, prompt)
   }
 
