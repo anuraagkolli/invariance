@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { StyleSpecSchema } from './style-spec'
+import { CssTokenValueSchema } from './css-token-value'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -92,7 +93,9 @@ export const InvarianceConfigSchema = z.object({
 
 const ThemeColorsSchema = z.record(z.string(), z.string().regex(/^#[0-9a-fA-F]{6}$/))
 
-const ThemeFontsSchema = z.record(z.string(), z.string())
+// Font values become --inv-font-* token values after upgrade, so they must
+// satisfy the same safe-value allowlist as any other token value.
+const ThemeFontsSchema = z.record(z.string(), CssTokenValueSchema)
 
 const ThemeSpacingSchema = z.object({
   unit: z.number().int().positive(),
@@ -111,7 +114,9 @@ const ThemeGlobalsSchema = z
     spacing: ThemeSpacingSchema.optional(),
     radii: ThemeRadiiSchema.optional(),
   })
-  .catchall(z.string())
+  // Arbitrary --inv-* values (scanner migration). Constrain to the safe
+  // allowlist: these upgrade into v2 token values and reach the SSR/apply sinks.
+  .catchall(CssTokenValueSchema)
   .superRefine((val, ctx) => {
     for (const key of Object.keys(val)) {
       if (key === 'colors' || key === 'fonts' || key === 'spacing' || key === 'radii') continue
@@ -125,7 +130,9 @@ const ThemeGlobalsSchema = z
     }
   })
 
-const SlotStylesSchema = z.record(z.string(), z.string())
+// v1 slot styles: CSS property -> value. Values reach the same sinks as token
+// values once upgraded, so they get the same safe-value allowlist.
+const SlotStylesSchema = z.record(z.string(), CssTokenValueSchema)
 const ThemeSlotsSchema = z.record(z.string(), SlotStylesSchema)
 
 const ThemeSectionSchema = z.object({
@@ -171,9 +178,13 @@ export const ThemeJsonSchema = z.object({
 
 // --- theme.json v2 -----------------------------------------------------------
 
+// Keys are constrained to --inv-* names; VALUES are constrained to the safe
+// CSS-token-value allowlist. This is the primary gate against cookie/stored-theme
+// CSS injection: an unconstrained value (e.g. `red;background-image:url(//evil)`)
+// would inject a sibling declaration onto :root when SSR-inlined or applied.
 const CssVarRecordSchema = z.record(
   z.string().regex(CSS_VAR_KEY, 'keys must be --inv-* CSS variables'),
-  z.string().min(1),
+  CssTokenValueSchema,
 )
 
 const ThemeSectionV2Schema = z.object({

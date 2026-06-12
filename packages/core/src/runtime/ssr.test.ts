@@ -4,6 +4,7 @@ import type { AnyThemeJson, InvarianceConfig, ThemeJsonV2 } from '../config/type
 import { compileTheme } from '../compiler/compile'
 import { THEME_PACKS } from '../registries/theme-packs'
 import { renderThemeCss, themeFromCookieHeader } from './ssr'
+import { themeToCssEntries } from './apply'
 
 const config: InvarianceConfig = { app: 'nebula-demo' }
 
@@ -20,29 +21,22 @@ function compiledPackTheme(packId: string): ThemeJsonV2 {
   }
 }
 
-// Mirror of the client v2 apply path (apply.ts applyThemeJsonV2): roles then
-// slots, verbatim keys, in insertion order. This is the contract SSR must match.
-function clientApplyOrder(theme: ThemeJsonV2): Array<[string, string]> {
-  const pairs: Array<[string, string]> = []
-  for (const [k, v] of Object.entries(theme.theme?.roles ?? {})) pairs.push([k, v])
-  for (const [k, v] of Object.entries(theme.theme?.slots ?? {})) pairs.push([k, v])
-  return pairs
-}
-
 describe('renderThemeCss', () => {
   it('returns empty string for null theme', () => {
     expect(renderThemeCss(null, config)).toBe('')
   })
 
-  it('emits a :root block whose tokens match the client apply path exactly', () => {
+  it('emits a :root block built from the SHARED themeToCssEntries helper', () => {
     const theme = compiledPackTheme('retro-arcade')
     const css = renderThemeCss(theme, config)
 
     expect(css.startsWith(':root{')).toBe(true)
     expect(css.endsWith('}')).toBe(true)
 
-    // Every role/slot pair the client would write must appear, in the same order.
-    const expected = clientApplyOrder(theme)
+    // Parity is structural: the SSR string must be the SAME ordered entry list
+    // the client apply path feeds setProperty (themeToCssEntries), serialised.
+    // This pins the contract to one function rather than re-stating the order.
+    const expected = themeToCssEntries(theme)
       .map(([k, v]) => `${k}:${v};`)
       .join('')
     expect(css).toBe(`:root{${expected}}`)
@@ -96,6 +90,35 @@ describe('renderThemeCss', () => {
     expect(css).not.toContain('}body')
     expect(css).not.toContain('</style>')
     expect(css).not.toContain('script')
+  })
+
+  it('drops entries whose value injects a sibling declaration or fetches a resource', () => {
+    // Defense in depth: even if a bad value reached renderThemeCss (bypassing the
+    // schema allowlist), the SSR sink filter must independently refuse any value
+    // carrying ';' (sibling declaration — the cookie-injection beacon), '\\' (CSS
+    // escape), url()/expression() (resource fetch / script), or control chars.
+    const theme: ThemeJsonV2 = {
+      version: 2,
+      base_app_version: 'v1',
+      theme: {
+        slots: {
+          '--inv-accent': '#00ff88',
+          '--inv-beacon': 'red;background-image:url(//evil/beacon)',
+          '--inv-url': 'url(//evil/x.png)',
+          '--inv-expr': 'expression(alert(1))',
+          '--inv-escape': '\\3c script',
+          '--inv-newline': 'red\nbackground:url(//e)',
+        },
+      },
+    }
+    const css = renderThemeCss(theme, config)
+    // Only the clean value survives.
+    expect(css).toBe(':root{--inv-accent:#00ff88;}')
+    expect(css).not.toContain(';background')
+    expect(css).not.toContain('url(')
+    expect(css).not.toContain('expression(')
+    expect(css).not.toContain('\\')
+    expect(css).not.toContain('beacon')
   })
 
   it('drops entries whose key is not a valid --inv-* CSS variable', () => {
@@ -163,6 +186,20 @@ describe('themeFromCookieHeader', () => {
   it('returns null when the JSON fails schema validation', () => {
     const bad = encodeURIComponent(JSON.stringify({ version: 2, theme: { roles: { 'bad key': 1 } } }))
     const header = `invariance-theme-${config.app}=${bad}`
+    expect(themeFromCookieHeader(header, config)).toBeNull()
+  })
+
+  it('rejects a tampered cookie that injects a CSS beacon (the fixed vulnerability)', () => {
+    // The exact attack the schema allowlist closes: a stored/tampered theme whose
+    // slot value carries ';' to inject a sibling :root declaration that fetches a
+    // network beacon on first paint. The value-side allowlist makes the whole doc
+    // fail schema validation at the cookie boundary, so it never reaches SSR.
+    const evil = {
+      version: 2,
+      base_app_version: 'v1',
+      theme: { slots: { '--inv-x': 'red;background-image:url(//evil/beacon)' } },
+    }
+    const header = `invariance-theme-${config.app}=${encodeURIComponent(JSON.stringify(evil))}`
     expect(themeFromCookieHeader(header, config)).toBeNull()
   })
 

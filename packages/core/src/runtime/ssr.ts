@@ -2,6 +2,7 @@ import type { AnyThemeJson, InvarianceConfig, ThemeJson, ThemeJsonV2 } from '../
 import { ThemeJsonSchema, ThemeJsonV2Schema } from '../config/schema'
 import { upgradeThemeJson } from '../config/upgrade'
 import { prepareStoredTheme } from './load-theme'
+import { themeToCssEntries } from './apply'
 
 // Server-side theme inlining: render the same :root token block the client
 // runtime writes, so first paint is themed. Inlining only happens for themes
@@ -14,24 +15,31 @@ import { prepareStoredTheme } from './load-theme'
 // attempt and is dropped. (Mirrors CSS_VAR_KEY in theme-schemas.ts.)
 const CSS_VAR_KEY = /^--inv-[a-z0-9-]+$/
 
-// A style tag's contents must never be able to close the tag (</style>) or open
-// a new rule/block. We forbid '<' (can't start </style> or any tag) and '}'
-// (can't terminate the :root rule and start an attacker-controlled selector).
-// var() references, hex, rgb(), and font stacks contain neither, so legitimate
-// token values always pass.
+// Defense in depth. The schema's CSS-token-value allowlist is the PRIMARY gate
+// (see @invariance/schema css-token-value.ts) — every value reaching here has
+// already passed it. But this string is about to be concatenated into a
+// dangerouslySetInnerHTML <style> sink, so it must INDEPENDENTLY refuse anything
+// that could break out of the `:root{ ... }` context, regardless of upstream.
+// This is a denylist, deliberately distinct from the upstream allowlist so a
+// single bug can't disable both gates at once:
+//   '<'           can start </style> or any tag
+//   '}' / '{'     can terminate :root and open an attacker-controlled selector
+//   ';'           injects a SIBLING declaration onto :root (the cookie-injection
+//                 vector — a `url()` beacon firing on first paint)
+//   '\\'          CSS escape sequence (e.g. \3c → '<')
+//   url( / expression(  fetch a resource / evaluate legacy script
+//   control chars (incl. newline/null) can confuse the tokenizer
+// A space and '#' are legitimate (font stacks, shadows, hex) so they are NOT
+// here; control chars are checked by code point below to keep the regex ASCII.
+const SSR_DENY = /[<>{};\\]|url\s*\(|expression\s*\(/i
 function isSafeValue(value: string): boolean {
-  return !value.includes('<') && !value.includes('}')
-}
-
-// Append every safe role/slot entry in the SAME order the client apply path
-// writes them (roles first, then slots — see applyThemeJsonV2 in apply.ts) so
-// the SSR-inlined block and the client-applied block are byte-identical.
-function appendEntries(out: string[], record: Record<string, string> | undefined): void {
-  for (const [key, value] of Object.entries(record ?? {})) {
-    if (!CSS_VAR_KEY.test(key)) continue
-    if (!isSafeValue(value)) continue
-    out.push(`${key}:${value};`)
+  if (SSR_DENY.test(value)) return false
+  // Reject any C0 control character (newline, tab, null, etc.) by code point —
+  // these can confuse the CSS tokenizer or smuggle an escaped delimiter.
+  for (let i = 0; i < value.length; i++) {
+    if (value.charCodeAt(i) < 0x20) return false
   }
+  return true
 }
 
 export function renderThemeCss(theme: AnyThemeJson | null, config: InvarianceConfig): string {
@@ -47,9 +55,17 @@ export function renderThemeCss(theme: AnyThemeJson | null, config: InvarianceCon
   // here to get the partitioned slots regardless of input version.
   const v2: ThemeJsonV2 = upgradeThemeJson(prepared.theme).theme
 
+  // Build the inlined block from the SAME ordered entry list the client apply
+  // path consumes (themeToCssEntries) so first paint and hydration are
+  // byte-identical by construction. Key/value filters here are defence in depth:
+  // the schema allowlist already gated every value; we re-reject any key that
+  // isn't a valid --inv-* name and any value that could break the <style> sink.
   const entries: string[] = []
-  appendEntries(entries, v2.theme?.roles)
-  appendEntries(entries, v2.theme?.slots)
+  for (const [key, value] of themeToCssEntries(v2)) {
+    if (!CSS_VAR_KEY.test(key)) continue
+    if (!isSafeValue(value)) continue
+    entries.push(`${key}:${value};`)
+  }
   if (entries.length === 0) return ''
 
   return `:root{${entries.join('')}}`

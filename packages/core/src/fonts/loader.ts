@@ -47,7 +47,9 @@ export function googleFontsUrlFor(pairingId: string): string | null {
 
 // Inject the pairing's <link> into <head>, keyed by a stable id so repeated
 // calls (re-apply, React strict-mode double-invoke) are idempotent. No-ops
-// server-side and for pairings with no hostable families.
+// server-side and for pairings with no hostable families. On a theme switch the
+// previous pairing's <link> is removed: without this, every switch accumulated
+// another stylesheet (and the browser kept fetching stale font faces forever).
 export function ensureFontsLoaded(pairingId: string): void {
   if (typeof document === 'undefined') return
 
@@ -55,6 +57,17 @@ export function ensureFontsLoaded(pairingId: string): void {
   if (!href) return
 
   const linkId = `inv-font-${pairingId}`
+
+  // Remove any previously-injected pairing link that isn't the one we want now.
+  // Idempotent for the current pairing: its own link (if present) is skipped here
+  // and short-circuits below, so repeat calls neither remove nor duplicate it.
+  // Array.from over the NodeList: the core tsconfig lib is DOM (not dom.iterable),
+  // so the live list isn't directly iterable; the copy also avoids mutating a
+  // live collection while removing from it.
+  for (const stale of Array.from(document.querySelectorAll('link[id^="inv-font-"]'))) {
+    if (stale.id !== linkId) stale.remove()
+  }
+
   if (document.getElementById(linkId)) return // already injected
 
   const link = document.createElement('link')
