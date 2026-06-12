@@ -8,8 +8,11 @@ import { Header } from './header'
 import { Footer } from './footer'
 
 interface ShellProps {
-  // The m.page name for this route ('home', 'series', …). Drives the page
-  // wrapper so per-page text/layout overrides resolve against the right page.
+  // Semantic page marker written as a `data-inv-page` DOM attribute by m.page.
+  // Per-page override resolution is keyed by URL pathname (via useCurrentPage()
+  // which reads window.location.pathname), NOT by this name — pageName is a
+  // human-readable marker that should parallel the route path so the two stay
+  // in sync (home → '/', series → '/series', etc.).
   pageName: string
   children: ReactNode
 }

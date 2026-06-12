@@ -10,7 +10,7 @@ export function Header() {
 
   return (
     <header
-      className="sticky top-0 z-40 flex items-center gap-4 border-b bg-[var(--inv-header-bg)]/85 px-5 py-3 text-[var(--inv-header-text)] backdrop-blur-md sm:px-8"
+      className="inv-header-glass sticky top-0 z-40 flex items-center gap-4 border-b px-5 py-3 text-[var(--inv-header-text)] backdrop-blur-md sm:px-8"
       style={{ borderColor: 'var(--inv-border)' }}
     >
       <span className="font-display text-lg font-bold uppercase tracking-[0.3em] text-[var(--inv-header-text)] lg:hidden">

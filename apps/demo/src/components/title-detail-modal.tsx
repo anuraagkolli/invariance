@@ -41,27 +41,66 @@ export function TitleDetailModal() {
     return () => window.removeEventListener('keydown', onKey)
   }, [selected, close])
 
-  // Lock body scroll while the modal owns the viewport, and move focus into the
-  // dialog (focus-trap-lite: focus the close button so Esc/Tab start inside).
+  // Lock body scroll while the modal owns the viewport, move focus into the
+  // dialog, and restore focus to the opener card on close.
+  // We also mark the app root sibling inert so Tab can never escape the dialog
+  // without relying on the keydown trap alone — belt-and-suspenders approach.
   useEffect(() => {
     if (!selected) return
+
+    // Capture the element that triggered the modal so we can return focus to it
+    // when the dialog closes; otherwise focus lands on body and the keyboard user
+    // loses their place in the card grid.
+    const opener = document.activeElement as HTMLElement | null
+
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+
+    // Mark the page background inert so assistive technology and Tab navigation
+    // cannot reach content outside the dialog while it is open.
+    const appRoot = document.getElementById('__next') ?? document.getElementById('app-root')
+    if (appRoot) {
+      appRoot.setAttribute('aria-hidden', 'true')
+      // `inert` is supported in all modern browsers (Chromium 102+, FF 112+, Safari 15.5+)
+      ;(appRoot as HTMLElement & { inert?: boolean }).inert = true
+    }
+
     closeRef.current?.focus()
+
     return () => {
       document.body.style.overflow = prevOverflow
+
+      // Restore background to interactive before returning focus
+      if (appRoot) {
+        appRoot.removeAttribute('aria-hidden')
+        ;(appRoot as HTMLElement & { inert?: boolean }).inert = false
+      }
+
+      // Return focus to the card that opened the modal; fall back to body
+      // gracefully if the element has been unmounted.
+      opener?.focus()
     }
   }, [selected])
 
-  // Keep Tab within the panel: on the trailing edge, wrap focus back to the
-  // first focusable. Lightweight — good enough for a demo dialog.
+  // Keep Tab within the panel: wrap at both edges (Shift+Tab from first →
+  // last; Tab from last → first). We filter to visible, non-disabled elements
+  // so hidden/disabled nodes are never included in the cycle. The inert-on-
+  // background approach above is the primary trap; this is a secondary guard
+  // for browsers that have partial inert support.
   const onKeyDownTrap = useCallback((e: React.KeyboardEvent) => {
     if (e.key !== 'Tab') return
     const panel = panelRef.current
     if (!panel) return
-    const focusable = panel.querySelectorAll<HTMLElement>(
-      'button, [href], input, [tabindex]:not([tabindex="-1"])',
+    const candidates = panel.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     )
+    // Filter to only elements that are visible and enabled in the rendered tree
+    const focusable = Array.from(candidates).filter((el) => {
+      if ((el as HTMLButtonElement | HTMLInputElement).disabled) return false
+      // offsetParent is null for elements with display:none or visibility:hidden
+      // ancestors; use that as a cheap visibility guard without getComputedStyle.
+      return el.offsetParent !== null || el.tagName === 'BODY'
+    })
     if (focusable.length === 0) return
     const first = focusable[0]!
     const last = focusable[focusable.length - 1]!

@@ -80,6 +80,15 @@ body {
   background: var(--inv-border);
 }
 
+/* Translucent header glass: mix the themed header-bg with transparent at 85%
+   opacity. Using color-mix() because Tailwind's /alpha modifier emits
+   `rgb(<hex-var> / .85)` which is invalid for a hex-valued custom property —
+   the browser drops the entire background declaration and the header goes flat.
+   color-mix() is supported in Chromium 111+, Firefox 113+, Safari 16.2+. */
+.inv-header-glass {
+  background-color: color-mix(in srgb, var(--inv-header-bg) 85%, transparent);
+}
+
 /* Horizontal scroll-snap strip for carousel rows */
 .inv-carousel {
   scrollbar-width: none;
