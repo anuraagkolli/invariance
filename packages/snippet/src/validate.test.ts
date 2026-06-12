@@ -38,6 +38,17 @@ describe('isValidV2Theme', () => {
       value: { version: 2, base_app_version: 'x', theme: { roles: { '--inv-accent': 'red;background-image:url(//evil)' } } },
     },
     {
+      // A </style> breakout followed by a script tag is the canonical style-block
+      // escape. The forbidden-chars check (< and >) in isSafeCssTokenValue must
+      // catch it; this case locks in that guarantee.
+      name: '</style> breakout payload in slot value',
+      value: {
+        version: 2,
+        base_app_version: 'x',
+        theme: { slots: { '--inv-sidebar-bg': '</style><script>alert(1)</script>' } },
+      },
+    },
+    {
       name: 'non --inv-* role key',
       value: { version: 2, base_app_version: 'x', theme: { roles: { color: '#000000' } } },
     },

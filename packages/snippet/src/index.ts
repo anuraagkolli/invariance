@@ -15,7 +15,8 @@ import type {
 } from 'invariance/headless'
 import { miniScan } from './mini-scan'
 import type { ScanResult } from './mini-scan'
-import { applyVirtualTokens } from './virtual-tokens'
+import { applyVirtualTokens, undoOriginals } from './virtual-tokens'
+import type { OriginalStyles } from './virtual-tokens'
 import { startObserver } from './observe'
 import { saveSnippetTheme, loadSnippetTheme, snippetStorageKey } from './persist'
 import { buildPanel } from './panel'
@@ -89,9 +90,13 @@ export function mountTrial(opts: MountTrialOptions = {}): TrialHandle {
   let scannedAssignment: RoleAssignment = { roles: {}, varToRole: new Map(), warnings: [] }
   let currentRoles: Record<string, string> = {}
   let currentSpec: StyleSpec | undefined
-  // One undo fn per applyVirtualTokens call; run in reverse to restore every touched
-  // node's prior inline style exactly. Reset/destroy drains this.
-  const undos: Array<() => void> = []
+  // A single shared map from element -> CSS property -> original inline value.
+  // Only the FIRST time the snippet touches a given (element, property) pair is the
+  // original recorded, so re-bind / observer fires never overwrite the true
+  // pre-snippet value with an intermediate var() reference. undoOriginals() iterates
+  // the whole map and restores every element, then clears it — O(1) retained state
+  // regardless of how many observer fires occurred.
+  const originals: OriginalStyles = new Map()
 
   const writeRootBlock = (): void => {
     const decls = Object.entries(currentRoles)
@@ -100,22 +105,19 @@ export function mountTrial(opts: MountTrialOptions = {}): TrialHandle {
     styleEl!.textContent = `:root{${decls}}`
   }
 
-  const drainUndos = (): void => {
-    while (undos.length) undos.pop()!()
-  }
-
   // Bind matchable nodes to the current roles. Idempotent: an already-bound node
   // reads a compiled hex through its var() and no longer matches a scanned key, so
   // re-running only catches NEW nodes (SPA re-render) — no thrash, no re-scan.
+  // Writes into the shared `originals` map; no new closure is pushed per call.
   const bind = (): void => {
-    undos.push(applyVirtualTokens(document, scannedAssignment, scan))
+    applyVirtualTokens(document, scannedAssignment, scan, originals)
   }
 
   // Full re-scan: restore the page, re-read computed colours, re-cluster, re-bind.
   // The scanned role hexes seed currentRoles so the page looks identical to before
   // the scan (no theme applied yet) — a pack/prompt then swaps the values.
   const rescan = (): void => {
-    drainUndos()
+    undoOriginals(originals)
     scan = miniScan(document)
     scannedAssignment = clusterColors(scan.observations)
     currentRoles = { ...scannedAssignment.roles }
@@ -263,7 +265,7 @@ export function mountTrial(opts: MountTrialOptions = {}): TrialHandle {
     rescan,
     destroy: () => {
       stopObserver()
-      drainUndos()
+      undoOriginals(originals)
       styleEl?.remove()
       panel.destroy()
       delete (globalThis as Record<string, unknown>).__invTrialExport
@@ -278,7 +280,8 @@ function errMsg(err: unknown): string {
 // Re-export each pure module's public surface so it stays unit-addressable.
 export { miniScan } from './mini-scan'
 export type { ScanResult } from './mini-scan'
-export { buildRootVars, applyVirtualTokens } from './virtual-tokens'
+export { buildRootVars, applyVirtualTokens, undoOriginals } from './virtual-tokens'
+export type { OriginalStyles } from './virtual-tokens'
 export { startObserver } from './observe'
 export type { ObserveOptions } from './observe'
 export { saveSnippetTheme, loadSnippetTheme, snippetStorageKey } from './persist'

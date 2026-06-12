@@ -6,6 +6,10 @@ import {
   THEME_PACKS,
 } from 'invariance/headless'
 import { mountTrial } from './index'
+import { applyVirtualTokens, undoOriginals } from './virtual-tokens'
+import type { OriginalStyles } from './virtual-tokens'
+import { clusterColors } from 'invariance/headless'
+import { miniScan } from './mini-scan'
 
 describe('mountTrial', () => {
   beforeEach(() => {
@@ -107,5 +111,75 @@ describe('mountTrial', () => {
 
     handle.destroy()
     expect((globalThis as Record<string, unknown>).__invTrialExport).toBeUndefined()
+  })
+})
+
+describe('undo state bounds (Fix 1: no growth per observer fire)', () => {
+  beforeEach(() => {
+    document.head.innerHTML = ''
+    document.body.innerHTML = ''
+    document.body.removeAttribute('style')
+  })
+
+  it('binding the same DOM twice does not grow the tracked originals map', () => {
+    // Set up a page with a single button that has a recognisable accent colour.
+    document.body.innerHTML =
+      '<button id="btn" style="background-color: rgb(233, 69, 96)">go</button>'
+    const scan = miniScan(document)
+    const assignment = clusterColors(scan.observations)
+
+    const originals: OriginalStyles = new Map()
+
+    // First bind: should record the original for the button element.
+    applyVirtualTokens(document, assignment, scan, originals)
+    const sizeAfterFirstBind = originals.size
+
+    // Second bind (simulating an observer fire over the same nodes): the button is
+    // now bound to var(--inv-accent) and its computed colour no longer matches a
+    // scanned key, so it is skipped entirely. The map must not grow.
+    applyVirtualTokens(document, assignment, scan, originals)
+    expect(originals.size).toBe(sizeAfterFirstBind)
+
+    // A third fire is also a no-op for the same nodes.
+    applyVirtualTokens(document, assignment, scan, originals)
+    expect(originals.size).toBe(sizeAfterFirstBind)
+  })
+
+  it('tracked original is the true pre-snippet value, not an intermediate var()', () => {
+    document.body.innerHTML =
+      '<button id="btn" style="background-color: rgb(233, 69, 96)">go</button>'
+    const btn = document.getElementById('btn')!
+    const trueOriginal = btn.getAttribute('style')
+
+    const scan = miniScan(document)
+    const assignment = clusterColors(scan.observations)
+    const originals: OriginalStyles = new Map()
+
+    // Two bind calls — the second fires when the button already reads var(--inv-accent).
+    applyVirtualTokens(document, assignment, scan, originals)
+    applyVirtualTokens(document, assignment, scan, originals)
+
+    // Restore should bring back exactly what the page had before the first bind.
+    undoOriginals(originals)
+    expect(btn.getAttribute('style')).toBe(trueOriginal)
+  })
+
+  it('destroy after multiple reapply calls restores the original inline style exactly', () => {
+    document.body.innerHTML =
+      '<button id="btn" style="background-color: rgb(233, 69, 96)">go</button>'
+    const btn = document.getElementById('btn')!
+    const trueOriginal = btn.getAttribute('style')
+
+    const handle = mountTrial()
+    // Simulate two more observer-driven re-binds on top of the initial scan bind.
+    handle.reapply()
+    handle.reapply()
+
+    // The button should still be var-bound.
+    expect(btn.style.getPropertyValue('background-color')).toBe('var(--inv-accent)')
+
+    // destroy must restore the original — regardless of how many reapply calls fired.
+    handle.destroy()
+    expect(btn.getAttribute('style')).toBe(trueOriginal)
   })
 })
