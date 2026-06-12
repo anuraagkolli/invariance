@@ -141,8 +141,10 @@ Unchanged from v5: strict TS, named exports, no `any`, async/await only, single 
 7. ✅ Scanner: deterministic role clustering + v2 initial-theme emission with var() slot refs; verifier completeness/font checks gated on styleSpec presence so partial scanner seeds pass verify-on-load. *Exit met: fixture scan round-trips through ThemeJsonV2Schema + verifyV2.*
 8. ✅ SSR theme inlining (cookie-mirror channel) + runtime font loader + hydration-safe page resolution; token values constrained to a safe CSS grammar (closes a cookie CSS-injection vector). *Exit met: themed first paint proven via curl with no flash.*
 9. ✅ `invariance-check` (CI guard) + `invariance-migrate-theme` CLIs. *Exit met: removing a wrapped slot makes check exit non-zero naming the slot.*
-10. Trial Mode snippet, built as importable engine modules (mini-scan/virtual-tokens/observe are libraries, not a monolithic IIFE). *Exit: snippet themes an unmodified demo copy; exported theme.json round-trips post-scan.*
-11. Demo polish: theme packs in panel, full gauntlet sign-off, Playwright visual QA harness.
+10. ✅ Trial Mode snippet (`@invariance/snippet`, ~75KB gz, no React via `invariance/headless`): mini-scan/virtual-tokens/observe/persist/export + vanilla-DOM panel; scan-binds elements to roles once, then themes by `:root` role-value swap. *Exit met: snippet themes an unmodified static demo copy (Playwright); exported theme round-trips through `prepareStoredTheme`.*
+11. ✅ Demo polish: one-tap theme packs in the SDK panel (`applyPack`, keyless, self-defending via compile+verifyV2); Playwright visual-QA harness asserting ten distinct AA-passing accents + font links (exit-nonzero on failure); gauntlet sign-off at `docs/gauntlet-signoff.md`. *Exit met: v6 success criteria recorded with evidence.*
+
+**v6 rework complete.** All eleven phases merged to main. Full suite: 546 tests (schema 11 + core 396 + scanner 84 + snippet 55) + the demo app.
 
 > **Note:** `apps/demo` is the live Nebula demo (built phase 5). The v5-era scanner spec is archived at `docs/scanner-v5.md` and predates the role-tier model. Per-phase implementation plans live in `docs/superpowers/plans/`.
 
