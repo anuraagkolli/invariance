@@ -7,8 +7,10 @@ natural language, with developer-defined invariants the model can never violate.
 pnpm dev   # http://localhost:4321
 ```
 
-By default the customization panel's agents call the Anthropic API — set
-`NEXT_PUBLIC_ANTHROPIC_API_KEY` in `.env.local` (copy from `.env.example`).
+By default the customization panel's agents call the Anthropic API through the
+app's own `/api/llm` proxy route — set `ANTHROPIC_API_KEY` in `.env.local`
+(copy from `.env.example`). The key is server-only: it never reaches the
+browser, so the demo is safe to deploy and share.
 
 ## Local LLM (Ollama)
 

@@ -19,13 +19,13 @@ export const invarianceConfig: InvarianceConfig = {
 }
 
 // ---------------------------------------------------------------------------
-// LLM provider selection (env-driven; default = Anthropic, unchanged behavior)
+// LLM provider selection (env-driven; default = Anthropic via server proxy)
 // ---------------------------------------------------------------------------
 //
 // Swapping Ollama (local, free) ↔ Claude needs no code change — only env. When
 // NEXT_PUBLIC_LLM_PROVIDER is 'openai-compatible' we point every agent role at one
 // local model (NEXT_PUBLIC_LLM_MODEL) and the OpenAI-compatible base URL; the
-// default (no env) is byte-identical to the prior Anthropic-only wiring.
+// default (no env) routes through /api/llm so the Anthropic key stays server-side.
 
 type LlmStructuredMode = 'json_schema' | 'json_object'
 
@@ -37,9 +37,9 @@ export interface LlmProviderProps {
   models?: { gatekeeper: string; designer: string; builder: string; slotEdit: string }
 }
 
-// Built from NEXT_PUBLIC_* env. exactOptionalPropertyTypes: optional fields are
-// only present when the openai-compatible path is selected, so the default props
-// object is exactly { apiKey } — identical to before this seam existed.
+// Built from NEXT_PUBLIC_* env. Optional fields are only present when the
+// openai-compatible path is selected; the default routes every agent through
+// the server-side proxy (/api/llm) where ANTHROPIC_API_KEY lives.
 export function llmProviderProps(): LlmProviderProps {
   const provider = process.env.NEXT_PUBLIC_LLM_PROVIDER
   const anthropicKey = process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY ?? ''
@@ -60,6 +60,8 @@ export function llmProviderProps(): LlmProviderProps {
     }
   }
 
-  // Default: Anthropic, exactly as before the provider seam.
-  return { apiKey: anthropicKey }
+  // Default: Anthropic through the server proxy. 'proxy' is a non-empty
+  // sentinel — the panel's prompt input and callAnthropic's empty-key check
+  // both gate on a truthy key; the proxy route never reads the header.
+  return { apiKey: 'proxy', apiBaseUrl: '/api/llm' }
 }
