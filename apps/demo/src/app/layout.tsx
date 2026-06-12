@@ -9,9 +9,26 @@ import { invarianceConfig } from '../lib/invariance-config'
 import { mergeInvarianceConfig } from '../lib/dev-config'
 import { readDevConfig } from '../lib/server/dev-config-store'
 
+// metadataBase makes the OG image URL absolute on whatever host the demo is
+// deployed to; set NEXT_PUBLIC_SITE_URL in production env.
 export const metadata: Metadata = {
-  title: 'Nebula',
-  description: 'Stream the Nebula universe — a media-browsing demo for Invariance v6.',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:4321'),
+  title: 'Nebula — an Invariance demo',
+  description:
+    'A streaming app that re-designs itself on request. Type a vibe, watch the whole UI re-theme — aesthetic coherence and AA contrast compiled in, with developer-defined invariants the model can never violate.',
+  openGraph: {
+    title: 'Nebula — an app that re-designs itself on request',
+    description:
+      'Type a vibe. The Theme Compiler does the rest: ten distinct, coherent, AA-compliant themes from one codebase. Built with Invariance.',
+    images: ['/og.png'],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Nebula — an app that re-designs itself on request',
+    description: 'Type a vibe. The Theme Compiler does the rest. Built with Invariance.',
+    images: ['/og.png'],
+  },
 }
 
 // SSR theme inlining: read the cookie mirror off the request, render the same

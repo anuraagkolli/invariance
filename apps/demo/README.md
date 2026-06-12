@@ -12,6 +12,25 @@ app's own `/api/llm` proxy route — set `ANTHROPIC_API_KEY` in `.env.local`
 (copy from `.env.example`). The key is server-only: it never reaches the
 browser, so the demo is safe to deploy and share.
 
+## Deploying
+
+The repo root has a `Dockerfile` that builds the demo as a self-contained image
+(Next standalone output, traced across the monorepo). Any Docker host with a
+persistent disk works — Render, Railway, Fly, a VPS. **Not serverless**: the
+`/api` stores are file-backed and need a real filesystem.
+
+1. Point the host at the repo root (it auto-detects the Dockerfile).
+2. Set env: `ANTHROPIC_API_KEY` (required for prompts; packs work without it)
+   and `NEXT_PUBLIC_SITE_URL=https://your-domain` (absolute OG-image links).
+3. Mount a volume at `/data` so theme history and dev-config survive restarts.
+
+Local check of the exact image behavior:
+
+```sh
+docker build -t nebula-demo .
+docker run -p 4321:4321 -e ANTHROPIC_API_KEY=sk-... -v nebula-data:/data nebula-demo
+```
+
 ## Developer dashboard (`/dev`)
 
 `http://localhost:4321/dev` is the developer's side of Invariance. Every edit a

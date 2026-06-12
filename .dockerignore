@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/.data
+**/visual-qa-output
+**/.playwright-cli
+**/*.test.ts
+.git
+Dockerfile
+docs
