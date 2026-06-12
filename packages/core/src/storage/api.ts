@@ -18,12 +18,14 @@ export function createApiStorage(baseUrl: string): StorageBackend {
       }
     },
 
-    async saveTheme(userId, appId, theme) {
+    async saveTheme(userId, appId, theme, meta) {
       try {
+        // Conditional spread: when no meta is passed the PUT body stays
+        // byte-identical to the pre-provenance wire shape.
         await fetch(baseUrl, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: canonicalStringify({ userId, appId, theme }),
+          body: canonicalStringify({ userId, appId, theme, ...(meta !== undefined ? { meta } : {}) }),
         })
       } catch {
         // silently fail

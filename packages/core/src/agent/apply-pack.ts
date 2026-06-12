@@ -69,7 +69,7 @@ export async function applyPack(
     )
   }
 
-  await persistAndApply(context, candidate)
+  await persistAndApply(context, candidate, { prompt: pack.name, source: 'pack', description: pack.spec.rationale })
   return {
     type: 'success',
     description: pack.spec.rationale,

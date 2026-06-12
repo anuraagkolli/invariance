@@ -1,6 +1,6 @@
 import type { AnyThemeJson, ThemeJsonV2, InvarianceConfig } from '../config/types'
 import type { ThemeStore } from '../context/theme-store'
-import type { StorageBackend } from '../storage/types'
+import type { SaveThemeMeta, StorageBackend } from '../storage/types'
 import { upgradeThemeJson } from '../config/upgrade'
 import { applyAnyTheme } from '../runtime/apply'
 import { mirrorThemeCookie } from '../storage/cookie-mirror'
@@ -26,8 +26,12 @@ export async function loadCurrentV2(context: PipelineIoContext): Promise<ThemeJs
   return theme
 }
 
-export async function persistAndApply(context: PipelineIoContext, candidate: ThemeJsonV2): Promise<void> {
-  await context.storageBackend.saveTheme(context.userId, context.appId, candidate)
+export async function persistAndApply(
+  context: PipelineIoContext,
+  candidate: ThemeJsonV2,
+  meta?: SaveThemeMeta,
+): Promise<void> {
+  await context.storageBackend.saveTheme(context.userId, context.appId, candidate, meta)
   context.themeStore.setTheme(candidate)
   applyAnyTheme(candidate, context.config)
   // Mirror the just-applied theme to the cookie so the next SSR request paints

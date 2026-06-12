@@ -53,10 +53,15 @@ describe('runPipeline THEME route', () => {
       spec,
     ])
     const ctx = context(fetchFn)
+    const saveSpy = vi.spyOn(ctx.storageBackend, 'saveTheme')
     const result = await runPipeline('make it retro', [], ctx)
     expect(result.type).toBe('success')
     // The retro-arcade pack compiles warning-free so warnings must be absent (not []).
     if (result.type === 'success') expect(result.warnings).toBeUndefined()
+    // Provenance reaches the backend: the prompt + route that produced the save.
+    expect(saveSpy).toHaveBeenCalledWith('u', 'a', expect.anything(), {
+      prompt: 'make it retro', source: 'pipeline', description: spec.rationale,
+    })
     const stored = await ctx.storageBackend.loadTheme('u', 'a') as AnyThemeJson
     const parsed = ThemeJsonV2Schema.safeParse(stored)
     expect(parsed.success).toBe(true)
@@ -114,8 +119,12 @@ describe('runPipeline SLOT_F1 + Builder routes', () => {
       { targetVar: '--inv-sidebar-bg', hue: 250, chromaLevel: 'medium', lightness: 'same', explanation: 'Made the sidebar blue' },
     ])
     const ctx = context(fetchFn, sidebarRegistry)
+    const saveSpy = vi.spyOn(ctx.storageBackend, 'saveTheme')
     const result = await runPipeline('make the sidebar blue', [], ctx)
     expect(result.type).toBe('success')
+    expect(saveSpy).toHaveBeenCalledWith('u', 'a', expect.anything(), {
+      prompt: 'make the sidebar blue', source: 'pipeline', description: 'Made the sidebar blue',
+    })
 
     const stored = await ctx.storageBackend.loadTheme('u', 'a') as AnyThemeJson
     expect(stored.version).toBe(2)

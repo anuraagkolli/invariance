@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 import { applyPack, availablePacks } from './apply-pack'
 import { THEME_PACKS } from '../registries/theme-packs'
@@ -19,8 +19,14 @@ const ioContext = (config: InvarianceConfig): PipelineIoContext => ({
 describe('applyPack', () => {
   it('persists a v2 doc carrying the pack roles + styleSpec (no apiKey, no LLM)', async () => {
     const ctx = ioContext({ app: 'demo' })
+    const saveSpy = vi.spyOn(ctx.storageBackend, 'saveTheme')
     const result = await applyPack('retro-arcade', ctx)
     expect(result.type).toBe('success')
+    // Provenance: the pack name stands in for a typed prompt on this route.
+    const pack = THEME_PACKS.find((p) => p.id === 'retro-arcade')!
+    expect(saveSpy).toHaveBeenCalledWith('u', 'a', expect.anything(), {
+      prompt: pack.name, source: 'pack', description: pack.spec.rationale,
+    })
     if (result.type === 'success') {
       expect(result.slotName).toBe('theme')
       // description is the pack's own rationale (provenance for the panel bubble).

@@ -18,6 +18,8 @@ export function createLocalStorage(): StorageBackend {
       }
     },
 
+    // SaveThemeMeta is intentionally ignored: this backend stores only the
+    // latest doc, so there is no history for provenance to attach to.
     async saveTheme(userId, appId, theme) {
       try {
         localStorage.setItem(key(userId, appId), canonicalStringify(theme))

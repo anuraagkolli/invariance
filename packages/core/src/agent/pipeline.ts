@@ -243,7 +243,7 @@ export async function runPipeline(
 
       // Store + apply.
       onProgress?.('applying')
-      await persistAndApply(context, candidate)
+      await persistAndApply(context, candidate, { prompt: userMessage, source: 'pipeline', description: spec.rationale })
 
       // Only include warnings when non-empty (exactOptionalPropertyTypes: never assign
       // undefined to an optional field explicitly).
@@ -283,7 +283,7 @@ export async function runPipeline(
     })
     if (!outcome.ok) return { type: 'error', message: outcome.error }
     onProgress?.('applying')
-    await persistAndApply(context, outcome.candidate)
+    await persistAndApply(context, outcome.candidate, { prompt: userMessage, source: 'pipeline', description: outcome.explanation })
     return { type: 'success', description: outcome.explanation, slotName: gatekeeperResult.slotName }
   }
 
@@ -318,7 +318,7 @@ export async function runPipeline(
 
     if (verification.passed) {
       onProgress?.('applying')
-      await persistAndApply(context, candidate)
+      await persistAndApply(context, candidate, { prompt: userMessage, source: 'pipeline', description: builderResult.explanation })
       return { type: 'success', description: builderResult.explanation, slotName: intent.slotName }
     }
 

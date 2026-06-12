@@ -34,7 +34,7 @@ export {
   LevelViolationError,
 } from './utils/errors'
 export { CustomizationPanel } from './panel/customization-panel'
-export type { StorageBackend } from './storage/types'
+export type { StorageBackend, SaveThemeMeta } from './storage/types'
 export { createMemoryStorage } from './storage/memory'
 export { createLocalStorage } from './storage/local-storage'
 export { createApiStorage } from './storage/api'
@@ -102,7 +102,7 @@ export type { PreparedTheme } from './runtime/load-theme'
 // Agent Pipeline (v6)
 export { callClaude } from './agent/api'
 export type { ClaudeCallOptions, ClaudeCallResult, UsageEvent, UsageHandler } from './agent/api'
-export { GATEKEEPER_MODEL, DESIGNER_MODEL, BUILDER_MODEL } from './agent/models'
+export { GATEKEEPER_MODEL, DESIGNER_MODEL, BUILDER_MODEL, SLOT_EDIT_MODEL } from './agent/models'
 export { callDesigner } from './agent/designer'
 export type { DesignerInput, DesignerResult } from './agent/designer'
 export { selectFewShotPacks } from './agent/designer-prompt'

@@ -13,6 +13,8 @@ export function createMemoryStorage(): StorageBackend {
       return store.get(key(userId, appId)) ?? null
     },
 
+    // SaveThemeMeta is intentionally ignored: this backend stores only the
+    // latest doc, so there is no history for provenance to attach to.
     async saveTheme(userId, appId, theme) {
       store.set(key(userId, appId), theme)
     },
