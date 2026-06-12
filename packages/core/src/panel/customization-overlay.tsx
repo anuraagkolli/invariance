@@ -527,100 +527,6 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
                 />
               </svg>
               <span>No changes yet. Describe what you want to change.</span>
-
-              {/* Seeded example prompts. These run the full LLM pipeline, so they
-                  are shown only when an apiKey is configured — without one they
-                  would always error (the pack chips below remain the keyless path).
-                  Styled to match the pack chips' fixed-light palette. */}
-              {apiKey && (
-                <div style={{ marginTop: '14px', width: '100%' }}>
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      color: '#9ca3af',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                      marginBottom: '8px',
-                    }}
-                  >
-                    Try a vibe
-                  </div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '6px',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {EXAMPLE_PROMPTS.map((prompt) => (
-                      <button
-                        key={prompt}
-                        type="button"
-                        onClick={() => handlePromptChip(prompt)}
-                        disabled={isThinking}
-                        data-inv-prompt={prompt}
-                        style={{
-                          background: '#f3f4f6',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '999px',
-                          padding: '5px 11px',
-                          fontSize: '12px',
-                          color: '#374151',
-                          cursor: isThinking ? 'default' : 'pointer',
-                          transition: 'background 0.15s, border-color 0.15s, color 0.15s',
-                          whiteSpace: 'nowrap',
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!isThinking) {
-                            ;(e.currentTarget as HTMLButtonElement).style.background = '#eef2ff'
-                            ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#c7d2fe'
-                            ;(e.currentTarget as HTMLButtonElement).style.color = '#4338ca'
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          ;(e.currentTarget as HTMLButtonElement).style.background = '#f3f4f6'
-                          ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#e5e7eb'
-                          ;(e.currentTarget as HTMLButtonElement).style.color = '#374151'
-                        }}
-                      >
-                        {prompt}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={handleSurpriseMe}
-                      disabled={isThinking}
-                      data-inv-surprise="true"
-                      style={{
-                        background: '#6366f1',
-                        border: '1px solid #6366f1',
-                        borderRadius: '999px',
-                        padding: '5px 12px',
-                        fontSize: '12px',
-                        fontWeight: 500,
-                        color: '#ffffff',
-                        cursor: isThinking ? 'default' : 'pointer',
-                        transition: 'background 0.15s, border-color 0.15s',
-                        whiteSpace: 'nowrap',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isThinking) {
-                          ;(e.currentTarget as HTMLButtonElement).style.background = '#4f46e5'
-                          ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#4f46e5'
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        ;(e.currentTarget as HTMLButtonElement).style.background = '#6366f1'
-                        ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#6366f1'
-                      }}
-                    >
-                      ✨ Surprise me
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
           {history.map((item) => (
@@ -632,6 +538,94 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
         <div
           style={{ padding: '12px 16px 16px', borderTop: '1px solid #f3f4f6', flexShrink: 0 }}
         >
+          {/* Seeded example prompts. PERSISTENT (not just the empty state): a
+              user who applied a theme can always change their mind from here.
+              They run the full LLM pipeline, so they are shown only when an
+              apiKey is configured — without one they would always error (the
+              pack chips below remain the keyless path). */}
+          {apiKey && (
+            <div style={{ marginBottom: '12px' }}>
+              <div
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: '#9ca3af',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  marginBottom: '8px',
+                }}
+              >
+                Try a vibe
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {EXAMPLE_PROMPTS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => handlePromptChip(prompt)}
+                    disabled={isThinking}
+                    data-inv-prompt={prompt}
+                    style={{
+                      background: '#f3f4f6',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '999px',
+                      padding: '5px 11px',
+                      fontSize: '12px',
+                      color: '#374151',
+                      cursor: isThinking ? 'default' : 'pointer',
+                      transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+                      whiteSpace: 'nowrap',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isThinking) {
+                        ;(e.currentTarget as HTMLButtonElement).style.background = '#eef2ff'
+                        ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#c7d2fe'
+                        ;(e.currentTarget as HTMLButtonElement).style.color = '#4338ca'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      ;(e.currentTarget as HTMLButtonElement).style.background = '#f3f4f6'
+                      ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#e5e7eb'
+                      ;(e.currentTarget as HTMLButtonElement).style.color = '#374151'
+                    }}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={handleSurpriseMe}
+                  disabled={isThinking}
+                  data-inv-surprise="true"
+                  style={{
+                    background: '#6366f1',
+                    border: '1px solid #6366f1',
+                    borderRadius: '999px',
+                    padding: '5px 12px',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: '#ffffff',
+                    cursor: isThinking ? 'default' : 'pointer',
+                    transition: 'background 0.15s, border-color 0.15s',
+                    whiteSpace: 'nowrap',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isThinking) {
+                      ;(e.currentTarget as HTMLButtonElement).style.background = '#4f46e5'
+                      ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#4f46e5'
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    ;(e.currentTarget as HTMLButtonElement).style.background = '#6366f1'
+                    ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#6366f1'
+                  }}
+                >
+                  ✨ Surprise me
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Starting points: one-tap packs. Keyless quality preview (DESIGN 1.6c) —
               NOT disabled when apiKey is absent (only the prompt input needs a key).
               Hidden entirely if the app's constraints forbid every pack. The panel
