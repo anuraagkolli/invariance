@@ -33,6 +33,32 @@ const PACK_IDS = [
 ] as const
 
 // ---------------------------------------------------------------------------
+// F4 component-swap demo (?demo=f4)
+// ---------------------------------------------------------------------------
+
+// Swaps the Trending row from CarouselRow (horizontal scroll-snap strip) to
+// GridRow (wrapped grid) using the components.pages map in a v2 theme. The
+// slot's level={4} in home-screen.tsx enables the F4 branch in m.slot, which
+// looks up componentLibrary[selection.component] and renders it instead.
+//
+// Pathname note: window.location.pathname on this route is '/gauntlet', so the
+// components map must be keyed '/gauntlet' — matching the overrides variant.
+function buildF4Theme(roles: Record<string, string>): ThemeJsonV2 {
+  return {
+    version: 2,
+    base_app_version: 'v1',
+    theme: { roles },
+    components: {
+      pages: {
+        '/gauntlet': {
+          'row-trending': { component: 'GridRow' },
+        },
+      },
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
 // F2/F3 overrides demo (?demo=overrides)
 // ---------------------------------------------------------------------------
 
@@ -110,6 +136,14 @@ function GauntletIndex() {
             F2/F3 Overrides (content rename + section reorder/hide)
           </a>
         </li>
+        <li>
+          <a
+            href="/gauntlet?demo=f4"
+            className="text-accent underline-offset-2 hover:underline font-body text-sm"
+          >
+            F4 Component Swap (Trending row: CarouselRow → GridRow)
+          </a>
+        </li>
         {PACK_IDS.map((id) => {
           const pack = THEME_PACKS.find((p) => p.id === id)
           return (
@@ -138,8 +172,11 @@ function GauntletViewer() {
   const sidebarBlue = params.get('sidebar') === 'blue'
   // F2/F3 demo: exercises content + layout overrides on top of the tokens.
   const overrides = params.get('demo') === 'overrides'
+  // F4 demo: swaps 'row-trending' from CarouselRow to GridRow via the
+  // components.pages map — the slot's level={4} enables the m.slot F4 branch.
+  const f4swap = params.get('demo') === 'f4'
 
-  // F2/F3 are render-driven from CONTEXT, so the overrides theme must reach the
+  // F2/F3/F4 are render-driven from CONTEXT, so those themes must reach the
   // primitives via the store — applyAnyTheme only writes tokens to :root.
   const { themeStore } = useInvariance()
 
@@ -149,7 +186,7 @@ function GauntletViewer() {
   const appliedKey = useRef<string>('')
 
   useEffect(() => {
-    const key = `${packId ?? 'none'}|${sidebarBlue}|${overrides}`
+    const key = `${packId ?? 'none'}|${sidebarBlue}|${overrides}|${f4swap}`
     if (appliedKey.current === key) return
     appliedKey.current = key
 
@@ -186,7 +223,7 @@ function GauntletViewer() {
     }
 
     // --- tokens to :root (roles + any slot overrides) ---
-    if (pack || sidebarBlue || overrides) {
+    if (pack || sidebarBlue || overrides || f4swap) {
       const tokenTheme: ThemeJsonV2 = {
         version: 2,
         base_app_version: 'v1',
@@ -204,8 +241,15 @@ function GauntletViewer() {
       themeStore.setTheme(buildOverridesTheme(roles))
     }
 
+    // --- F4 component-swap: push theme with components map into the store ---
+    // m.slot reads themeJson.components.pages[pathname][name] and swaps to
+    // componentLibrary[selection.component] when level >= 4.
+    if (f4swap) {
+      themeStore.setTheme(buildF4Theme(roles))
+    }
+
     setReady(true)
-  }, [packId, sidebarBlue, overrides, themeStore])
+  }, [packId, sidebarBlue, overrides, f4swap, themeStore])
 
   return (
     <div data-gauntlet-ready={ready ? 'true' : undefined}>

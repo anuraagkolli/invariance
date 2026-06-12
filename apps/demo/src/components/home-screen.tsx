@@ -37,6 +37,10 @@ function Row({ name, row }: { name: string; row: TitleRow }) {
       level={4}
       description={meta.description}
       aliases={meta.aliases}
+      // Forward titles + shape as slotProps so the F4 branch can pass them to
+      // whatever library component is swapped in (e.g. GridRow). Without this,
+      // the swapped component receives no data and renders an empty container.
+      props={{ titles: row.titles, shape }}
     >
       <section className="flex flex-col gap-3">
         <h2 className="font-display text-lg font-semibold tracking-tight text-textPrimary sm:text-xl">

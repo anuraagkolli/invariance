@@ -101,6 +101,140 @@ function displayFontParam(pairingId) {
   return name.replace(/ /g, '+')
 }
 
+// ---------------------------------------------------------------------------
+// Panel-pack scene helpers
+// ---------------------------------------------------------------------------
+
+// localStorage key used by the demo's createLocalStorage backend.
+// Key structure: invariance:${appId}:${userId} (from local-storage.ts).
+// The demo provider sets appId='nebula-demo', userId='demo-user'.
+const THEME_STORAGE_KEY = 'invariance:nebula-demo:demo-user'
+
+// Verify a stored v2 theme has a roles map with at least one --inv-* token.
+function isStoredV2ThemeWithRoles(raw) {
+  try {
+    const parsed = JSON.parse(raw)
+    return (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      parsed.version === 2 &&
+      parsed.theme &&
+      typeof parsed.theme.roles === 'object' &&
+      Object.keys(parsed.theme.roles).length > 0
+    )
+  } catch {
+    return false
+  }
+}
+
+// Click a pack chip in the customization panel and assert:
+//   (a) --inv-accent on :root changed from the baseAccent before the click
+//   (b) localStorage for the demo key holds a valid v2 theme with roles
+async function clickPackChipAndAssert(page, packId, packName, baseAccent, outputDir) {
+  // Chips are identified by data-inv-pack={packId} (set in customization-overlay.tsx)
+  const chipSelector = `[data-inv-pack="${packId}"]`
+  const chip = await page.$(chipSelector)
+  if (!chip) {
+    throw new Error(`Panel chip for pack "${packId}" (${chipSelector}) not found — check availablePacks filter or panel markup`)
+  }
+  await chip.click()
+
+  // applyPack is async (compile → verify → persist); wait up to 8s for the
+  // in-progress state to resolve (chip will re-enable once isThinking goes false).
+  // The most reliable signal is the chip becoming enabled again.
+  await page.waitForFunction(
+    (sel) => {
+      const btn = document.querySelector(sel)
+      return btn && !btn.disabled
+    },
+    chipSelector,
+    { timeout: 8000 },
+  ).catch(() => { /* timeout OK — proceed to assertions */ })
+
+  // (a) --inv-accent must have changed from the default (applyPack calls applyAnyTheme)
+  const newAccent = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--inv-accent').trim(),
+  )
+
+  // (b) localStorage holds a valid v2 theme with roles
+  const storedRaw = await page.evaluate((k) => localStorage.getItem(k), THEME_STORAGE_KEY)
+  const storedOk = storedRaw !== null && isStoredV2ThemeWithRoles(storedRaw)
+
+  const accentChanged = newAccent !== '' && newAccent !== baseAccent
+
+  const slug = `panel-pack-${packId}`
+  await page.screenshot({ path: `${outputDir}/${slug}.png`, fullPage: true })
+
+  return { packId, packName, accentChanged, newAccent, storedOk, pass: accentChanged && storedOk }
+}
+
+// ---------------------------------------------------------------------------
+// Panel-pack scene: navigate /, open panel, click 3 chips
+// ---------------------------------------------------------------------------
+
+async function runPanelPackScene(browser, outputDir, rows) {
+  // Use a fresh page so localStorage is isolated from gauntlet pack scenes
+  // (gauntlet uses applyAnyTheme directly, not applyPack; mixing the two would
+  // make the "accent changed" assertion ambiguous).
+  const page = await browser.newPage({ viewport: { width: 1280, height: 1024 } })
+
+  await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' })
+
+  // Clear any stored theme so the baseline accent is the true default.
+  await page.evaluate((k) => localStorage.removeItem(k), THEME_STORAGE_KEY)
+
+  // Reload so the provider starts from no stored theme.
+  await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' })
+
+  const baseAccent = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--inv-accent').trim(),
+  )
+
+  // Open the panel. Trigger button has aria-label="Open customization panel"
+  // (trigger-button.tsx) and also data-inv-trigger="true" — use the aria-label
+  // via getByRole for a robust selector that isn't markup-coupled.
+  const trigger = page.getByRole('button', { name: 'Open customization panel' })
+  await trigger.click()
+
+  // Wait for the panel dialog to appear (role=dialog, aria-label="Customization panel")
+  await page.waitForSelector('[role="dialog"][aria-label="Customization panel"]', { timeout: 5000 })
+
+  // Screenshot panel open state before clicking any chip.
+  await page.screenshot({ path: `${outputDir}/panel-open.png`, fullPage: true })
+
+  // Three packs to click (subset of PACK_IDS; must be permitted by the demo's
+  // config — font_registry:'default' and allowed_modes:['light','dark'] mean all
+  // packs in the registry are available).
+  const PANEL_PACKS = [
+    { id: 'retro-arcade', name: 'Retro Arcade' },
+    { id: 'ocean', name: 'Ocean' },
+    { id: 'neobrutalist', name: 'Neobrutalist' },
+  ]
+
+  let currentBase = baseAccent
+  for (const pack of PANEL_PACKS) {
+    const result = await clickPackChipAndAssert(page, pack.id, pack.name, currentBase, outputDir)
+    rows.push({
+      scene: `panel:${pack.id}`,
+      accent: result.newAccent,
+      contrast: '—',
+      font: '—',
+      pass: result.pass,
+      accentChanged: result.accentChanged,
+      storedOk: result.storedOk,
+    })
+    // After each click the accent is the new baseline (we want distinct per-pack changes)
+    currentBase = result.newAccent
+    if (!result.pass) {
+      console.error(
+        `[panel-pack] FAIL ${pack.id}: accentChanged=${result.accentChanged} storedOk=${result.storedOk}`,
+      )
+    }
+  }
+
+  await page.close()
+}
+
 async function main() {
   await mkdir(OUTPUT_DIR, { recursive: true })
 
@@ -145,6 +279,14 @@ async function main() {
       fontOk,
     })
   }
+
+  // --- panel-pack scene: exercises the real applyPack gate (compile→verify→persist) ---
+  // This scene navigates /, opens the CustomizationPanel, and clicks 3 pack
+  // chips, asserting each application (a) changes --inv-accent on :root and
+  // (b) persists a valid v2 theme to localStorage. The purpose is proving the
+  // applyPack code path runs end-to-end in the panel — not merely that the
+  // compiler produces correct tokens (the gauntlet already covers that).
+  await runPanelPackScene(browser, OUTPUT_DIR, rows)
 
   await browser.close()
 
@@ -194,6 +336,13 @@ async function main() {
   for (const r of rowFailures) {
     if (r.contrastOk === false) console.log(`  - ${r.scene}: contrast ${r.contrast} < ${AA_CONTRAST}`)
     if (r.fontOk === false) console.log(`  - ${r.scene}: font link for ${r.font} missing`)
+    // Panel-pack specific failure details
+    if (r.scene.startsWith('panel:') && r.accentChanged === false) {
+      console.log(`  - ${r.scene}: --inv-accent did not change after applying pack`)
+    }
+    if (r.scene.startsWith('panel:') && r.storedOk === false) {
+      console.log(`  - ${r.scene}: localStorage did not contain a valid v2 theme with roles after applying pack`)
+    }
   }
 
   const failures = rowFailures.length + accentViolations.length
