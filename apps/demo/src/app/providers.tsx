@@ -11,13 +11,16 @@ import { TitleModalProvider } from '../components/title-modal-context'
 import { TitleDetailModal } from '../components/title-detail-modal'
 import { SearchProvider } from '../components/search-context'
 import { SearchOverlay } from '../components/search-overlay'
-import { invarianceConfig as config, llmProviderProps } from '../lib/invariance-config'
+import type { InvarianceConfig } from 'invariance'
+import { llmProviderProps } from '../lib/invariance-config'
 
 // The F4 swap path looks components up here by name; both render a row of
 // title cards (Carousel = scroll-snap strip, Grid = wrapped grid).
 const componentLibrary = { CarouselRow, GridRow }
 
-export function Providers({ children }: { children: ReactNode }) {
+// config arrives from the server layout: the static base merged with the
+// developer's lock/unlock overlay (see /dev), serialized across the boundary.
+export function Providers({ config, children }: { config: InvarianceConfig; children: ReactNode }) {
   // Provider/baseUrl/model/key come from NEXT_PUBLIC_* env (see invariance-config).
   // Spread so the default (Anthropic) path stays exactly { apiKey } — no new props.
   const llm = llmProviderProps()

@@ -6,6 +6,8 @@ import { renderThemeCss, themeFromCookieHeader } from 'invariance'
 import './globals.css'
 import { Providers } from './providers'
 import { invarianceConfig } from '../lib/invariance-config'
+import { mergeInvarianceConfig } from '../lib/dev-config'
+import { readDevConfig } from '../lib/server/dev-config-store'
 
 export const metadata: Metadata = {
   title: 'Nebula',
@@ -19,10 +21,17 @@ export const metadata: Metadata = {
 // expected for any per-user themed app.
 // The geo-grotesk pairing (Space Grotesk display + Inter body) loaded via
 // Google Fonts so the default theme renders with its real faces.
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // The developer's lock/unlock overlay merges into the static base config per
+  // request — the cookie read below already forces dynamic rendering, so this
+  // adds no new rendering-mode constraint. The same merged config feeds the
+  // SSR helpers and the client provider, keeping the verify-on-load gate
+  // consistent between first paint and hydration.
+  const overlay = await readDevConfig()
+  const config = mergeInvarianceConfig(invarianceConfig, overlay)
   const cookieHeader = headers().get('cookie')
-  const ssrTheme = themeFromCookieHeader(cookieHeader, invarianceConfig)
-  const ssrCss = renderThemeCss(ssrTheme, invarianceConfig)
+  const ssrTheme = themeFromCookieHeader(cookieHeader, config)
+  const ssrCss = renderThemeCss(ssrTheme, config)
 
   return (
     <html lang="en">
@@ -38,7 +47,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         ) : null}
       </head>
       <body>
-        <Providers>{children}</Providers>
+        <Providers config={config}>{children}</Providers>
       </body>
     </html>
   )
