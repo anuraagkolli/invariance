@@ -43,8 +43,8 @@ The Scanner assigns roles during semantic analysis: deterministic clustering of 
 | Monorepo | pnpm workspaces + turborepo | test depends on ^build |
 | Color math | culori | OKLCH ramps, gamut mapping, WCAG contrast in compiler |
 | Config | js-yaml + zod | |
-| LLM | Anthropic API via raw fetch (native structured outputs) OR OpenAI-compatible endpoint (Ollama for local dev), selected by config; zod revalidation + retry make native schema enforcement optional, so weaker local models work | no SDK, no prompt-and-parse |
-| Models | Gatekeeper: Haiku-class. Designer/Builder: Sonnet-class. | model ids in one constants file |
+| LLM | OpenAI-compatible endpoint (Ollama) OR Anthropic API, via raw fetch with structured outputs, selected by config; zod revalidation + retry make native schema enforcement optional, so weaker local models work | no SDK, no prompt-and-parse |
+| Models | **Current default: open-source `qwen2.5` (Ollama) for all four agent roles, via the demo's `/api/llm` server proxy — no Anthropic key needed.** Anthropic is env opt-in (Gatekeeper: Haiku-class, Designer/Builder: Sonnet-class). | model ids in one constants file |
 | Scanner | ts-morph, tailwindcss resolveConfig | |
 | Trial snippet | vanilla TS bundle, no React dep, <35KB gz | esbuild |
 | Testing | vitest; Playwright + screenshots for visual QA (CI only) | |

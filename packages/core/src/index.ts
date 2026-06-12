@@ -102,7 +102,7 @@ export type { PreparedTheme } from './runtime/load-theme'
 // Agent Pipeline (v6)
 export { callClaude } from './agent/api'
 export type { ClaudeCallOptions, ClaudeCallResult, UsageEvent, UsageHandler } from './agent/api'
-export { GATEKEEPER_MODEL, DESIGNER_MODEL, BUILDER_MODEL, SLOT_EDIT_MODEL } from './agent/models'
+export { GATEKEEPER_MODEL, DESIGNER_MODEL, BUILDER_MODEL, SLOT_EDIT_MODEL, DEFAULT_OLLAMA_MODEL } from './agent/models'
 export { callDesigner } from './agent/designer'
 export type { DesignerInput, DesignerResult } from './agent/designer'
 export { selectFewShotPacks } from './agent/designer-prompt'

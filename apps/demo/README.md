@@ -7,10 +7,21 @@ natural language, with developer-defined invariants the model can never violate.
 pnpm dev   # http://localhost:4321
 ```
 
-By default the customization panel's agents call the Anthropic API through the
-app's own `/api/llm` proxy route — set `ANTHROPIC_API_KEY` in `.env.local`
-(copy from `.env.example`). The key is server-only: it never reaches the
-browser, so the demo is safe to deploy and share.
+By default the customization panel's agents run an **open-source model —
+`qwen2.5` via Ollama** — through the app's own `/api/llm` proxy route. No API
+key, no cloud calls:
+
+```sh
+brew install ollama
+ollama pull qwen2.5
+ollama serve      # leave running; no OLLAMA_ORIGINS needed (the proxy is server-side)
+pnpm dev
+```
+
+The agents `JSON.parse` + zod-revalidate + retry every structured call, so a
+local model that returns JSON-ish text works through the existing revalidation
+path. If themes feel weak, bump the model (`ollama pull qwen2.5:14b`, set
+`LLM_MODEL=qwen2.5:14b`) — no code change.
 
 ## Deploying
 
@@ -20,15 +31,20 @@ persistent disk works — Render, Railway, Fly, a VPS. **Not serverless**: the
 `/api` stores are file-backed and need a real filesystem.
 
 1. Point the host at the repo root (it auto-detects the Dockerfile).
-2. Set env: `ANTHROPIC_API_KEY` (required for prompts; packs work without it)
-   and `NEXT_PUBLIC_SITE_URL=https://your-domain` (absolute OG-image links).
-3. Mount a volume at `/data` so theme history and dev-config survive restarts.
+2. Make the model reachable from the container: run Ollama on the same host (or
+   as a sidecar) and set `LLM_BASE_URL` to its OpenAI endpoint, e.g.
+   `http://host.docker.internal:11434/v1` or the sidecar's address. Optionally
+   `LLM_MODEL` (default `qwen2.5`). Prompts fail gracefully and packs still
+   work if the model is unreachable.
+3. Set `NEXT_PUBLIC_SITE_URL=https://your-domain` (absolute OG-image links).
+4. Mount a volume at `/data` so theme history and dev-config survive restarts.
 
-Local check of the exact image behavior:
+Local check of the exact image behavior (with Ollama running on the host):
 
 ```sh
 docker build -t nebula-demo .
-docker run -p 4321:4321 -e ANTHROPIC_API_KEY=sk-... -v nebula-data:/data nebula-demo
+docker run -p 4321:4321 -e LLM_BASE_URL=http://host.docker.internal:11434/v1 \
+  -v nebula-data:/data nebula-demo
 ```
 
 ## Developer dashboard (`/dev`)
@@ -50,44 +66,29 @@ Storage is file-backed under `apps/demo/.data/` (gitignored): theme version
 history at `theme-history.json`, the lock overlay at `dev-config.json`. The
 SDK talks to it through the stock `storage="api"` backend at `/api/themes`.
 
-## Local LLM (Ollama)
+## LLM providers
 
-For free local iteration you can point every agent at a local Ollama model instead
-of Anthropic — no code change, only env. The agents already `JSON.parse` + zod-
-revalidate + retry every structured call, so a weaker local model that returns
-JSON-ish text works through the existing revalidation path.
+Three modes, swappable by env alone (`.env.example` documents every knob):
 
-1. Install and pull a model:
+- **Default — open-source via the proxy.** The browser calls `/api/llm`; the
+  server forwards to an OpenAI-compatible endpoint (`LLM_BASE_URL`, default
+  `http://localhost:11434/v1`) and **pins the model server-side**
+  (`LLM_MODEL`, default `qwen2.5`). No CORS setup, nothing exposed to the
+  browser, deployable as-is. `LLM_API_KEY` covers hosted OpenAI-compatible
+  endpoints; Ollama ignores it.
+- **Claude (opt-in).** `NEXT_PUBLIC_LLM_PROVIDER=anthropic` plus server-side
+  `ANTHROPIC_API_KEY`. Same proxy route, Anthropic wire shape, model allowlist;
+  the key never reaches the browser.
+- **Browser-direct (legacy local mode).**
+  `NEXT_PUBLIC_LLM_PROVIDER=openai-compatible` with
+  `NEXT_PUBLIC_LLM_BASE_URL`/`NEXT_PUBLIC_LLM_MODEL` talks to the model server
+  straight from the browser — requires `OLLAMA_ORIGINS=* ollama serve` for
+  CORS. Kept for poking at the transport without the proxy in between.
 
-   ```sh
-   brew install ollama
-   ollama pull qwen2.5
-   ```
-
-2. Serve it with CORS open so the browser at `:4321` can reach `:11434`:
-
-   ```sh
-   OLLAMA_ORIGINS=* ollama serve
-   ```
-
-3. Set the env vars in `.env.local`:
-
-   ```sh
-   NEXT_PUBLIC_LLM_PROVIDER=openai-compatible
-   NEXT_PUBLIC_LLM_BASE_URL=http://localhost:11434/v1
-   NEXT_PUBLIC_LLM_MODEL=qwen2.5
-   # optional: NEXT_PUBLIC_LLM_STRUCTURED_MODE=json_object   # if the server rejects json_schema
-   ```
-
-4. Run the demo:
-
-   ```sh
-   pnpm dev
-   ```
-
-Open the customization panel and type a vibe ("make it retro"). To swap back to
-Claude, unset `NEXT_PUBLIC_LLM_PROVIDER` (and set the Anthropic key). If the local
-model's themes feel weak, bump the model id (e.g. `qwen2.5:14b`) — no code change.
+If a server/model rejects native `json_schema` structured outputs, set
+`NEXT_PUBLIC_LLM_STRUCTURED_MODE=json_object` — the schema is embedded in the
+prompt instead and the agents' zod revalidation + retry absorb the looser
+guarantee.
 
 ## Vibe wall (`/showcase`)
 
@@ -108,7 +109,7 @@ that the OSS model produces coherent themes, not just that the compiler is sound
 
 This is a **manual proof, not part of `pnpm test`** — it is standalone, imported
 by nothing, and skips cleanly (exit 0) when Ollama is unreachable. To run it,
-have Ollama serving with the model pulled (see the Local LLM section), then:
+have Ollama serving with the model pulled (see the top of this README), then:
 
 ```sh
 pnpm --filter @invariance/demo designer-smoke

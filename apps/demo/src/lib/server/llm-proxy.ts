@@ -1,7 +1,9 @@
 import { GATEKEEPER_MODEL, DESIGNER_MODEL, BUILDER_MODEL, SLOT_EDIT_MODEL } from 'invariance'
 
-// Pure request validation + rate limiting for the /api/llm proxy route. Lives
-// outside the route handler so it can be unit-tested without Next.js plumbing.
+// Pure request validation + rate limiting for the /api/llm proxy routes
+// (Anthropic wire shape at /v1/messages, OpenAI-compatible at
+// /chat/completions). Lives outside the route handlers so it can be
+// unit-tested without Next.js plumbing.
 
 // Only the four agent-role models may transit the proxy — the server key must
 // not become a general-purpose Anthropic relay.
@@ -64,6 +66,49 @@ export function validateProxyBody(raw: unknown): ProxyValidation {
     messages: (o.messages as Array<Record<string, unknown>>).map((m) => ({ role: m.role, content: m.content })),
   }
   if (o.output_config !== undefined) body.output_config = o.output_config
+  return { ok: true, body }
+}
+
+// OpenAI-compatible shape — the demo's DEFAULT path (open-source model via a
+// server-side Ollama). The server pins the model: whatever id the browser
+// sends is replaced with `pinnedModel`, so which model runs is purely a
+// server-env decision and the proxy can never relay to an arbitrary one.
+export function validateOpenAiProxyBody(raw: unknown, pinnedModel: string): ProxyValidation {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return invalid('Body must be a JSON object')
+  const o = raw as Record<string, unknown>
+
+  if (typeof o.max_tokens !== 'number' || !Number.isInteger(o.max_tokens) || o.max_tokens <= 0) {
+    return invalid('max_tokens must be a positive integer')
+  }
+  if (typeof o.temperature !== 'number' || o.temperature < 0 || o.temperature > 1) {
+    return invalid('temperature must be a number in [0, 1]')
+  }
+  // The OpenAI transport carries the system prompt as a messages[0] entry, so
+  // 'system' is a legal role here (unlike the Anthropic shape).
+  if (!Array.isArray(o.messages) || o.messages.length > MESSAGES_CAP) {
+    return invalid('messages must be an array under the size cap')
+  }
+  for (const m of o.messages) {
+    if (!m || typeof m !== 'object' || Array.isArray(m)) return invalid('Malformed message')
+    const msg = m as Record<string, unknown>
+    if (msg.role !== 'system' && msg.role !== 'user' && msg.role !== 'assistant') {
+      return invalid('Malformed message role')
+    }
+    if (typeof msg.content !== 'string' || msg.content.length > SYSTEM_CHARS_CAP) {
+      return invalid('Malformed message content')
+    }
+  }
+  if (o.response_format !== undefined && (typeof o.response_format !== 'object' || o.response_format === null || Array.isArray(o.response_format))) {
+    return invalid('response_format must be an object')
+  }
+
+  const body: Record<string, unknown> = {
+    model: pinnedModel,
+    max_tokens: Math.min(o.max_tokens, MAX_TOKENS_CAP),
+    temperature: o.temperature,
+    messages: (o.messages as Array<Record<string, unknown>>).map((m) => ({ role: m.role, content: m.content })),
+  }
+  if (o.response_format !== undefined) body.response_format = o.response_format
   return { ok: true, body }
 }
 

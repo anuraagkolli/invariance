@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { GATEKEEPER_MODEL } from 'invariance'
 
-import { MAX_TOKENS_CAP, createRateLimiter, validateProxyBody } from './llm-proxy'
+import { MAX_TOKENS_CAP, createRateLimiter, validateOpenAiProxyBody, validateProxyBody } from './llm-proxy'
 
 const goodBody = () => ({
   model: GATEKEEPER_MODEL,
@@ -58,6 +58,50 @@ describe('validateProxyBody', () => {
     const result = validateProxyBody({ ...goodBody(), output_config: schema })
     expect(result.ok && result.body.output_config).toEqual(schema)
     expect(validateProxyBody({ ...goodBody(), output_config: 'nope' }).ok).toBe(false)
+  })
+})
+
+const goodOaiBody = () => ({
+  model: 'whatever-the-browser-says',
+  max_tokens: 1024,
+  temperature: 0.1,
+  messages: [
+    { role: 'system', content: 'You are the Gatekeeper.' },
+    { role: 'user', content: 'make it retro' },
+  ],
+})
+
+describe('validateOpenAiProxyBody', () => {
+  it('pins the model server-side regardless of what the browser sent', () => {
+    const result = validateOpenAiProxyBody(goodOaiBody(), 'qwen2.5')
+    expect(result.ok && result.body.model).toBe('qwen2.5')
+  })
+
+  it('echoes only whitelisted keys and rebuilds messages key-by-key', () => {
+    const result = validateOpenAiProxyBody(
+      { ...goodOaiBody(), stream: true, messages: [{ role: 'user', content: 'hi', smuggled: 'x' }] },
+      'qwen2.5',
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(Object.keys(result.body).sort()).toEqual(['max_tokens', 'messages', 'model', 'temperature'])
+      expect(result.body.messages).toEqual([{ role: 'user', content: 'hi' }])
+    }
+  })
+
+  it('allows the system role (OpenAI shape) but rejects unknown roles', () => {
+    expect(validateOpenAiProxyBody(goodOaiBody(), 'm').ok).toBe(true)
+    expect(
+      validateOpenAiProxyBody({ ...goodOaiBody(), messages: [{ role: 'tool', content: 'x' }] }, 'm').ok,
+    ).toBe(false)
+  })
+
+  it('clamps max_tokens and passes response_format through', () => {
+    const rf = { type: 'json_schema', json_schema: { name: 'out', schema: {} } }
+    const result = validateOpenAiProxyBody({ ...goodOaiBody(), max_tokens: 999_999, response_format: rf }, 'm')
+    expect(result.ok && result.body.max_tokens).toBe(MAX_TOKENS_CAP)
+    expect(result.ok && result.body.response_format).toEqual(rf)
+    expect(validateOpenAiProxyBody({ ...goodOaiBody(), response_format: 'nope' }, 'm').ok).toBe(false)
   })
 })
 

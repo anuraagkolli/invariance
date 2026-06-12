@@ -2,11 +2,23 @@
 # Fly / any Docker host. The demo's /api stores are file-backed, so it needs a
 # real persistent filesystem (mount a volume at /data), NOT serverless lambdas.
 #
+# The default LLM is an open-source model behind /api/llm; point LLM_BASE_URL
+# (runtime env) at an Ollama/OpenAI-compatible endpoint reachable FROM the
+# container:
+#
 #   docker build -t nebula-demo .
-#   docker run -p 4321:4321 -e ANTHROPIC_API_KEY=sk-... -v nebula-data:/data nebula-demo
+#   docker run -p 4321:4321 -e LLM_BASE_URL=http://host.docker.internal:11434/v1 \
+#     -v nebula-data:/data nebula-demo
+#
+# Claude instead: the provider flag is inlined into the client bundle at BUILD
+# time, the key is runtime —
+#   docker build --build-arg NEXT_PUBLIC_LLM_PROVIDER=anthropic -t nebula-demo .
+#   docker run ... -e ANTHROPIC_API_KEY=sk-... nebula-demo
 
 FROM node:20-alpine AS builder
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+ARG NEXT_PUBLIC_LLM_PROVIDER=
+ENV NEXT_PUBLIC_LLM_PROVIDER=$NEXT_PUBLIC_LLM_PROVIDER
 WORKDIR /repo
 COPY . .
 RUN pnpm install --frozen-lockfile

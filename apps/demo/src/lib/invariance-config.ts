@@ -19,13 +19,19 @@ export const invarianceConfig: InvarianceConfig = {
 }
 
 // ---------------------------------------------------------------------------
-// LLM provider selection (env-driven; default = Anthropic via server proxy)
+// LLM provider selection (env-driven; default = open-source qwen via Ollama,
+// routed through the /api/llm server proxy)
 // ---------------------------------------------------------------------------
 //
-// Swapping Ollama (local, free) ↔ Claude needs no code change — only env. When
-// NEXT_PUBLIC_LLM_PROVIDER is 'openai-compatible' we point every agent role at one
-// local model (NEXT_PUBLIC_LLM_MODEL) and the OpenAI-compatible base URL; the
-// default (no env) routes through /api/llm so the Anthropic key stays server-side.
+// Three modes, all swappable by env alone:
+//   (default)                                  open-source model through /api/llm;
+//                                              the server forwards to Ollama
+//                                              (LLM_BASE_URL) and pins LLM_MODEL.
+//   NEXT_PUBLIC_LLM_PROVIDER=anthropic         Claude through /api/llm; needs
+//                                              server-side ANTHROPIC_API_KEY.
+//   NEXT_PUBLIC_LLM_PROVIDER=openai-compatible browser-direct to an OpenAI-shaped
+//                                              server (legacy local mode; needs
+//                                              OLLAMA_ORIGINS=* for CORS).
 
 type LlmStructuredMode = 'json_schema' | 'json_object'
 
@@ -37,12 +43,16 @@ export interface LlmProviderProps {
   models?: { gatekeeper: string; designer: string; builder: string; slotEdit: string }
 }
 
-// Built from NEXT_PUBLIC_* env. Optional fields are only present when the
-// openai-compatible path is selected; the default routes every agent through
-// the server-side proxy (/api/llm) where ANTHROPIC_API_KEY lives.
+// Built from NEXT_PUBLIC_* env. 'proxy' is a non-empty apiKey sentinel — the
+// panel's prompt input and the client's empty-key check both gate on a truthy
+// key; the proxy routes never read the header.
 export function llmProviderProps(): LlmProviderProps {
   const provider = process.env.NEXT_PUBLIC_LLM_PROVIDER
   const anthropicKey = process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY ?? ''
+
+  if (provider === 'anthropic') {
+    return { apiKey: 'proxy', apiBaseUrl: '/api/llm' }
+  }
 
   if (provider === 'openai-compatible') {
     const baseUrl = process.env.NEXT_PUBLIC_LLM_BASE_URL ?? 'http://localhost:11434/v1'
@@ -60,8 +70,17 @@ export function llmProviderProps(): LlmProviderProps {
     }
   }
 
-  // Default: Anthropic through the server proxy. 'proxy' is a non-empty
-  // sentinel — the panel's prompt input and callAnthropic's empty-key check
-  // both gate on a truthy key; the proxy route never reads the header.
-  return { apiKey: 'proxy', apiBaseUrl: '/api/llm' }
+  // Default: open-source model through the server proxy. The model id here is
+  // what the agents put on the wire; the proxy pins it to server-side
+  // LLM_MODEL regardless, so the two only need to agree for log readability.
+  const model = process.env.NEXT_PUBLIC_LLM_MODEL ?? 'qwen2.5'
+  const mode: LlmStructuredMode =
+    process.env.NEXT_PUBLIC_LLM_STRUCTURED_MODE === 'json_object' ? 'json_object' : 'json_schema'
+  return {
+    apiKey: 'proxy',
+    apiBaseUrl: '/api/llm',
+    llmProvider: 'openai-compatible',
+    oaiStructuredMode: mode,
+    models: { gatekeeper: model, designer: model, builder: model, slotEdit: model },
+  }
 }
