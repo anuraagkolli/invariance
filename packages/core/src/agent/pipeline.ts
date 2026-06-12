@@ -39,6 +39,12 @@ export interface PipelineContext {
   fetchFn?: typeof fetch
   apiBaseUrl?: string
   onUsage?: UsageHandler
+  // Provider seam: select the LLM transport and (for openai-compatible) the
+  // structured-output mode app-wide; per-role model ids override the Anthropic
+  // constants so one local model can serve every role.
+  llmProvider?: 'anthropic' | 'openai-compatible'
+  oaiStructuredMode?: 'json_schema' | 'json_object'
+  models?: { gatekeeper?: string; designer?: string; builder?: string; slotEdit?: string }
 }
 
 // ---------------------------------------------------------------------------
@@ -111,11 +117,15 @@ export async function runPipeline(
   const maxRetries = 2
   const componentLibrary = context.componentLibrary ?? []
 
-  // Shared transport hooks for every agent call (test fetch / hosted endpoint / metering).
+  // Shared transport hooks for every agent call (test fetch / hosted endpoint /
+  // metering / provider selection). The per-role model is per-call, not here, so
+  // each agent can fall back to its own Anthropic constant independently.
   const agentOpts = {
     ...(context.fetchFn ? { fetchFn: context.fetchFn } : {}),
     ...(context.apiBaseUrl ? { baseUrl: context.apiBaseUrl } : {}),
     ...(context.onUsage ? { onUsage: context.onUsage } : {}),
+    ...(context.llmProvider ? { provider: context.llmProvider } : {}),
+    ...(context.oaiStructuredMode ? { oaiStructuredMode: context.oaiStructuredMode } : {}),
   }
 
   // Step 1: Gatekeeper — classify intent, validate level
@@ -129,6 +139,7 @@ export async function runPipeline(
       apiKey: context.apiKey,
       componentLibrary,
       ...agentOpts,
+      ...(context.models?.gatekeeper ? { model: context.models.gatekeeper } : {}),
     },
   )
 
@@ -158,6 +169,7 @@ export async function runPipeline(
           constraints,
           apiKey: context.apiKey,
           ...agentOpts,
+          ...(context.models?.designer ? { model: context.models.designer } : {}),
         },
         retryFeedback,
       )
@@ -265,6 +277,7 @@ export async function runPipeline(
       config: context.config,
       apiKey: context.apiKey,
       ...agentOpts,
+      ...(context.models?.slotEdit ? { model: context.models.slotEdit } : {}),
     })
     if (!outcome.ok) return { type: 'error', message: outcome.error }
     onProgress?.('applying')
@@ -288,6 +301,7 @@ export async function runPipeline(
     slotRegistry: context.registry,
     invariantConfig: context.config,
     ...agentOpts,
+    ...(context.models?.builder ? { model: context.models.builder } : {}),
   }
   let builderResult = await callBuilder(builderInput, context.apiKey)
 

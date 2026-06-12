@@ -144,3 +144,49 @@ describe('runPipeline SLOT_F1 + Builder routes', () => {
     }
   })
 })
+
+// OpenAI-shaped scripted fetch — same in-order contract as scriptedFetch but the
+// choices[].message.content wire shape, so the openai-compatible transport reads it.
+const scriptedOaiFetch = (replies: unknown[]) => {
+  let i = 0
+  return vi.fn().mockImplementation(async () => ({
+    ok: true, status: 200,
+    json: async () => ({
+      choices: [{ message: { content: JSON.stringify(replies[Math.min(i++, replies.length - 1)]) }, finish_reason: 'stop' }],
+    }),
+  })) as unknown as typeof fetch
+}
+
+describe('runPipeline provider seam threading', () => {
+  it('threads llmProvider + per-role model + baseUrl down to the actual fetch call', async () => {
+    const fetchFn = scriptedOaiFetch([
+      { kind: 'THEME', description: 'retro' },
+      spec,
+    ])
+    const ctx = {
+      ...context(fetchFn),
+      fetchFn,
+      apiBaseUrl: 'http://localhost:11434/v1',
+      llmProvider: 'openai-compatible' as const,
+      oaiStructuredMode: 'json_object' as const,
+      models: { gatekeeper: 'qwen2.5', designer: 'qwen2.5', builder: 'qwen2.5', slotEdit: 'qwen2.5' },
+    }
+    const result = await runPipeline('make it retro', [], ctx)
+    expect(result.type).toBe('success')
+
+    // Gatekeeper call (first) went to the OpenAI-compatible endpoint with the per-role model.
+    const calls = (fetchFn as unknown as { mock: { calls: [string, { headers: Record<string, string>; body: string }][] } }).mock.calls
+    const [gkUrl, gkInit] = calls[0]
+    expect(gkUrl).toBe('http://localhost:11434/v1/chat/completions')
+    expect(gkInit.headers['Authorization']).toBe('Bearer k')
+    const gkBody = JSON.parse(gkInit.body)
+    expect(gkBody.model).toBe('qwen2.5')
+    expect(gkBody.messages[0].role).toBe('system')
+    // json_object fallback: the structured-output schema is inlined into the system prompt.
+    expect(gkBody.response_format).toEqual({ type: 'json_object' })
+
+    // Designer call (second) carried its own per-role model too.
+    const designerBody = JSON.parse(calls[1][1].body)
+    expect(designerBody.model).toBe('qwen2.5')
+  })
+})

@@ -81,6 +81,9 @@ export interface GatekeeperOptions {
   fetchFn?: typeof fetch
   baseUrl?: string
   onUsage?: UsageHandler
+  provider?: 'anthropic' | 'openai-compatible'
+  oaiStructuredMode?: 'json_schema' | 'json_object'
+  model?: string
 }
 
 const ERROR_RESULT = (message: string): GatekeeperResult => ({ kind: 'ERROR', message })
@@ -98,7 +101,7 @@ export async function callGatekeeper(
 
   const result = await callClaude({
     apiKey: opts.apiKey,
-    model: GATEKEEPER_MODEL,
+    model: opts.model ?? GATEKEEPER_MODEL,
     system,
     messages,
     temperature: 0.1,
@@ -107,6 +110,8 @@ export async function callGatekeeper(
     ...(opts.fetchFn ? { fetchFn: opts.fetchFn } : {}),
     ...(opts.baseUrl ? { baseUrl: opts.baseUrl } : {}),
     ...(opts.onUsage ? { onUsage: opts.onUsage } : {}),
+    ...(opts.provider ? { provider: opts.provider } : {}),
+    ...(opts.oaiStructuredMode ? { oaiStructuredMode: opts.oaiStructuredMode } : {}),
   })
 
   if (!result.ok) {

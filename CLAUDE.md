@@ -43,7 +43,7 @@ The Scanner assigns roles during semantic analysis: deterministic clustering of 
 | Monorepo | pnpm workspaces + turborepo | test depends on ^build |
 | Color math | culori | OKLCH ramps, gamut mapping, WCAG contrast in compiler |
 | Config | js-yaml + zod | |
-| LLM | Anthropic API via raw fetch, native structured outputs (json_schema output format, beta header) | no SDK, no prompt-and-parse |
+| LLM | Anthropic API via raw fetch (native structured outputs) OR OpenAI-compatible endpoint (Ollama for local dev), selected by config; zod revalidation + retry make native schema enforcement optional, so weaker local models work | no SDK, no prompt-and-parse |
 | Models | Gatekeeper: Haiku-class. Designer/Builder: Sonnet-class. | model ids in one constants file |
 | Scanner | ts-morph, tailwindcss resolveConfig | |
 | Trial snippet | vanilla TS bundle, no React dep, <35KB gz | esbuild |

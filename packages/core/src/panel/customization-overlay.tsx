@@ -187,6 +187,9 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
     initialTheme,
     apiBaseUrl,
     onUsage,
+    llmProvider,
+    oaiStructuredMode,
+    models,
   } = useInvariance()
 
   const [input, setInput] = useState('')
@@ -248,6 +251,9 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
         componentLibrary: componentLibrary ? Object.keys(componentLibrary) : [],
         ...(apiBaseUrl ? { apiBaseUrl } : {}),
         ...(onUsage ? { onUsage } : {}),
+        ...(llmProvider ? { llmProvider } : {}),
+        ...(oaiStructuredMode ? { oaiStructuredMode } : {}),
+        ...(models ? { models } : {}),
       },
       (stage) => {
         setHistory((h) =>

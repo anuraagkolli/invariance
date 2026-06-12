@@ -16,6 +16,9 @@ export interface DesignerInput {
   fetchFn?: typeof fetch
   baseUrl?: string
   onUsage?: UsageHandler
+  provider?: 'anthropic' | 'openai-compatible'
+  oaiStructuredMode?: 'json_schema' | 'json_object'
+  model?: string
 }
 
 export type DesignerResult =
@@ -53,13 +56,15 @@ export async function callDesigner(input: DesignerInput, retryFeedback?: string[
     : input.request
 
   const result = await callClaude({
-    apiKey: input.apiKey, model: DESIGNER_MODEL, system,
+    apiKey: input.apiKey, model: input.model ?? DESIGNER_MODEL, system,
     messages: [{ role: 'user', content: userContent }],
     temperature: 0.7, maxTokens: 2048,
     outputSchema: styleSpecWireSchema(pairingIds),
     ...(input.fetchFn ? { fetchFn: input.fetchFn } : {}),
     ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
     ...(input.onUsage ? { onUsage: input.onUsage } : {}),
+    ...(input.provider ? { provider: input.provider } : {}),
+    ...(input.oaiStructuredMode ? { oaiStructuredMode: input.oaiStructuredMode } : {}),
   })
 
   // Transport or HTTP failure — not retryable (the issue is not the model's output).

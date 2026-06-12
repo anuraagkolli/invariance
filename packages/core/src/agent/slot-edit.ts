@@ -147,6 +147,9 @@ export interface SlotEditInput {
   fetchFn?: typeof fetch
   baseUrl?: string
   onUsage?: UsageHandler
+  provider?: 'anthropic' | 'openai-compatible'
+  oaiStructuredMode?: 'json_schema' | 'json_object'
+  model?: string
 }
 
 export type SlotEditOutcome =
@@ -170,7 +173,7 @@ export async function runSlotEdit(input: SlotEditInput): Promise<SlotEditOutcome
   const result = await callClaude({
     apiKey: input.apiKey,
     // Micro-edit: a classification-sized job where latency matters most.
-    model: SLOT_EDIT_MODEL,
+    model: input.model ?? SLOT_EDIT_MODEL,
     system,
     messages: [{ role: 'user', content: input.intent.description }],
     temperature: 0.1,
@@ -179,6 +182,8 @@ export async function runSlotEdit(input: SlotEditInput): Promise<SlotEditOutcome
     ...(input.fetchFn ? { fetchFn: input.fetchFn } : {}),
     ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
     ...(input.onUsage ? { onUsage: input.onUsage } : {}),
+    ...(input.provider ? { provider: input.provider } : {}),
+    ...(input.oaiStructuredMode ? { oaiStructuredMode: input.oaiStructuredMode } : {}),
   })
   if (!result.ok) return { ok: false, error: result.error }
 

@@ -111,3 +111,110 @@ describe('callClaude baseUrl + usage', () => {
     expect(result.ok).toBe(true)
   })
 })
+
+// OpenAI-compatible transport (Ollama for local dev). The Anthropic path above
+// is untouched; this path is additive and only engages with provider set.
+const oaiOk = (body: unknown) =>
+  ({ ok: true, status: 200, json: async () => body }) as unknown as Response
+
+const oaiChoice = (content: string, finish = 'stop') =>
+  oaiOk({ choices: [{ message: { content }, finish_reason: finish }] })
+
+const oaiBase = { ...baseOpts, provider: 'openai-compatible' as const }
+
+describe('callClaude openai-compatible', () => {
+  it('POSTs to <base>/chat/completions with a Bearer header', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(oaiChoice('{}'))
+    await callClaude({ ...oaiBase, fetchFn, baseUrl: 'http://localhost:11434/v1' })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('http://localhost:11434/v1/chat/completions')
+    expect(init.headers['Authorization']).toBe('Bearer k')
+    expect(init.headers['Content-Type']).toBe('application/json')
+  })
+
+  it('defaults to the Ollama base URL and proceeds with a dummy key when none given', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(oaiChoice('{}'))
+    const result = await callClaude({ ...oaiBase, apiKey: '', fetchFn })
+    expect(result.ok).toBe(true)
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('http://localhost:11434/v1/chat/completions')
+    expect(init.headers['Authorization']).toBe('Bearer ollama')
+  })
+
+  it('puts the system message first in the messages array', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(oaiChoice('{}'))
+    await callClaude({ ...oaiBase, fetchFn })
+    const body = JSON.parse(fetchFn.mock.calls[0][1].body)
+    expect(body.messages[0]).toEqual({ role: 'system', content: 'sys' })
+    expect(body.messages[1]).toEqual({ role: 'user', content: 'hi' })
+    expect(body.max_tokens).toBe(1024)
+    expect(body.temperature).toBe(0.1)
+    expect(body.model).toBe('claude-haiku-4-5')
+  })
+
+  it('sends response_format json_schema by default when a schema is provided', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(oaiChoice('{}'))
+    const schema = { type: 'object', additionalProperties: false, properties: {} }
+    await callClaude({ ...oaiBase, outputSchema: schema, fetchFn })
+    const body = JSON.parse(fetchFn.mock.calls[0][1].body)
+    expect(body.response_format).toEqual({
+      type: 'json_schema',
+      json_schema: { name: 'out', strict: false, schema },
+    })
+    // The system message stays untouched in json_schema mode.
+    expect(body.messages[0].content).toBe('sys')
+  })
+
+  it('json_object mode embeds the schema in the system prompt and uses response_format json_object', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(oaiChoice('{}'))
+    const schema = { type: 'object', properties: { a: { type: 'number' } } }
+    await callClaude({ ...oaiBase, outputSchema: schema, oaiStructuredMode: 'json_object', fetchFn })
+    const body = JSON.parse(fetchFn.mock.calls[0][1].body)
+    expect(body.response_format).toEqual({ type: 'json_object' })
+    expect(body.messages[0].role).toBe('system')
+    expect(body.messages[0].content).toContain('sys')
+    expect(body.messages[0].content).toContain(JSON.stringify(schema))
+    expect(body.messages[0].content).toContain('ONLY a JSON object')
+  })
+
+  it('extracts text from choices[0].message.content', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(oaiChoice('{"a":1}'))
+    expect(await callClaude({ ...oaiBase, fetchFn })).toEqual({ ok: true, text: '{"a":1}' })
+  })
+
+  it('maps usage from prompt_tokens/completion_tokens into onUsage', async () => {
+    const onUsage = vi.fn()
+    const fetchFn = vi.fn().mockResolvedValue(oaiOk({
+      choices: [{ message: { content: '{}' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 33, completion_tokens: 7 },
+    }))
+    await callClaude({ ...oaiBase, fetchFn, onUsage })
+    expect(onUsage).toHaveBeenCalledWith({ model: oaiBase.model, inputTokens: 33, outputTokens: 7 })
+  })
+
+  it('maps finish_reason length to a truncation error and content_filter to a decline', async () => {
+    const trunc = vi.fn().mockResolvedValue(oaiChoice('{', 'length'))
+    expect((await callClaude({ ...oaiBase, fetchFn: trunc })).ok).toBe(false)
+    const filtered = vi.fn().mockResolvedValue(oaiChoice('', 'content_filter'))
+    expect((await callClaude({ ...oaiBase, fetchFn: filtered })).ok).toBe(false)
+  })
+
+  it('maps transport throw, HTTP error, and empty content to errors (never throws)', async () => {
+    const conn = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
+    expect((await callClaude({ ...oaiBase, fetchFn: conn })).ok).toBe(false)
+    const http = vi.fn().mockResolvedValue({ ok: false, status: 503, json: async () => ({}) } as unknown as Response)
+    expect((await callClaude({ ...oaiBase, fetchFn: http })).ok).toBe(false)
+    const empty = vi.fn().mockResolvedValue(oaiOk({ choices: [{ message: { content: '' }, finish_reason: 'stop' }] }))
+    expect((await callClaude({ ...oaiBase, fetchFn: empty })).ok).toBe(false)
+  })
+
+  it('reports usage even on a length finish (tokens were still spent)', async () => {
+    const onUsage = vi.fn()
+    const fetchFn = vi.fn().mockResolvedValue(oaiOk({
+      choices: [{ message: { content: '{' }, finish_reason: 'length' }],
+      usage: { prompt_tokens: 5, completion_tokens: 2 },
+    }))
+    await callClaude({ ...oaiBase, fetchFn, onUsage })
+    expect(onUsage).toHaveBeenCalledOnce()
+  })
+})

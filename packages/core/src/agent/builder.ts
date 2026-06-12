@@ -36,6 +36,9 @@ export interface BuilderConfigInput {
   fetchFn?: typeof fetch
   baseUrl?: string
   onUsage?: UsageHandler
+  provider?: 'anthropic' | 'openai-compatible'
+  oaiStructuredMode?: 'json_schema' | 'json_object'
+  model?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -129,7 +132,7 @@ Produce the theme.json mutation now:`
   // phase retypes mutations as typed op arrays.
   const result = await callClaude({
     apiKey,
-    model: BUILDER_MODEL,
+    model: input.model ?? BUILDER_MODEL,
     system: systemPrompt,
     messages: [{ role: 'user', content: userMessage }],
     temperature: 0.2,
@@ -137,6 +140,8 @@ Produce the theme.json mutation now:`
     ...(input.fetchFn ? { fetchFn: input.fetchFn } : {}),
     ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
     ...(input.onUsage ? { onUsage: input.onUsage } : {}),
+    ...(input.provider ? { provider: input.provider } : {}),
+    ...(input.oaiStructuredMode ? { oaiStructuredMode: input.oaiStructuredMode } : {}),
   })
   if (!result.ok) return { ok: false, error: result.error }
 

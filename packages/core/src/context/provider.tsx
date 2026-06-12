@@ -38,6 +38,9 @@ interface InvarianceContextValue {
   componentLibrary: Record<string, React.ComponentType<any>> | undefined
   apiBaseUrl?: string
   onUsage?: UsageHandler
+  llmProvider?: 'anthropic' | 'openai-compatible'
+  oaiStructuredMode?: 'json_schema' | 'json_object'
+  models?: { gatekeeper?: string; designer?: string; builder?: string; slotEdit?: string }
 }
 
 const InvarianceContext = createContext<InvarianceContextValue | null>(null)
@@ -56,6 +59,9 @@ interface InvarianceProviderProps {
   storageUrl?: string
   apiBaseUrl?: string
   onUsage?: UsageHandler
+  llmProvider?: 'anthropic' | 'openai-compatible'
+  oaiStructuredMode?: 'json_schema' | 'json_object'
+  models?: { gatekeeper?: string; designer?: string; builder?: string; slotEdit?: string }
   children: ReactNode
 }
 
@@ -69,6 +75,9 @@ export function InvarianceProvider({
   storageUrl,
   apiBaseUrl,
   onUsage,
+  llmProvider,
+  oaiStructuredMode,
+  models,
   children,
 }: InvarianceProviderProps) {
   const themeStore = useMemo(() => createThemeStore(), [])
@@ -143,8 +152,11 @@ export function InvarianceProvider({
       componentLibrary,
       ...(apiBaseUrl ? { apiBaseUrl } : {}),
       ...(onUsage ? { onUsage } : {}),
+      ...(llmProvider ? { llmProvider } : {}),
+      ...(oaiStructuredMode ? { oaiStructuredMode } : {}),
+      ...(models ? { models } : {}),
     }),
-    [config, apiKey, userId, themeStore, themeJson, initialTheme, registry, storageBackend, componentLibrary, apiBaseUrl, onUsage],
+    [config, apiKey, userId, themeStore, themeJson, initialTheme, registry, storageBackend, componentLibrary, apiBaseUrl, onUsage, llmProvider, oaiStructuredMode, models],
   )
 
   return (
