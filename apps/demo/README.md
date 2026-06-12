@@ -12,6 +12,25 @@ app's own `/api/llm` proxy route — set `ANTHROPIC_API_KEY` in `.env.local`
 (copy from `.env.example`). The key is server-only: it never reaches the
 browser, so the demo is safe to deploy and share.
 
+## Developer dashboard (`/dev`)
+
+`http://localhost:4321/dev` is the developer's side of Invariance. Every edit a
+user makes — vibe prompt, slot edit, F2–F4 change, one-tap pack — lands
+server-side as a new version with the prompt that produced it, a source badge,
+a themed mini-Nebula preview, and a token diff against the previous version.
+Older versions roll back with one click (append-only: a rollback is a new
+version whose provenance says so).
+
+The Invariants card is the lock/unlock surface: per-page customization levels
+(0–4), a brand-accent lock (themes compile *around* a locked token — change the
+whole vibe and the accent stays byte-identical), and locked sections users
+cannot hide. Changes apply to the live app on the next edit; other sessions
+pick them up on their next request.
+
+Storage is file-backed under `apps/demo/.data/` (gitignored): theme version
+history at `theme-history.json`, the lock overlay at `dev-config.json`. The
+SDK talks to it through the stock `storage="api"` backend at `/api/themes`.
+
 ## Local LLM (Ollama)
 
 For free local iteration you can point every agent at a local Ollama model instead
