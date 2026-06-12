@@ -28,7 +28,8 @@ async function pgStore() {
   return new PgStore(db as unknown as SqlClient);
 }
 
-describe("registry lifecycle on PgStore", () => {
+// Generous timeout: PGlite's WASM init can take several seconds under load.
+describe("registry lifecycle on PgStore", { timeout: 30_000 }, () => {
   it("publish -> supersede -> stale -> migrate -> kill, all against Postgres", async () => {
     const store = await pgStore();
     await publishManifest(store, "app1", manifest("1.0.0", ["--a", "--b"]));

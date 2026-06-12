@@ -38,9 +38,12 @@ function record(overrides: Partial<ModRecord> = {}): ModRecord {
   };
 }
 
-/** One behavioral contract, run against every Store implementation. */
+/**
+ * One behavioral contract, run against every Store implementation. Generous
+ * timeout: PGlite's WASM init can take several seconds on a loaded machine.
+ */
 function conformance(name: string, makeStore: () => Promise<Store>) {
-  describe(`${name} store conformance`, () => {
+  describe(`${name} store conformance`, { timeout: 30_000 }, () => {
     it("stores manifests and tracks the current version", async () => {
       const store = await makeStore();
       expect(await store.currentManifest("app1")).toBeNull();
