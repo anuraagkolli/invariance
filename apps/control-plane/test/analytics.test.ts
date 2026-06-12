@@ -119,7 +119,7 @@ describe("analytics + mods admin endpoints", () => {
     expect(restored.status).toBe(200);
     expect((await pointer()).status).toBe("active");
 
-    const types = cp.store.app("app1").events.map((e) => e.type);
+    const types = (await cp.store.listEvents("app1")).map((e) => e.type);
     expect(types).toContain("mod_killed");
     expect(types).toContain("mod_restored");
   });

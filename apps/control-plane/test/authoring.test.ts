@@ -28,7 +28,7 @@ const badDraft = {
 describe("authorMod pipeline", () => {
   it("publishes a verified draft on the first attempt", async () => {
     const store = new MemoryStore();
-    publishManifest(store, "app1", manifest);
+    await publishManifest(store, "app1", manifest);
     const agent = new MockAgent([goodDraft]);
     const result = await authorMod({
       store, keys, agent, appId: "app1", subjectId: "u1", prompt: "make the accent teal",
@@ -42,7 +42,7 @@ describe("authorMod pipeline", () => {
 
   it("feeds verifier reasons back to the agent and repairs", async () => {
     const store = new MemoryStore();
-    publishManifest(store, "app1", manifest);
+    await publishManifest(store, "app1", manifest);
     const agent = new MockAgent([badDraft, goodDraft]);
     const result = await authorMod({
       store, keys, agent, appId: "app1", subjectId: "u1", prompt: "teal please",
@@ -54,19 +54,89 @@ describe("authorMod pipeline", () => {
 
   it("gives up after maxAttempts and records a rejection event", async () => {
     const store = new MemoryStore();
-    publishManifest(store, "app1", manifest);
+    await publishManifest(store, "app1", manifest);
     const agent = new MockAgent([badDraft]);
     const result = await authorMod({
       store, keys, agent, appId: "app1", subjectId: "u1", prompt: "x", maxAttempts: 2,
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reasons.join()).toContain("unknown design token");
-    expect(store.app("app1").events.some((e) => e.type === "mod_rejected")).toBe(true);
+    expect((await store.listEvents("app1")).some((e) => e.type === "mod_rejected")).toBe(true);
+  });
+
+  const sortHook = {
+    id: "hook_sort",
+    trigger: { endpointId: "list-items", phase: "response" },
+    language: "js",
+    source: "(payload) => { payload.items.sort(); return payload; }",
+  };
+  const hookCapabilities = {
+    reads: [],
+    writes: [{ endpointId: "list-items", fields: ["items"] }],
+    budgets: { cpuMs: 50, memMb: 32 },
+  };
+
+  it("rejects drafts that drop existing ops, then publishes the merged resubmission", async () => {
+    const store = new MemoryStore();
+    await publishManifest(store, "app1", manifest);
+    await authorMod({
+      store, keys, agent: new MockAgent([goodDraft]), appId: "app1", subjectId: "u1", prompt: "teal",
+    });
+    const hookOnlyDraft = { hooks: [sortHook], capabilities: hookCapabilities };
+    const mergedDraft = { ...hookOnlyDraft, uiOps: goodDraft.uiOps };
+    const agent = new MockAgent([hookOnlyDraft, mergedDraft]);
+    const result = await authorMod({
+      store, keys, agent, appId: "app1", subjectId: "u1", prompt: "sort my items",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.attempts).toBe(2);
+    expect(agent.inputs[1]?.feedback.join()).toContain("dropped existing customizations");
+    expect(agent.inputs[1]?.feedback.join()).toContain("token --inv-accent");
+  });
+
+  it("re-warns about drops when another rejection intervenes", async () => {
+    const store = new MemoryStore();
+    await publishManifest(store, "app1", manifest);
+    await authorMod({
+      store, keys, agent: new MockAgent([goodDraft]), appId: "app1", subjectId: "u1", prompt: "teal",
+    });
+    const hookOnlyDraft = { hooks: [sortHook], capabilities: hookCapabilities };
+    const agent = new MockAgent([hookOnlyDraft, badDraft, hookOnlyDraft, hookOnlyDraft]);
+    const result = await authorMod({
+      store, keys, agent, appId: "app1", subjectId: "u1", prompt: "sort my items", maxAttempts: 5,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.attempts).toBe(4);
+    // The bad attempt consumed the first warning; the drop must be re-warned,
+    // not silently accepted, before the final resubmission counts as intent.
+    expect(agent.inputs[3]?.feedback.join()).toContain("dropped existing customizations");
+  });
+
+  it("treats a resubmitted drop as intentional removal", async () => {
+    const store = new MemoryStore();
+    await publishManifest(store, "app1", manifest);
+    await authorMod({
+      store, keys, agent: new MockAgent([goodDraft]), appId: "app1", subjectId: "u1", prompt: "teal",
+    });
+    const removalDraft = { hooks: [sortHook], capabilities: hookCapabilities };
+    const result = await authorMod({
+      store,
+      keys,
+      agent: new MockAgent([removalDraft, removalDraft]),
+      appId: "app1",
+      subjectId: "u1",
+      prompt: "drop the accent color and sort my items",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.attempts).toBe(2);
+      expect(JSON.parse(result.record.envelope.payload).uiOps).toEqual([]);
+    }
   });
 
   it("passes the current modset so prompts accumulate cumulatively", async () => {
     const store = new MemoryStore();
-    publishManifest(store, "app1", manifest);
+    await publishManifest(store, "app1", manifest);
     const agent = new MockAgent([goodDraft, goodDraft]);
     await authorMod({ store, keys, agent, appId: "app1", subjectId: "u1", prompt: "first" });
     const second = await authorMod({
@@ -117,6 +187,7 @@ describe("prompts route", () => {
 
   it("returns 503 when no agent is configured", async () => {
     delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.INVARIANCE_LLM_BASE_URL;
     const { app } = createControlPlane({ keys });
     const res = await app.request("/v1/apps/app1/subjects/u1/prompts", {
       method: "POST",

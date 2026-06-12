@@ -9,7 +9,7 @@ import {
 } from "@invariance/schema";
 import { signBundle, type SigningKeyPair } from "@invariance/schema/signing";
 import { randomUUID } from "node:crypto";
-import type { MemoryStore, ModRecord } from "../store";
+import type { Store, ModRecord } from "../store";
 import { verifyBundleAgainstManifest } from "./verification";
 
 export interface ModDraft {
@@ -39,41 +39,30 @@ export class RegistryError extends Error {
  * subject's active mod bound to an older version becomes stale and will be
  * lazily revalidated on that subject's next session.
  */
-export function publishManifest(
-  store: MemoryStore,
+export async function publishManifest(
+  store: Store,
   appId: string,
   manifestInput: unknown,
-): { manifest: AppManifest; staleCount: number } {
+): Promise<{ manifest: AppManifest; staleCount: number }> {
   const manifest = AppManifestSchema.parse(manifestInput);
   if (manifest.appId !== appId) {
     throw new RegistryError(`manifest appId ${manifest.appId} does not match route ${appId}`);
   }
-  const state = store.app(appId);
-  state.manifests.set(manifest.version, manifest);
-  state.currentManifestVersion = manifest.version;
-
-  let staleCount = 0;
-  for (const mods of state.modsBySubject.values()) {
-    for (const mod of mods) {
-      if (mod.status === "active" && mod.boundManifestVersion !== manifest.version) {
-        mod.status = "stale";
-        staleCount++;
-      }
-    }
-  }
+  await store.putManifest(appId, manifest);
+  const staleCount = await store.markActiveModsStale(appId, manifest.version);
   return { manifest, staleCount };
 }
 
 /** Builds a full ModBundle from a draft, assigning identity and binding. */
-export function assembleBundle(
-  store: MemoryStore,
+export async function assembleBundle(
+  store: Store,
   appId: string,
   subjectId: string,
   draft: ModDraft,
-): ModBundle {
-  const manifest = store.currentManifest(appId);
+): Promise<ModBundle> {
+  const manifest = await store.currentManifest(appId);
   if (!manifest) throw new RegistryError(`app ${appId} has no published manifest`, 404);
-  const latest = store.latestMod(appId, subjectId);
+  const latest = await store.latestMod(appId, subjectId);
   return ModBundleSchema.parse({
     id: `mod_${randomUUID()}`,
     appId,
@@ -82,28 +71,34 @@ export function assembleBundle(
     binding: { appManifestVersion: manifest.version },
     uiOps: draft.uiOps ?? [],
     hooks: draft.hooks ?? [],
-    capabilities: draft.capabilities ?? { reads: [], writes: [], budgets: { cpuMs: 50, memMb: 32 } },
+    // Models get the reads/writes themselves right far more often than the
+    // boilerplate around them; missing lists and budgets get safe defaults
+    // (the verifier still enforces policy caps on whatever lands here).
+    capabilities: {
+      reads: [],
+      writes: [],
+      ...(draft.capabilities ?? {}),
+      budgets: { cpuMs: 50, memMb: 32, ...(draft.capabilities?.budgets ?? {}) },
+    },
     createdAt: new Date().toISOString(),
   });
 }
 
 /** Signs and stores a verified bundle, superseding the subject's previous revision. */
-export function publishBundle(
-  store: MemoryStore,
+export async function publishBundle(
+  store: Store,
   keys: SigningKeyPair,
   bundle: ModBundle,
   prompts: string[],
-): ModRecord {
+): Promise<ModRecord> {
   const envelope = signBundle(bundle, keys.privateKeyPem, keys.keyId);
-  const state = store.app(bundle.appId);
-  const mods = store.subjectMods(bundle.appId, bundle.subjectId);
 
-  const previous = store.latestMod(bundle.appId, bundle.subjectId);
+  const previous = await store.latestMod(bundle.appId, bundle.subjectId);
   if (
     previous &&
     (previous.status === "active" || previous.status === "stale" || previous.status === "degraded")
   ) {
-    previous.status = "superseded";
+    await store.updateModStatus(bundle.appId, previous.modId, "superseded");
   }
 
   const record: ModRecord = {
@@ -119,13 +114,17 @@ export function publishBundle(
     boundManifestVersion: bundle.binding.appManifestVersion,
     createdAt: bundle.createdAt,
   };
-  mods.push(record);
-  state.bundlesByHash.set(envelope.contentHash, envelope);
+  await store.insertMod(record);
+  await store.putBundle(bundle.appId, envelope);
   return record;
 }
 
-export function getPointer(store: MemoryStore, appId: string, subjectId: string): PointerView {
-  const mod = store.latestMod(appId, subjectId);
+export async function getPointer(
+  store: Store,
+  appId: string,
+  subjectId: string,
+): Promise<PointerView> {
+  const mod = await store.latestMod(appId, subjectId);
   if (!mod) return { status: "none" };
   switch (mod.status) {
     case "active":
@@ -147,28 +146,27 @@ export function getPointer(store: MemoryStore, appId: string, subjectId: string)
  * forward), pointer active again. Fail -> the record degrades with the
  * verifier's reasons and the client offers the AI re-fix path.
  */
-export function revalidateSubject(
-  store: MemoryStore,
+export async function revalidateSubject(
+  store: Store,
   keys: SigningKeyPair,
   appId: string,
   subjectId: string,
-): PointerView {
-  const mod = store.latestMod(appId, subjectId);
+): Promise<PointerView> {
+  const mod = await store.latestMod(appId, subjectId);
   if (!mod || mod.status !== "stale") return getPointer(store, appId, subjectId);
-  const manifest = store.currentManifest(appId);
+  const manifest = await store.currentManifest(appId);
   if (!manifest) return getPointer(store, appId, subjectId);
 
   const stale = ModBundleSchema.parse(JSON.parse(mod.envelope.payload));
-  const rebound = assembleBundle(store, appId, subjectId, {
+  const rebound = await assembleBundle(store, appId, subjectId, {
     uiOps: stale.uiOps,
     hooks: stale.hooks,
     capabilities: stale.capabilities,
   });
   const verdict = verifyBundleAgainstManifest(rebound, manifest);
   if (!verdict.ok) {
-    mod.status = "degraded";
-    mod.reasons = verdict.reasons;
-    store.app(appId).events.push({
+    await store.updateModStatus(appId, mod.modId, "degraded", verdict.reasons);
+    await store.addEvent({
       type: "mod_degraded",
       appId,
       subjectId,
@@ -179,8 +177,8 @@ export function revalidateSubject(
     return { status: "degraded", reasons: verdict.reasons };
   }
 
-  const record = publishBundle(store, keys, rebound, mod.prompts);
-  store.app(appId).events.push({
+  const record = await publishBundle(store, keys, rebound, mod.prompts);
+  await store.addEvent({
     type: "mod_migrated",
     appId,
     subjectId,
@@ -196,13 +194,13 @@ export function revalidateSubject(
  * an old revision's status would make it the subject's "latest non-superseded"
  * record and corrupt pointer resolution.
  */
-export function setModStatus(
-  store: MemoryStore,
+export async function setModStatus(
+  store: Store,
   appId: string,
   modId: string,
   status: "disabled" | "active",
-): ModRecord {
-  const mod = store.findMod(appId, modId);
+): Promise<ModRecord> {
+  const mod = await store.findMod(appId, modId);
   if (!mod) throw new RegistryError(`mod ${modId} not found`, 404);
   if (mod.status === "superseded") {
     throw new RegistryError(`mod ${modId} is superseded history and cannot change status`, 409);
@@ -210,6 +208,7 @@ export function setModStatus(
   if (status === "active" && mod.status !== "disabled") {
     throw new RegistryError(`mod ${modId} is ${mod.status}; only disabled mods can be restored`, 409);
   }
-  mod.status = status;
-  return mod;
+  const updated = await store.updateModStatus(appId, modId, status);
+  if (!updated) throw new RegistryError(`mod ${modId} not found`, 404);
+  return updated;
 }

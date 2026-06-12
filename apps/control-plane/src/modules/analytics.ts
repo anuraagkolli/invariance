@@ -1,5 +1,5 @@
 import { ModBundleSchema, type HookPhase, type ModBundle } from "@invariance/schema";
-import type { MemoryStore, ModRecord } from "../store";
+import type { Store, ModRecord } from "../store";
 
 /**
  * Mod classification: what surfaces a mod touches and through which declared
@@ -76,11 +76,11 @@ export interface AnalyticsSummary {
 }
 
 /** Aggregate view over every subject of one app. */
-export function summarizeApp(store: MemoryStore, appId: string): AnalyticsSummary {
-  const state = store.app(appId);
+export async function summarizeApp(store: Store, appId: string): Promise<AnalyticsSummary> {
+  const events = await store.listEvents(appId);
 
   const byType: Record<string, number> = {};
-  for (const event of state.events) {
+  for (const event of events) {
     byType[event.type] = (byType[event.type] ?? 0) + 1;
   }
 
@@ -90,7 +90,8 @@ export function summarizeApp(store: MemoryStore, appId: string): AnalyticsSummar
   const components = new Map<string, number>();
   const prompts: Array<{ subjectId: string; prompt: string; at: string }> = [];
 
-  for (const record of store.allMods(appId)) {
+  const allMods = await store.allMods(appId);
+  for (const record of allMods) {
     byStatus[record.status] = (byStatus[record.status] ?? 0) + 1;
     if (record.status === "superseded") continue; // count live surfaces only
     const classification = classifyRecord(record);
@@ -107,9 +108,9 @@ export function summarizeApp(store: MemoryStore, appId: string): AnalyticsSummar
   prompts.sort((a, b) => (a.at < b.at ? 1 : -1));
 
   return {
-    events: { total: state.events.length, byType },
+    events: { total: events.length, byType },
     mods: {
-      total: store.allMods(appId).length,
+      total: allMods.length,
       byStatus,
       degraded: byStatus["degraded"] ?? 0,
     },

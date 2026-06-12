@@ -97,7 +97,7 @@ describe("phase 5 exit criteria: breaking release -> degrade -> AI re-fix", () =
   });
 
   it("the synthetic re-fix instruction is not stored as a user prompt", async () => {
-    const record = cp.store.latestMod("streamline", "migrator");
+    const record = await cp.store.latestMod("streamline", "migrator");
     expect(record?.prompts).toEqual(["make the accent teal and cards rounder"]);
   });
 
@@ -119,7 +119,7 @@ describe("phase 5 exit criteria: breaking release -> degrade -> AI re-fix", () =
     expect(loaded.status).toBe("active");
     expect(loaded.bundle?.binding.appManifestVersion).toBe("2.1.0");
 
-    const events = cp.store.app("streamline").events.map((e) => e.type);
+    const events = (await cp.store.listEvents("streamline")).map((e) => e.type);
     expect(events).toContain("mod_migrated");
     expect(events).toContain("mod_degraded");
     expect(events).toContain("mod_refixed");
