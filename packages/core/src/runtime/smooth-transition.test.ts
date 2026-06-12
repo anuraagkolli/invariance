@@ -1,11 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-import { beginSmoothThemeTransition } from './customization-overlay'
+import { beginSmoothThemeTransition } from './smooth-transition'
+
+interface StubStyleEl {
+  id: string
+  textContent: string
+}
 
 // Minimal documentElement stub — avoids a jsdom dependency (same approach as
-// runtime/apply-v2.test.ts). Returns the live class set for assertions.
-function stubDocument(): Set<string> {
+// runtime/apply-v2.test.ts). Returns the live class set plus the list of
+// injected style tags for assertions.
+function stubDocument(): { classes: Set<string>; styles: StubStyleEl[] } {
   const classes = new Set<string>()
+  const styles: StubStyleEl[] = []
   ;(globalThis as { document?: unknown }).document = {
     documentElement: {
       classList: {
@@ -13,8 +20,13 @@ function stubDocument(): Set<string> {
         remove: (c: string) => { classes.delete(c) },
       },
     },
+    getElementById: (id: string) => styles.find((s) => s.id === id) ?? null,
+    createElement: (): StubStyleEl => ({ id: '', textContent: '' }),
+    head: {
+      appendChild: (el: StubStyleEl) => { styles.push(el) },
+    },
   }
-  return classes
+  return { classes, styles }
 }
 
 describe('beginSmoothThemeTransition', () => {
@@ -36,7 +48,7 @@ describe('beginSmoothThemeTransition', () => {
   })
 
   it('adds the transition class and removes it after the morph window', () => {
-    const classes = stubDocument()
+    const { classes } = stubDocument()
     beginSmoothThemeTransition()
     expect(classes.has('inv-theme-transition')).toBe(true)
     vi.advanceTimersByTime(699)
@@ -46,7 +58,7 @@ describe('beginSmoothThemeTransition', () => {
   })
 
   it('rapid calls extend the window instead of stacking removals', () => {
-    const classes = stubDocument()
+    const { classes } = stubDocument()
     beginSmoothThemeTransition()
     vi.advanceTimersByTime(400)
     beginSmoothThemeTransition()
@@ -56,5 +68,15 @@ describe('beginSmoothThemeTransition', () => {
     expect(classes.has('inv-theme-transition')).toBe(true)
     vi.advanceTimersByTime(400) // t = 1100 = second call + 700
     expect(classes.has('inv-theme-transition')).toBe(false)
+  })
+
+  it('injects the transition style tag exactly once across calls', () => {
+    const { styles } = stubDocument()
+    beginSmoothThemeTransition()
+    beginSmoothThemeTransition()
+    expect(styles).toHaveLength(1)
+    expect(styles[0]?.id).toBe('inv-smooth-transition')
+    expect(styles[0]?.textContent).toContain('html.inv-theme-transition')
+    expect(styles[0]?.textContent).toContain('prefers-reduced-motion')
   })
 })

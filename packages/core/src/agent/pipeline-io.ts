@@ -3,6 +3,7 @@ import type { ThemeStore } from '../context/theme-store'
 import type { SaveThemeMeta, StorageBackend } from '../storage/types'
 import { upgradeThemeJson } from '../config/upgrade'
 import { applyAnyTheme } from '../runtime/apply'
+import { beginSmoothThemeTransition } from '../runtime/smooth-transition'
 import { mirrorThemeCookie } from '../storage/cookie-mirror'
 
 // The minimal slice of PipelineContext the store/apply path actually touches.
@@ -33,6 +34,12 @@ export async function persistAndApply(
 ): Promise<void> {
   await context.storageBackend.saveTheme(context.userId, context.appId, candidate, meta)
   context.themeStore.setTheme(candidate)
+  // Arm the morph HERE, at the actual token write — not earlier in the
+  // pipeline. saveTheme above can be a slow network PUT, and the transition
+  // class self-clears after ~700ms, so arming before the await could expire
+  // mid-save and the swap would snap instead of morphing. This is the single
+  // shared apply path (pipeline + packs), so every apply gets the morph.
+  beginSmoothThemeTransition()
   applyAnyTheme(candidate, context.config)
   // Mirror the just-applied theme to the cookie so the next SSR request paints
   // it on first byte. The storage backend above stays the source of truth.

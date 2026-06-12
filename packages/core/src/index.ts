@@ -92,6 +92,10 @@ export { isV2Theme } from './config/types'
 export { upgradeThemeJson } from './config/upgrade'
 export type { UpgradeResult } from './config/upgrade'
 export { applyAnyTheme } from './runtime/apply'
+// Arms the global morph class right before a token write so the swap
+// transitions instead of snapping. persistAndApply calls it automatically;
+// exported for hosts that write tokens through their own path.
+export { beginSmoothThemeTransition } from './runtime/smooth-transition'
 
 // Provider-path integrity net: upgrade + re-verify a stored theme before apply.
 // Exported so tooling (the scanner round-trip test) can assert a scanned initial

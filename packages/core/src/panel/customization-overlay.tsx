@@ -10,10 +10,11 @@ import {
 } from 'react'
 
 import { useInvariance } from '../context/provider'
-import { runPipeline, type PipelineStage } from '../agent/pipeline'
+import { runPipeline, type PipelineStage, type PipelineResult } from '../agent/pipeline'
 import { applyPack, availablePacks } from '../agent/apply-pack'
 import type { ConvTurn } from '../agent/gatekeeper'
 import { applyAnyTheme } from '../runtime/apply'
+import { beginSmoothThemeTransition } from '../runtime/smooth-transition'
 import { upgradeThemeJson } from '../config/upgrade'
 
 // ---------------------------------------------------------------------------
@@ -178,29 +179,6 @@ const PROGRESS_LABELS: Record<PipelineStage, string> = {
   applying: 'Applying changes...',
 }
 
-// ---------------------------------------------------------------------------
-// Smooth theme reveal
-// ---------------------------------------------------------------------------
-
-// Module-level (not per-instance) because the class lives on <html>, outside
-// any one overlay's lifecycle: an unmount must not strand it, and rapid calls
-// (pack-chip mashing) should extend the window rather than stack removals.
-let themeTransitionTimer: ReturnType<typeof setTimeout> | undefined
-
-// Briefly arms a global transition class so the token swap — a synchronous
-// batch of :root style writes — morphs colors instead of snapping. Call this
-// immediately BEFORE the write; the class self-clears once the .55s
-// transitions have finished.
-export function beginSmoothThemeTransition(): void {
-  if (typeof document === 'undefined') return
-  document.documentElement.classList.add('inv-theme-transition')
-  if (themeTransitionTimer !== undefined) clearTimeout(themeTransitionTimer)
-  themeTransitionTimer = setTimeout(() => {
-    document.documentElement.classList.remove('inv-theme-transition')
-    themeTransitionTimer = undefined
-  }, 700)
-}
-
 // Veiled-run phase machine: 'chat' is the normal dialog; 'loading' minimizes
 // the dialog under a full-screen progress veil while the pipeline runs;
 // 'revealing' is the brief post-success beat before the veil fades and the
@@ -340,7 +318,11 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
   async function handleSubmit(e?: FormEvent, override?: string) {
     e?.preventDefault()
     const message = (override ?? input).trim()
-    if (!message || isThinking) return
+    // phase !== 'chat' covers the 'revealing' window after isThinking has
+    // already dropped: phase timers (including the scheduled onClose) are
+    // still pending, and a run started under them would be torn down mid-
+    // flight. CSS pointer-events alone must not be the only guard.
+    if (!message || isThinking || phase !== 'chat') return
     setInput('')
     setIsThinking(true)
 
@@ -366,38 +348,54 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
     setVeilExit(null)
     setPhase('loading')
 
-    const result = await runPipeline(
-      message,
-      convHistory,
-      {
-        registry: registry.getAll(),
-        config,
-        themeStore,
-        storageBackend,
-        apiKey,
-        userId,
-        appId,
-        componentLibrary: componentLibrary ? Object.keys(componentLibrary) : [],
-        ...(apiBaseUrl ? { apiBaseUrl } : {}),
-        ...(onUsage ? { onUsage } : {}),
-        ...(llmProvider ? { llmProvider } : {}),
-        ...(oaiStructuredMode ? { oaiStructuredMode } : {}),
-        ...(models ? { models } : {}),
-      },
-      (stage) => {
-        setHistory((h) =>
-          h.map((item) =>
-            item.id === id
-              ? { ...item, progressText: PROGRESS_LABELS[stage] ?? 'Working...' }
-              : item,
-          ),
-        )
-        setVeilStage(PROGRESS_LABELS[stage] ?? 'Working...')
-        // 'applying' fires immediately before the pipeline writes the new
-        // tokens to :root — arm the transition now so the swap morphs.
-        if (stage === 'applying') beginSmoothThemeTransition()
-      },
-    )
+    let result: PipelineResult
+    try {
+      result = await runPipeline(
+        message,
+        convHistory,
+        {
+          registry: registry.getAll(),
+          config,
+          themeStore,
+          storageBackend,
+          apiKey,
+          userId,
+          appId,
+          componentLibrary: componentLibrary ? Object.keys(componentLibrary) : [],
+          ...(apiBaseUrl ? { apiBaseUrl } : {}),
+          ...(onUsage ? { onUsage } : {}),
+          ...(llmProvider ? { llmProvider } : {}),
+          ...(oaiStructuredMode ? { oaiStructuredMode } : {}),
+          ...(models ? { models } : {}),
+        },
+        (stage) => {
+          setHistory((h) =>
+            h.map((item) =>
+              item.id === id
+                ? { ...item, progressText: PROGRESS_LABELS[stage] ?? 'Working...' }
+                : item,
+            ),
+          )
+          setVeilStage(PROGRESS_LABELS[stage] ?? 'Working...')
+        },
+      )
+    } catch (err) {
+      // runPipeline returns structured errors, but programmer-error paths and
+      // developer-supplied storage backends can THROW — and an unhandled throw
+      // here would strand the full-screen veil (Escape is gated, the backdrop
+      // ignores pointer events), soft-locking the whole app.
+      console.error('[invariance]', err)
+      setHistory((h) =>
+        h.map((item) =>
+          item.id === id
+            ? { ...item, status: 'error' as const, reason: 'Something went wrong applying this change. Please try again.' }
+            : item,
+        ),
+      )
+      dismissVeilToChat()
+      setIsThinking(false)
+      return
+    }
 
     if (result.type === 'clarification') {
       setHistory((h) =>
@@ -462,7 +460,9 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
   const packs = useMemo(() => availablePacks(config), [config])
 
   async function handleApplyPack(packId: string, packName: string) {
-    if (isThinking) return
+    // phase !== 'chat': a pack tap during the post-success 'revealing' window
+    // would race the scheduled onClose (see handleSubmit's guard).
+    if (isThinking || phase !== 'chat') return
     setIsThinking(true)
 
     const id = Math.random().toString(36).slice(2)
@@ -471,10 +471,26 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
       { id, userMessage: packName, status: 'thinking', progressText: PROGRESS_LABELS.compiling },
     ])
 
-    // Packs land in <100ms — no veil, but the token swap should still morph
-    // instead of snapping.
-    beginSmoothThemeTransition()
-    const result = await applyPack(packId, { config, themeStore, storageBackend, userId, appId })
+    // The smooth token-swap morph is armed inside persistAndApply (the shared
+    // apply path), so packs morph without the panel doing anything here.
+    let result: PipelineResult
+    try {
+      result = await applyPack(packId, { config, themeStore, storageBackend, userId, appId })
+    } catch (err) {
+      // applyPack throws on programmer-error paths (invalid compiled doc) and
+      // developer-supplied storage backends can reject — keep the failure in
+      // the chat instead of leaving a stuck 'thinking' bubble.
+      console.error('[invariance]', err)
+      setHistory((h) =>
+        h.map((item) =>
+          item.id === id
+            ? { ...item, status: 'error' as const, reason: 'Something went wrong applying this change. Please try again.' }
+            : item,
+        ),
+      )
+      setIsThinking(false)
+      return
+    }
 
     // applyPack only ever returns success | error (it skips the Gatekeeper, so
     // there is no clarification path), but PipelineResult is the shared union —
@@ -533,11 +549,17 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
       const { theme: upgradedTheme, warnings } = upgradeThemeJson(initialTheme)
       if (warnings.length > 0) console.warn('[invariance] reset upgrade warnings:', warnings)
       themeStore.setTheme(upgradedTheme)
+      // Reset applies directly (not via persistAndApply), so arm the morph
+      // here — snapping back to the initial theme reads as a glitch.
+      beginSmoothThemeTransition()
       applyAnyTheme(upgradedTheme, config)
       await storageBackend.saveTheme(userId, appId, upgradedTheme)
     } else {
       themeStore.clear()
       if (typeof document !== 'undefined') {
+        // Same morph as the themed-reset branch: clearing every --inv- token
+        // is just as visually abrupt as a swap.
+        beginSmoothThemeTransition()
         const root = document.documentElement
         const props = Array.from({ length: root.style.length }, (_, i) => root.style.item(i))
         for (const prop of props) {
@@ -930,9 +952,10 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
 
       {/* Loading veil: a frosted scrim over the live app while the pipeline
           runs ('loading'), then a brief success beat ('revealing') before the
-          whole thing fades and the panel closes. Rendered AFTER the backdrop
-          (same z-index) so it paints on top; the card above it is held
-          invisible by its exit animation. */}
+          whole thing fades and the panel closes. z-index sits ABOVE the
+          trigger FAB (9999) — anything below the veil but above the scrim
+          would float clickable-but-inert; the card is held invisible by its
+          exit animation. */}
       {phase !== 'chat' && (
         <div
           data-inv-veil="true"
@@ -941,7 +964,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 9998,
+            zIndex: 10000,
             background: 'rgba(10, 11, 13, 0.45)',
             backdropFilter: 'blur(7px) saturate(1.15)',
             WebkitBackdropFilter: 'blur(7px) saturate(1.15)',
@@ -983,6 +1006,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
                 {veilStage}
               </div>
               <div
+                data-inv-shimmer="true"
                 style={{
                   position: 'relative',
                   width: '160px',
@@ -1055,12 +1079,6 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
           from { transform: translateX(-56px); }
           to   { transform: translateX(160px); }
         }
-        html.inv-theme-transition,
-        html.inv-theme-transition *,
-        html.inv-theme-transition *::before,
-        html.inv-theme-transition *::after {
-          transition: background-color .55s ease, color .55s ease, border-color .55s ease, fill .55s ease, stroke .55s ease, box-shadow .55s ease !important;
-        }
         @media (prefers-reduced-motion: reduce) {
           [data-inv-veil],
           [data-inv-veil] *,
@@ -1072,11 +1090,10 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
             opacity: 0 !important;
             visibility: hidden !important;
           }
-          html.inv-theme-transition,
-          html.inv-theme-transition *,
-          html.inv-theme-transition *::before,
-          html.inv-theme-transition *::after {
-            transition: none !important;
+          /* With its animation off the shimmer is a frozen gradient blob that
+             reads as a rendering glitch — hide the whole bar instead. */
+          [data-inv-shimmer] {
+            display: none !important;
           }
         }
       `}</style>
