@@ -132,24 +132,29 @@ async function callOpenAiCompatible(opts: ClaudeCallOptions): Promise<ClaudeCall
   const baseUrl = opts.baseUrl ?? DEFAULT_OPENAI_BASE_URL
   const mode = opts.oaiStructuredMode ?? 'json_schema'
 
-  // json_object fallback: weaker servers reject native json_schema, so we ask for
-  // a bare JSON object and pin the shape by appending the schema to the system
-  // prompt. The agents' existing zod revalidation + retry absorb imperfect output.
-  const useJsonObject = mode === 'json_object' && opts.outputSchema !== undefined
-  const system = useJsonObject
-    ? `${opts.system}\n\nRespond with ONLY a JSON object matching this schema (no markdown, no prose):\n${JSON.stringify(opts.outputSchema)}`
-    : opts.system
-
-  const messages = [{ role: 'system' as const, content: system }, ...opts.messages]
-
-  const responseFormat = opts.outputSchema
-    ? useJsonObject
-      ? { type: 'json_object' }
-      : { type: 'json_schema', json_schema: { name: 'out', strict: false, schema: opts.outputSchema } }
-    : undefined
-
   let res: Response
   try {
+    // Build system/messages/responseFormat inside the try so that
+    // JSON.stringify(opts.outputSchema) — which can throw on circular refs or
+    // BigInt values — is caught and returned as { ok: false } like every other
+    // transport error, preserving the never-throws contract.
+
+    // json_object fallback: weaker servers reject native json_schema, so we ask for
+    // a bare JSON object and pin the shape by appending the schema to the system
+    // prompt. The agents' existing zod revalidation + retry absorb imperfect output.
+    const useJsonObject = mode === 'json_object' && opts.outputSchema !== undefined
+    const system = useJsonObject
+      ? `${opts.system}\n\nRespond with ONLY a JSON object matching this schema (no markdown, no prose):\n${JSON.stringify(opts.outputSchema)}`
+      : opts.system
+
+    const messages = [{ role: 'system' as const, content: system }, ...opts.messages]
+
+    const responseFormat = opts.outputSchema
+      ? useJsonObject
+        ? { type: 'json_object' }
+        : { type: 'json_schema', json_schema: { name: 'out', strict: false, schema: opts.outputSchema } }
+      : undefined
+
     res = await fetchFn(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {

@@ -44,6 +44,8 @@ export interface PipelineContext {
   // constants so one local model can serve every role.
   llmProvider?: 'anthropic' | 'openai-compatible'
   oaiStructuredMode?: 'json_schema' | 'json_object'
+  // When llmProvider === 'openai-compatible', populate ALL FOUR roles: an unset
+  // role falls back to its Anthropic model id, which a local server will reject.
   models?: { gatekeeper?: string; designer?: string; builder?: string; slotEdit?: string }
 }
 
