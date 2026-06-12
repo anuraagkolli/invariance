@@ -77,4 +77,64 @@ describe('verifyV2', () => {
     const locked = result.results.find((r) => r.name === 'lockedTokensUntouched')
     expect(locked?.passed).toBe(true)
   })
+
+  // --- styleSpec-gated completeness/registry checks (scanner seeds) ---
+  // A scanned app's initial theme carries partial roles (only observed values)
+  // and the app's own font — neither is a compiled theme, so completeness and
+  // registry membership do not apply. The gate is styleSpec presence: scanner
+  // seeds omit it, compiled themes always carry it.
+
+  it('compilerOutputComplete passes (warning) for a partial roles map WITHOUT a styleSpec', () => {
+    // Scanner seed: a few observed roles, no styleSpec, missing most of the 22.
+    const theme: ThemeJsonV2 = {
+      version: 2, base_app_version: 'v1',
+      theme: {
+        roles: { '--inv-surface-0': '#FFFFFF', '--inv-accent': '#E94560' },
+        slots: { '--inv-sidebar-bg': 'var(--inv-surface-0)' },
+      },
+    }
+    const r = verifyV2(theme, config, {})
+    const check = r.results.find((t) => t.name === 'compilerOutputComplete')
+    expect(check?.passed).toBe(true)
+    expect(check?.severity).toBe('warning')
+  })
+
+  it('compilerOutputComplete still fails an incomplete COMPILED theme (styleSpec present)', () => {
+    // Same partial map but WITH a styleSpec — now it is a compiled theme and
+    // must be complete. (Distinct from the existing "delete --inv-ring" case:
+    // here most roles are missing.)
+    const theme: ThemeJsonV2 = {
+      version: 2, base_app_version: 'v1',
+      theme: {
+        roles: { '--inv-surface-0': '#FFFFFF', '--inv-accent': '#E94560' },
+        slots: { '--inv-sidebar-bg': 'var(--inv-surface-0)' },
+        styleSpec: pack.spec,
+      },
+    }
+    const r = verifyV2(theme, config, {})
+    expect(r.results.find((t) => t.name === 'compilerOutputComplete')?.passed).toBe(false)
+  })
+
+  it('fontInRegistry passes (warning) for an app font WITHOUT a styleSpec', () => {
+    // The developer's own body font is not a registry pairing; that is fine for
+    // a scanned seed (no styleSpec).
+    const theme: ThemeJsonV2 = {
+      version: 2, base_app_version: 'v1',
+      theme: {
+        roles: { '--inv-surface-0': '#FFFFFF', '--inv-font-body': 'Inter, system-ui' },
+        slots: { '--inv-sidebar-bg': 'var(--inv-surface-0)' },
+      },
+    }
+    const r = verifyV2(theme, config, {})
+    const check = r.results.find((t) => t.name === 'fontInRegistry')
+    expect(check?.passed).toBe(true)
+    expect(check?.severity).toBe('warning')
+  })
+
+  it('fontInRegistry still fails an off-registry font in a COMPILED theme (styleSpec present)', () => {
+    const roles = { ...compiled.roles, '--inv-font-body': 'Inter, system-ui' }
+    const theme: ThemeJsonV2 = { ...goodTheme, theme: { ...goodTheme.theme, roles } }
+    const r = verifyV2(theme, config, {})
+    expect(r.results.find((t) => t.name === 'fontInRegistry')?.passed).toBe(false)
+  })
 })

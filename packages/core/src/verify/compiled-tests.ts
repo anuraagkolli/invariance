@@ -43,9 +43,24 @@ function styleSpecValid(theme: ThemeJsonV2['theme']): TestResult {
 }
 
 // --- compilerOutputComplete ---
+// Completeness is a property of COMPILED themes only. The styleSpec is the
+// compiler's provenance marker: the Designer→Compiler path always attaches one
+// (verified in pipeline.ts), and only that path can produce the full 22-token
+// set. A scanner seed carries partial roles (only the values it observed) and
+// no styleSpec — requiring all 22 there would reject the app's own initial
+// theme, including at runtime via the provider's verify-on-load. So gate on
+// styleSpec presence: absent → pass (warning); present → every token required.
 // Skip when roles are absent or empty (theme not compiler-produced).
-// Otherwise every ROLE_TOKENS key must be present and non-empty.
 function compilerOutputComplete(theme: ThemeJsonV2['theme']): TestResult {
+  if (!theme?.styleSpec) {
+    return {
+      name: 'compilerOutputComplete',
+      passed: true,
+      message: 'No styleSpec — completeness applies to compiled themes only',
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
   const roles = theme?.roles
   if (!roles || Object.keys(roles).length === 0) {
     return {
@@ -170,9 +185,22 @@ function contrastPairsCheck(
 }
 
 // --- fontInRegistry ---
-// The three font tokens must match a registered pairing's display/body/mono value,
-// or DEFAULT_MONO_STACK for --inv-font-mono.
+// Registry membership is a property of COMPILED themes only — the Designer
+// picks fonts FROM the registry. A scanned app's --inv-font-body is the
+// developer's own font, which legitimately is not a registry pairing. Gate on
+// styleSpec presence (same marker as compilerOutputComplete): absent → pass
+// (warning); present → the three font tokens must match a registered pairing's
+// display/body/mono value, or DEFAULT_MONO_STACK for --inv-font-mono.
 function fontInRegistry(theme: ThemeJsonV2['theme']): TestResult {
+  if (!theme?.styleSpec) {
+    return {
+      name: 'fontInRegistry',
+      passed: true,
+      message: 'No styleSpec — registry membership applies to compiled themes only',
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
   const roles = theme?.roles
   if (!roles) {
     return {

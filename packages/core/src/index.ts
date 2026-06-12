@@ -74,6 +74,12 @@ export { upgradeThemeJson } from './config/upgrade'
 export type { UpgradeResult } from './config/upgrade'
 export { applyAnyTheme } from './runtime/apply'
 
+// Provider-path integrity net: upgrade + re-verify a stored theme before apply.
+// Exported so tooling (the scanner round-trip test) can assert a scanned initial
+// theme survives the same gate the provider runs on load.
+export { prepareStoredTheme } from './runtime/load-theme'
+export type { PreparedTheme } from './runtime/load-theme'
+
 // Agent Pipeline (v6)
 export { callClaude } from './agent/api'
 export type { ClaudeCallOptions, ClaudeCallResult, UsageEvent, UsageHandler } from './agent/api'
