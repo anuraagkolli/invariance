@@ -9,6 +9,11 @@
       "require": "./dist/index.js",
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./headless": {
+      "require": "./dist/headless.js",
+      "import": "./dist/headless.js",
+      "types": "./dist/headless.d.ts"
     }
   },
   "scripts": {

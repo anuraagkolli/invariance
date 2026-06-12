@@ -68,6 +68,13 @@ export type { StyleSpec, DesignConstraints } from './compiler/style-spec'
 export { ROLE_TOKENS, COLOR_ROLE_TOKENS } from './compiler/roles'
 export type { RoleToken } from './compiler/roles'
 
+// Deterministic OKLCH role clustering. Lives in the compiler (pure culori math,
+// no ts-morph) so BOTH the scanner and the no-React Trial snippet consume ONE
+// implementation: the scanner re-exports these from here, the snippet imports the
+// pure surface for its mini-scan brain. Pure addition to the barrel.
+export { clusterColors } from './compiler/cluster'
+export type { ColorObservation, RoleCluster, RoleAssignment, ColorKind } from './compiler/cluster'
+
 // Registries
 export { FONT_PAIRINGS, DEFAULT_MONO_STACK, getFontPairing } from './registries/font-pairings'
 export type { FontPairing } from './registries/font-pairings'
