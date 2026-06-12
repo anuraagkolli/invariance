@@ -8,9 +8,9 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
   THEME_PACKS,
-  FONT_PAIRINGS,
   compileTheme,
   applyAnyTheme,
+  ensureFontsLoaded,
   useInvariance,
   type ThemeJsonV2,
 } from 'invariance'
@@ -31,47 +31,6 @@ const PACK_IDS = [
   'mono',
   'corporate-trust',
 ] as const
-
-// ---------------------------------------------------------------------------
-// Font injection
-// ---------------------------------------------------------------------------
-
-// Extract the primary family name from a CSS font stack like
-// "'VT323', monospace" → "VT323"
-// "'IBM Plex Mono', ui-monospace, monospace" → "IBM+Plex+Mono"
-function extractGoogleFontName(cssStack: string): string | null {
-  const match = cssStack.match(/['"]([^'"]+)['"]/)
-  if (!match) return null
-  const name = match[1]
-  // System fonts and generic families are not on Google Fonts.
-  const systemFonts = ['Inter', 'system-ui', 'ui-monospace', 'SF Mono', 'monospace', 'sans-serif', 'serif']
-  if (systemFonts.some((s) => name.toLowerCase() === s.toLowerCase())) return null
-  return name.replace(/ /g, '+')
-}
-
-// Injects a Google Fonts <link> into document.head, keyed by a stable id so
-// repeated calls (e.g. React strict-mode double-invoke) are idempotent.
-function injectGoogleFont(displayStack: string, bodyStack: string): void {
-  if (typeof document === 'undefined') return
-
-  const display = extractGoogleFontName(displayStack)
-  const body = extractGoogleFontName(bodyStack)
-
-  const families: string[] = []
-  if (display) families.push(`family=${display}:wght@400;500;700`)
-  if (body && body !== display) families.push(`family=${body}:wght@400;500;700`)
-  if (families.length === 0) return
-
-  const linkId = `gauntlet-font-${families.join('-').replace(/[^a-zA-Z0-9-]/g, '')}`
-  if (document.getElementById(linkId)) return // already injected
-
-  const href = `https://fonts.googleapis.com/css2?${families.join('&')}&display=swap`
-  const link = document.createElement('link')
-  link.id = linkId
-  link.rel = 'stylesheet'
-  link.href = href
-  document.head.appendChild(link)
-}
 
 // ---------------------------------------------------------------------------
 // F2/F3 overrides demo (?demo=overrides)
@@ -221,8 +180,9 @@ function GauntletViewer() {
         setReady(true)
         return
       }
-      const pairing = FONT_PAIRINGS.find((fp) => fp.id === pack.spec.fontPairing)
-      if (pairing) injectGoogleFont(pairing.display, pairing.body)
+      // Core owns font loading now — looks the pairing up in the registry and
+      // injects the keyed Google Fonts <link> (idempotent, system-family-safe).
+      ensureFontsLoaded(pack.spec.fontPairing)
     }
 
     // --- tokens to :root (roles + any slot overrides) ---
