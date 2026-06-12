@@ -13,10 +13,12 @@ interface TitleCardProps {
 function posterStyle(hue: number): React.CSSProperties {
   const top = `hsl(${hue} 55% 38%)`
   const bottom = `hsl(${(hue + 40) % 360} 60% 18%)`
-  const glow = `hsl(${hue} 70% 62%)`
+  // Alpha lives inside the hsl() function: `hsl(...)55` is invalid CSS and the
+  // browser drops the whole backgroundImage (posters render flat black).
+  const glow = `hsl(${hue} 70% 62% / 0.33)`
   return {
     backgroundImage: [
-      `radial-gradient(120% 80% at 75% 12%, ${glow}55 0%, transparent 55%)`,
+      `radial-gradient(120% 80% at 75% 12%, ${glow} 0%, transparent 55%)`,
       `linear-gradient(160deg, ${top}, ${bottom})`,
     ].join(', '),
   }

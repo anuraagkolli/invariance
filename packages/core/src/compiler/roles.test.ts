@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { wcagContrast } from 'culori'
 import { ROLE_TOKENS, COLOR_ROLE_TOKENS, assignColorRoles } from './roles'
+import { neutralRamp, toHex } from './ramps'
 import type { StyleSpec } from './style-spec'
 
 const base: StyleSpec = {
@@ -87,6 +88,20 @@ describe('assignColorRoles', () => {
     const s0 = roles['--inv-surface-0']
     expect(wcagContrast(roles['--inv-text-primary'], s0))
       .toBeGreaterThan(wcagContrast(roles['--inv-text-secondary'], s0))
+  })
+
+  it('dark text-primary anchors to the ramp extreme (index 10) for presence', () => {
+    const dark: StyleSpec = { ...base, mode: 'dark' }
+    const { roles } = assignColorRoles(dark, {})
+    // index 10 is the brightest neutral step in dark mode (ramp reversed).
+    const ramp = neutralRamp(dark)
+    const step10 = ramp[10]
+    if (!step10) throw new Error('neutral ramp missing index 10')
+    const textEnd = toHex(step10)
+    expect(roles['--inv-text-primary']).toBe(textEnd)
+    // Presence, not just AA: real dark UIs put primary text near pure white.
+    expect(wcagContrast(roles['--inv-text-primary'], roles['--inv-surface-1']))
+      .toBeGreaterThanOrEqual(7)
   })
 
   it('is deterministic', () => {

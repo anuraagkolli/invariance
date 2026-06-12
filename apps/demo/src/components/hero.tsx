@@ -12,10 +12,12 @@ interface HeroProps {
 // into surface-0 so the hero dissolves into the page below it.
 function backdropStyle(hue: number): React.CSSProperties {
   const wash = `hsl(${hue} 52% 30%)`
-  const glow = `hsl(${hue} 68% 55%)`
+  // Alpha lives inside the hsl() function: `hsl(...)40` is invalid CSS and the
+  // browser drops the whole backgroundImage (the hero washes out to flat).
+  const glow = `hsl(${hue} 68% 55% / 0.25)`
   return {
     backgroundImage: [
-      `radial-gradient(90% 120% at 78% 8%, ${glow}40 0%, transparent 50%)`,
+      `radial-gradient(90% 120% at 78% 8%, ${glow} 0%, transparent 50%)`,
       `linear-gradient(105deg, ${wash} 0%, var(--inv-surface-0) 62%)`,
     ].join(', '),
   }

@@ -97,7 +97,23 @@ export function assignColorRoles(
   const s1 = roles['--inv-surface-1']
   const s2 = roles['--inv-surface-2']
   // surfaces guaranteed non-undefined: set unconditionally above
-  const primary = solveAgainstAll([s2, s1, s0], primaryTarget)
+
+  // Primary text anchors to the ramp extreme for presence: the floor is a floor,
+  // not a target — minimum-sufficient contrast is reserved for secondary. The
+  // neutral ramp is mode-oriented: index 10 is the brightest step in dark mode,
+  // the darkest in light mode — i.e. the end the page reads "ink" against. Use it
+  // for primary whenever it clears the target on all three surfaces; only fall back
+  // to the harmonious minimum-sufficient solve when the extreme can't (rare: low
+  // contrast spec on tinted surfaces).
+  const textEnd = toHex(at(neutrals, 10))
+  const textEndPassesAll = [s0, s1, s2].every((s) => wcagContrast(textEnd, s) >= primaryTarget)
+
+  let primary: { hex: string; met: boolean }
+  if (textEndPassesAll) {
+    primary = { hex: textEnd, met: true }
+  } else {
+    primary = solveAgainstAll([s2, s1, s0], primaryTarget)
+  }
   if (!primary.met) warnings.push(`text-primary could not reach ${primaryTarget} on all surfaces`)
   roles['--inv-text-primary'] = lock('--inv-text-primary') ?? primary.hex
   if (lock('--inv-text-primary') && wcagContrast(roles['--inv-text-primary'], s1) < primaryTarget) {

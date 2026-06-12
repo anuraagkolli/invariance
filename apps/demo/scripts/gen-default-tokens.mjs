@@ -9,8 +9,8 @@ const { compileTheme } = require('invariance')
 
 const spec = {
   mode: 'dark',
-  accentHue: 350,
-  accentChroma: 'medium',
+  accentHue: 12,
+  accentChroma: 'vivid',
   neutralTint: 255,
   neutralTintStrength: 'subtle',
   contrast: 'standard',
