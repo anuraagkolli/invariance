@@ -6,25 +6,11 @@ import { neutralRamp, accentRamp, toHex } from './ramps'
 import type { OklchColor } from './ramps'
 import { solveText } from './contrast'
 
-export const ROLE_TOKENS = [
-  '--inv-surface-0', '--inv-surface-1', '--inv-surface-2',
-  '--inv-text-primary', '--inv-text-secondary', '--inv-text-disabled',
-  '--inv-accent', '--inv-accent-hover', '--inv-accent-contrast', '--inv-accent-subtle',
-  '--inv-border', '--inv-border-strong', '--inv-ring',
-  '--inv-font-display', '--inv-font-body', '--inv-font-mono',
-  '--inv-radius-base', '--inv-radius-lg', '--inv-shadow-1', '--inv-shadow-2',
-  '--inv-density-unit', '--inv-border-width',
-] as const
-
-export type RoleToken = (typeof ROLE_TOKENS)[number]
-
-// Strict subset of ROLE_TOKENS: only the 13 hex-valued color tokens
-export const COLOR_ROLE_TOKENS = [
-  '--inv-surface-0', '--inv-surface-1', '--inv-surface-2',
-  '--inv-text-primary', '--inv-text-secondary', '--inv-text-disabled',
-  '--inv-accent', '--inv-accent-hover', '--inv-accent-contrast', '--inv-accent-subtle',
-  '--inv-border', '--inv-border-strong', '--inv-ring',
-] as const
+// The role vocabulary moved to @invariance/schema. Re-exported here for
+// back-compat so existing './roles' imports keep resolving; the assignment
+// logic below stays in core.
+export { ROLE_TOKENS, COLOR_ROLE_TOKENS } from '@invariance/schema'
+export type { RoleToken } from '@invariance/schema'
 
 export interface ColorRoleResult {
   roles: Record<string, string>
