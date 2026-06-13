@@ -85,7 +85,7 @@ describe('verifyV2', () => {
   // seeds omit it, compiled themes always carry it.
 
   it('compilerOutputComplete passes (warning) for a partial roles map WITHOUT a styleSpec', () => {
-    // Scanner seed: a few observed roles, no styleSpec, missing most of the 22.
+    // Scanner seed: a few observed roles, no styleSpec, missing most of the 38.
     const theme: ThemeJsonV2 = {
       version: 2, base_app_version: 'v1',
       theme: {

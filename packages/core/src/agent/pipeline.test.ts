@@ -66,7 +66,7 @@ describe('runPipeline THEME route', () => {
     const parsed = ThemeJsonV2Schema.safeParse(stored)
     expect(parsed.success).toBe(true)
     if (parsed.success) {
-      expect(Object.keys(parsed.data.theme?.roles ?? {})).toHaveLength(22)
+      expect(Object.keys(parsed.data.theme?.roles ?? {})).toHaveLength(38)
       expect(parsed.data.theme?.styleSpec?.fontPairing).toBe('retro-terminal')
     }
   })

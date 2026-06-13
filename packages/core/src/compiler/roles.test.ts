@@ -13,10 +13,14 @@ const base: StyleSpec = {
 }
 
 describe('ROLE_TOKENS', () => {
-  it('is the canonical 22-token vocabulary', () => {
-    expect(ROLE_TOKENS).toHaveLength(22)
+  it('is the canonical 38-token vocabulary', () => {
+    expect(ROLE_TOKENS).toHaveLength(38)
     expect(ROLE_TOKENS).toContain('--inv-ring')
     expect(ROLE_TOKENS).toContain('--inv-font-mono')
+    // T2 additions: typography, space scale, geometry.
+    expect(ROLE_TOKENS).toContain('--inv-display-weight')
+    expect(ROLE_TOKENS).toContain('--inv-space-md')
+    expect(ROLE_TOKENS).toContain('--inv-card-aspect')
   })
 })
 

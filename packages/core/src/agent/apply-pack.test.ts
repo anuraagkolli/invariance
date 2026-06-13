@@ -39,8 +39,8 @@ describe('applyPack', () => {
     const parsed = ThemeJsonV2Schema.safeParse(stored)
     expect(parsed.success).toBe(true)
     if (parsed.success) {
-      // Full 22-token compiler output, with the pack's spec attached as provenance.
-      expect(Object.keys(parsed.data.theme?.roles ?? {})).toHaveLength(22)
+      // Full 38-token compiler output, with the pack's spec attached as provenance.
+      expect(Object.keys(parsed.data.theme?.roles ?? {})).toHaveLength(38)
       expect(parsed.data.theme?.styleSpec?.fontPairing).toBe('retro-terminal')
     }
     // Same doc lives in the in-memory store (panel reads it post-apply).

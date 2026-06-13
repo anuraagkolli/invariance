@@ -34,6 +34,27 @@ const PASS_FONT_STACKS = [
 
 const PASS_NUMERIC = ['0px', '4px', '8px', '12px', '20px', '999px', '1px', '3px', '5px', '0', '1.5rem', '100%', '0.5', '45deg', '200ms', '1fr']
 
+// Typography + space-scale + geometry tokens (T2). These shapes must pass or the
+// new --inv-display-*/--inv-space-*/geometry tokens silently vanish on first
+// paint. Keywords go through the FONT_STACK branch (pure letters); em / negative
+// lengths and bare font-weight integers go through SINGLE_VALUE; aspect ratios
+// go through the ASPECT_RATIO branch added for --inv-card-aspect.
+const PASS_TYPO_GEOMETRY = [
+  'none', // display-transform standard
+  'uppercase', // display-transform caps/technical
+  '0', // display-tracking standard (bare zero)
+  '0.08em', // display-tracking caps
+  '-0.01em', // display-tracking editorial (negative em)
+  '0.04em', // display-tracking technical
+  '400', '500', '600', '700', // display-weight (bare integers)
+  '200px', '230px', '264px', // sidebar-w across framing
+  '132px', '168px', '196px', '248px', '320px', '384px', // card widths
+  '320px', '420px', '520px', // hero-min-h
+  '28px', '44px', '64px', // section-gap / space steps
+  '2 / 3', '3 / 4', // card-aspect (the slash shape)
+  '2/3', // no-space aspect form is also accepted
+]
+
 const PASS_COLOR_FN = [
   'rgb(0 0 0 / 0.13)',
   'rgba(255, 255, 255, 0.5)',
@@ -89,6 +110,12 @@ const FAIL_INJECTION = [
   'calc(1px + url(//e))', // calc with url
   '', // empty (min length)
   '   ', // whitespace only
+  // The aspect-ratio widening must NOT reopen the hole: a slash cannot become a
+  // vector for a second declaration or a smuggled url/identifier.
+  '2 / 3;background:url(//e)', // sibling declaration after a ratio
+  '1 / url(//e)', // url smuggled where the denominator goes
+  '2 / 3 / 4', // a third slash term is not a ratio
+  '2px / 3px', // units are not allowed in the ratio shape
 ]
 
 describe('isSafeCssTokenValue', () => {
@@ -114,6 +141,12 @@ describe('isSafeCssTokenValue', () => {
 
   it('accepts shadow composites the compiler emits', () => {
     for (const v of PASS_SHADOW) expect(isSafeCssTokenValue(v), v).toBe(true)
+  })
+
+  it('accepts typography / space-scale / geometry token values (T2)', () => {
+    // Locks the grammar against a future tightening that would drop the
+    // typography/framing/space tokens on themed first paint.
+    for (const v of PASS_TYPO_GEOMETRY) expect(isSafeCssTokenValue(v), v).toBe(true)
   })
 
   it('rejects every injection payload', () => {

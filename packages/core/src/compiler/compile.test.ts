@@ -70,7 +70,7 @@ describe('compileTheme', () => {
   it('never throws for any pack (the whole gauntlet compiles)', () => {
     for (const pack of THEME_PACKS) {
       const { roles, warnings } = compileTheme(pack.spec)
-      expect(Object.keys(roles).length, pack.id).toBeGreaterThanOrEqual(22)
+      expect(Object.keys(roles).length, pack.id).toBeGreaterThanOrEqual(38)
       expect(warnings, `${pack.id}: ${warnings.join('; ')}`).toEqual([])
     }
   })

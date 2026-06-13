@@ -6,6 +6,14 @@ export const ROLE_TOKENS = [
   '--inv-font-display', '--inv-font-body', '--inv-font-mono',
   '--inv-radius-base', '--inv-radius-lg', '--inv-shadow-1', '--inv-shadow-2',
   '--inv-density-unit', '--inv-border-width',
+  // Display typography (transform/tracking/weight) — derived from StyleSpec.typography.
+  '--inv-display-transform', '--inv-display-tracking', '--inv-display-weight',
+  // Space scale — derived from StyleSpec.density (one ramp, seven steps).
+  '--inv-space-2xs', '--inv-space-xs', '--inv-space-sm', '--inv-space-md',
+  '--inv-space-lg', '--inv-space-xl', '--inv-space-2xl',
+  // Layout geometry — derived from StyleSpec.framing.
+  '--inv-sidebar-w', '--inv-card-w', '--inv-card-w-wide', '--inv-card-aspect',
+  '--inv-hero-min-h', '--inv-section-gap',
 ] as const
 
 export type RoleToken = (typeof ROLE_TOKENS)[number]

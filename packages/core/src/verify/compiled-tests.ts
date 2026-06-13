@@ -45,9 +45,9 @@ function styleSpecValid(theme: ThemeJsonV2['theme']): TestResult {
 // --- compilerOutputComplete ---
 // Completeness is a property of COMPILED themes only. The styleSpec is the
 // compiler's provenance marker: the Designer→Compiler path always attaches one
-// (verified in pipeline.ts), and only that path can produce the full 22-token
+// (verified in pipeline.ts), and only that path can produce the full 38-token
 // set. A scanner seed carries partial roles (only the values it observed) and
-// no styleSpec — requiring all 22 there would reject the app's own initial
+// no styleSpec — requiring all 38 there would reject the app's own initial
 // theme, including at runtime via the provider's verify-on-load. So gate on
 // styleSpec presence: absent → pass (warning); present → every token required.
 // Skip when roles are absent or empty (theme not compiler-produced).

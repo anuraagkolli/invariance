@@ -7,7 +7,7 @@ import { converter, wcagContrast } from 'culori'
 // classifies the COLOR values into the v6 role vocabulary WITHOUT an LLM and
 // WITHOUT inventing any value: every role it fills holds a hex the app already
 // uses. The compiler (a separate, later step at theme-edit time) is what fills
-// the remaining 22-token set; here we seed only what we saw, so the emitted
+// the remaining 38-token set; here we seed only what we saw, so the emitted
 // initial theme is partial by design. Verification gates completeness on
 // styleSpec presence precisely so these partial seeds pass.
 //
