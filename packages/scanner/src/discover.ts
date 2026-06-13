@@ -7,6 +7,7 @@ export interface DiscoveredApp {
   pages: Array<{ route: string; file: string }>
   tailwindConfigPath: string | null
   layoutFile: string | null
+  globalsCssFile: string | null
 }
 
 const TAILWIND_CONFIG_CANDIDATES = [
@@ -49,6 +50,14 @@ async function readPackageJsonName(appRoot: string): Promise<string> {
     return (parsed as { name: string }).name
   }
   return path.basename(appRoot)
+}
+
+async function findGlobalsCss(layoutFile: string | null): Promise<string | null> {
+  if (!layoutFile) return null
+  // Convention: the root layout imports './globals.css' from its own directory.
+  const candidate = path.join(path.dirname(layoutFile), 'globals.css')
+  if (await fileExists(candidate)) return candidate
+  return null
 }
 
 async function findTailwindConfig(appRoot: string): Promise<string | null> {
@@ -178,11 +187,14 @@ export async function discoverApp(appRoot: string): Promise<DiscoveredApp> {
     }
   }
 
+  const globalsCssFile = await findGlobalsCss(layoutFile)
+
   return {
     appRoot: absRoot,
     packageJsonName,
     pages,
     tailwindConfigPath,
     layoutFile,
+    globalsCssFile,
   }
 }

@@ -112,6 +112,39 @@ describe('applyWrapperEdits — slot wrapping', () => {
     expect(out).toContain("cssVariables={['--inv-sidebar-bg']}")
   })
 
+  it('wraps BOTH same-tag JSX siblings (regression: second sibling silently dropped)', () => {
+    // Two <section> siblings share a tag. indexJsxByPath computes their paths as
+    // `Shell>section[0]` and `Shell>section[1]`. The old loop re-indexed after
+    // each wrap: wrapping section[0] collapsed the survivor's path to
+    // `Shell>section` (no index), so the `Shell>section[1]` lookup returned
+    // undefined and the second slot was never wrapped.
+    const project = makeProject([
+      {
+        path: '/page.tsx',
+        text:
+          'export default function P() {\n' +
+          '  return (\n' +
+          '    <Shell>\n' +
+          '      <section>first</section>\n' +
+          '      <section>second</section>\n' +
+          '    </Shell>\n' +
+          '  )\n' +
+          '}\n',
+      },
+    ])
+    const plan = minimalPlan({
+      __slotLocations: [
+        { name: 'first', file: '/page.tsx', jsxPath: 'Shell>section[0]', preserve: false },
+        { name: 'second', file: '/page.tsx', jsxPath: 'Shell>section[1]', preserve: false },
+      ],
+      __pageLocations: [{ file: '/page.tsx', name: '/' }],
+    })
+    applyWrapperEdits(project, plan)
+    const out = project.getSourceFileOrThrow('/page.tsx').getFullText()
+    expect(out).toContain('<m.slot name="first"')
+    expect(out).toContain('<m.slot name="second"')
+  })
+
   it('wraps the top-level return with <m.page>', () => {
     const project = makeProject([
       {
@@ -125,5 +158,25 @@ describe('applyWrapperEdits — slot wrapping', () => {
     applyWrapperEdits(project, plan)
     const out = project.getSourceFileOrThrow('/page.tsx').getFullText()
     expect(out).toContain('<m.page name="home">')
+  })
+})
+
+describe('wrapSlotNode — level', () => {
+  it('emits the slot location level instead of hardcoded 0', () => {
+    const project = new Project({ useInMemoryFileSystem: true, compilerOptions: { jsx: 4, allowJs: true } })
+    const sf = project.createSourceFile(
+      'page.tsx',
+      'export default function P(){return (<div><aside>x</aside></div>)}',
+    )
+    const plan = {
+      slotCssVariables: { sidebar: [] },
+      __slotLocations: [
+        { name: 'sidebar', file: 'page.tsx', jsxPath: 'div>aside', preserve: true, level: 2 },
+      ],
+      __textLocations: [],
+      __pageLocations: [],
+    } as unknown as Parameters<typeof applyWrapperEdits>[1]
+    applyWrapperEdits(project, plan)
+    expect(sf.getFullText()).toContain('<m.slot name="sidebar" level={2}')
   })
 })

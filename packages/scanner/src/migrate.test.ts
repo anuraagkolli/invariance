@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import path from 'path'
+import { promises as fsp } from 'fs'
+import os from 'os'
 import { ThemeJsonV2Schema, verifyV2, deriveConstraints, prepareStoredTheme } from 'invariance'
 import { migrate } from './migrate'
 import type { ScannerAgent } from './migrate'
@@ -146,5 +148,143 @@ describe('migrate — end-to-end on fixture', () => {
         agent: stubAgent,
       }),
     ).rejects.toThrow(/already migrated/)
+  })
+})
+
+async function copyDir(src: string, dest: string): Promise<void> {
+  await fsp.mkdir(dest, { recursive: true })
+  for (const entry of await fsp.readdir(src, { withFileTypes: true })) {
+    const s = path.join(src, entry.name)
+    const d = path.join(dest, entry.name)
+    if (entry.isDirectory()) await copyDir(s, d)
+    else await fsp.copyFile(s, d)
+  }
+}
+
+describe('writeMigration — globals.css baseline', () => {
+  it('writes the generated :root block into globals.css', async () => {
+    const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-'))
+    const root = path.join(tmp, 'nebula-clean')
+    await copyDir(path.resolve(__dirname, '__fixtures__/nebula-clean'), root)
+
+    const { analyze, writeMigration } = await import('./migrate')
+    const result = await analyze({ appRoot: root, apiKey: '', dryRun: false })
+    await writeMigration(result)
+
+    const css = await fsp.readFile(path.join(root, 'src/app/globals.css'), 'utf-8')
+    expect(css).toContain('INVARIANCE-GENERATED:start')
+    expect(css).toMatch(/--inv-[a-z0-9-]+:/)
+    expect(css).toContain('--app-gutter: 24px') // app's own :root preserved
+  })
+})
+
+describe('writeMigration — SSR inlining', () => {
+  it('patches layout.tsx with cookie-driven renderThemeCss + inline style', async () => {
+    const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-ssr-'))
+    const root = path.join(tmp, 'nebula-clean')
+    await copyDir(path.resolve(__dirname, '__fixtures__/nebula-clean'), root)
+
+    const { analyze, writeMigration } = await import('./migrate')
+    const result = await analyze({ appRoot: root, apiKey: '', dryRun: false })
+    await writeMigration(result)
+
+    const layout = await fsp.readFile(path.join(root, 'src/app/layout.tsx'), 'utf-8')
+    expect(layout).toContain("from 'next/headers'")
+    expect(layout).toMatch(/renderThemeCss|themeFromCookieHeader/)
+    expect(layout).toContain('inv-ssr-theme')
+    expect(layout).toMatch(/export default async function/)
+    // providers.tsx exports config for the layout to consume
+    const providers = await fsp.readFile(path.join(root, 'src/app/providers.tsx'), 'utf-8')
+    expect(providers).toContain('export const config')
+  })
+})
+
+describe('analyze — chooseLevels callback', () => {
+  it('sets wrapper levels and derives config from chosen levels', async () => {
+    const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-lvl-'))
+    const root = path.join(tmp, 'nebula-clean')
+    await copyDir(path.resolve(__dirname, '__fixtures__/nebula-clean'), root)
+
+    const { analyze } = await import('./migrate')
+    const seen: string[] = []
+    const seenNonPreserved: string[] = []
+    const result = await analyze({
+      appRoot: root,
+      apiKey: '',
+      dryRun: true,
+      chooseLevels: async (slots) => {
+        for (const s of slots) {
+          seen.push(s.name)
+          if (!s.preserve) seenNonPreserved.push(s.name)
+        }
+        // Raise ONLY the non-preserved slot(s) to level 1. The preserved
+        // structural slots stay at level 0. This is the real acceptance path:
+        // it only yields a wrapped level={1} slot if same-tag sibling sections
+        // actually get wrapped (the nebula card-row <section> is a non-preserved
+        // section[1] sibling that the old re-index-each-wrap loop silently dropped).
+        const map = new Map<string, number>()
+        for (const s of slots) map.set(s.name, s.preserve ? 0 : 1)
+        return map
+      },
+    })
+
+    expect(seen.length).toBeGreaterThan(0)
+    // The fixture has at least one non-preserved slot to exercise this path.
+    expect(seenNonPreserved.length).toBeGreaterThan(0)
+    // A NON-PRESERVED slot wrapper got level={1} in the diff. Non-preserved
+    // slots emit no `preserve={true}` attribute, so the level={1} wrapper must
+    // not be immediately followed by preserve={true}.
+    expect(result.diff).toMatch(/<m\.slot name="[^"]+" level=\{1\}(?! preserve=\{true\})/)
+    // Colors unlocked to any.
+    expect(result.plan.config.frontend?.design?.colors?.mode).toBe('any')
+  })
+})
+
+describe('injectSsrInlining — helper-before-root guard', () => {
+  it('inserts cookie lines into the root layout body, not an earlier helper return', async () => {
+    const { injectSsrInlining } = await import('./migrate')
+
+    // Layout with a helper component whose `return (` appears BEFORE the root
+    // layout's `export default function`.
+    const layoutWithHelper = `import type { ReactNode } from 'react'
+
+function HelperBanner() {
+  return (
+    <div>helper</div>
+  )
+}
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+      </head>
+      <body>{children}</body>
+    </html>
+  )
+}
+`
+
+    const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'inv-ssr-helper-'))
+    const layoutFile = path.join(tmp, 'layout.tsx')
+    await fsp.writeFile(layoutFile, layoutWithHelper, 'utf-8')
+
+    await injectSsrInlining(layoutFile)
+
+    const result = await fsp.readFile(layoutFile, 'utf-8')
+
+    // The cookie lines must appear AFTER the root export, not inside HelperBanner.
+    const cookieIdx = result.indexOf('const cookieHeader = headers()')
+    const exportIdx = result.indexOf('export default async function')
+
+    expect(cookieIdx, 'cookieHeader line not found in output').toBeGreaterThan(-1)
+    expect(exportIdx, 'export default async function not found in output').toBeGreaterThan(-1)
+    expect(cookieIdx).toBeGreaterThan(exportIdx)
+
+    // Verify the helper function body does NOT contain the cookie line.
+    const helperEnd = result.indexOf('export default async function')
+    const helperBody = result.slice(0, helperEnd)
+    expect(helperBody).not.toContain('const cookieHeader')
   })
 })

@@ -10,12 +10,15 @@ import { loadProject } from './ast/parse'
 import { callScannerAgent } from './agent/scanner-agent'
 import { discoverApp } from './discover'
 import { emitConfigYaml, emitInitialThemeJson } from './emit/config-emitter'
+import { patchGlobalsCss } from './emit/css-emitter'
 import { renderReport } from './emit/report'
 import { applyWrapperEdits } from './emit/source-rewriter'
 import { applyVariableRewrites } from './emit/variable-rewriter'
 import { buildMigrationPlan } from './plan/build-plan'
 import { buildSlotPlan } from './plan/slot-plan'
 import { loadTailwindMaps } from './tailwind/resolve'
+import { deriveConfigFromLevels } from './init/derive-config'
+import type { ChosenLevels } from './init/derive-config'
 import type { InvarianceConfig } from 'invariance'
 import type {
   CandidateSection,
@@ -28,6 +31,13 @@ import type {
 
 export type ScannerAgent = typeof callScannerAgent
 
+export interface SlotChoiceInput {
+  name: string
+  page: string
+  preserve: boolean
+  description?: string
+}
+
 export interface MigrateOptions {
   appRoot: string
   apiKey: string
@@ -35,6 +45,10 @@ export interface MigrateOptions {
   /** Optional override for the LLM-backed semantic naming agent. Tests inject
    *  a stub to run migrate() without an Anthropic API key. */
   agent?: ScannerAgent
+  /** Optional interactive level selection. Invoked after naming/plan-build,
+   *  before wrapper edits, with one entry per discovered slot. Returns a map of
+   *  slotName -> chosen level. Absent → every slot stays level 0 (scan default). */
+  chooseLevels?: (slots: SlotChoiceInput[]) => Promise<Map<string, number>>
 }
 
 // ---------------------------------------------------------------------------
@@ -58,7 +72,7 @@ import type { InvarianceConfig, ThemeJson } from 'invariance'
 
 import initialThemeJson from '${relativeThemePath}'
 
-const config: InvarianceConfig = ${configJson}
+export const config: InvarianceConfig = ${configJson}
 
 interface ProvidersProps {
   children: ReactNode
@@ -125,6 +139,53 @@ async function injectProvider(
   await fs.writeFile(layoutFile, layoutSource, 'utf-8')
 }
 
+// Adds cookie-driven SSR theme inlining to a root layout so first paint is
+// themed. Idempotent (keys off the inv-ssr-theme marker). Requires a <head>
+// anchor and a `return (` in the default export; a layout without these is
+// left untouched (the client still themes post-hydration, just with a flash).
+export async function injectSsrInlining(layoutFile: string): Promise<void> {
+  let src = await fs.readFile(layoutFile, 'utf-8')
+  if (src.includes('inv-ssr-theme')) return
+  if (!src.includes('</head>') || !/return\s*\(/.test(src)) return
+
+  function addImport(source: string, line: string): string {
+    if (source.includes(line)) return source
+    const lastImportIdx = source.lastIndexOf('\nimport ')
+    if (lastImportIdx === -1) return line + '\n' + source
+    const eol = source.indexOf('\n', lastImportIdx + 1)
+    return source.slice(0, eol + 1) + line + '\n' + source.slice(eol + 1)
+  }
+
+  src = addImport(src, "import { headers } from 'next/headers'")
+  src = addImport(src, "import { renderThemeCss, themeFromCookieHeader } from 'invariance'")
+  src = addImport(src, "import { config } from './providers'")
+
+  // Make the default export async (function form; covers the fixture + common case).
+  src = src.replace(/export default function /, 'export default async function ')
+
+  // Insert the SSR computation before the root layout's `return (` — anchored
+  // after the default export so a helper component's earlier return isn't hit.
+  const fnIdx = src.indexOf('export default async function')
+  if (fnIdx !== -1) {
+    const head = src.slice(0, fnIdx)
+    const tail = src.slice(fnIdx).replace(
+      /(\n[ \t]*)return\s*\(/,
+      `$1const cookieHeader = headers().get('cookie')` +
+        `$1const ssrTheme = themeFromCookieHeader(cookieHeader, config)` +
+        `$1const ssrCss = renderThemeCss(ssrTheme, config)$1return (`,
+    )
+    src = head + tail
+  }
+
+  // Inject the <style> just before </head>.
+  src = src.replace(
+    /<\/head>/,
+    `  {ssrCss ? <style id="inv-ssr-theme" dangerouslySetInnerHTML={{ __html: ssrCss }} /> : null}\n      </head>`,
+  )
+
+  await fs.writeFile(layoutFile, src, 'utf-8')
+}
+
 function routeToPageName(route: string): string {
   if (route === '/' || route === '') return 'home'
   return route.replace(/^\/+/, '').replace(/\//g, '-')
@@ -161,6 +222,8 @@ export interface AnalyzeResult extends ScannerResult {
   appRoot: string
   /** Layout file discovered for provider injection, if any. */
   layoutFile: string | null
+  /** globals.css discovered for the :root baseline, if any. */
+  globalsCssFile: string | null
 }
 
 /**
@@ -220,6 +283,8 @@ export async function analyze(opts: MigrateOptions): Promise<AnalyzeResult> {
     file: string
     jsxPath: string
     preserve: boolean
+    level: number
+    page: string
     description?: string
     aliases?: string[]
   }
@@ -336,6 +401,8 @@ export async function analyze(opts: MigrateOptions): Promise<AnalyzeResult> {
         file: slot.file,
         jsxPath: slot.jsxPath,
         preserve: slot.preserve,
+        level: slot.level, // 0 from the scanner-agent; raised by chooseLevels below
+        page: page.route,
         ...(slot.description ? { description: slot.description } : {}),
         ...(slot.aliases && slot.aliases.length > 0 ? { aliases: slot.aliases } : {}),
       })
@@ -370,6 +437,27 @@ export async function analyze(opts: MigrateOptions): Promise<AnalyzeResult> {
   ;(plan as unknown as { __textLocations: TextLocation[] }).__textLocations = textLocations
   ;(plan as unknown as { __pageLocations: PageLocation[] }).__pageLocations = pageLocations
 
+  // Interactive level selection (optional). Runs before wrapper edits so chosen
+  // levels are baked into the m.slot wrappers, and derives the config (page
+  // levels + section unlocks) deterministically. The model never picks levels.
+  if (opts.chooseLevels) {
+    const inputs: SlotChoiceInput[] = slotLocations.map((s) => ({
+      name: s.name,
+      page: s.page,
+      preserve: s.preserve,
+      ...(s.description ? { description: s.description } : {}),
+    }))
+    const chosen = await opts.chooseLevels(inputs)
+
+    const byPage: ChosenLevels = {}
+    for (const loc of slotLocations) {
+      const level = chosen.get(loc.name) ?? 0
+      loc.level = level
+      ;(byPage[loc.page] ??= {})[loc.name] = level
+    }
+    plan.config = deriveConfigFromLevels(plan.config, byPage)
+  }
+
   // Apply variable rewrites first (touches string literals / class tokens) then
   // wrapper edits (which replace whole JSX subtrees).
   applyVariableRewrites(project, {
@@ -397,7 +485,7 @@ export async function analyze(opts: MigrateOptions): Promise<AnalyzeResult> {
   }
   const diff = diffParts.join('\n')
 
-  return { plan, diff, report, project, appRoot, layoutFile: discovered.layoutFile }
+  return { plan, diff, report, project, appRoot, layoutFile: discovered.layoutFile, globalsCssFile: discovered.globalsCssFile }
 }
 
 /**
@@ -415,8 +503,12 @@ export async function writeMigration(result: AnalyzeResult): Promise<void> {
     themeJson,
     'utf-8',
   )
+  if (result.globalsCssFile) {
+    await patchGlobalsCss(result.globalsCssFile, result.plan.initialTheme)
+  }
   if (result.layoutFile) {
     await injectProvider(result.layoutFile, result.appRoot, result.plan.config)
+    await injectSsrInlining(result.layoutFile)
   }
 }
 

@@ -91,7 +91,7 @@ export type { ThemeJsonV2, ThemeSectionV2, AnyThemeJson } from './config/types'
 export { isV2Theme } from './config/types'
 export { upgradeThemeJson } from './config/upgrade'
 export type { UpgradeResult } from './config/upgrade'
-export { applyAnyTheme } from './runtime/apply'
+export { applyAnyTheme, themeToCssEntries } from './runtime/apply'
 // Arms the global morph class right before a token write so the swap
 // transitions instead of snapping. persistAndApply calls it automatically;
 // exported for hosts that write tokens through their own path.
