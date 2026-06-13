@@ -73,6 +73,18 @@ export const PolicyRuleSchema = z.discriminatedUnion("type", [
     maxCpuMsPerHook: z.number().int().positive(),
     maxMemMbPerHook: z.number().int().positive(),
   }),
+  z.object({
+    // Design-system invariants the verifier enforces on theme mods (bundles
+    // carrying design provenance). Property-based — the compiler guarantees
+    // them by construction; this is the safety net against tampering.
+    type: z.literal("design-constraint"),
+    id: z.string().min(1),
+    description: z.string().optional(),
+    /** Minimum WCAG contrast for primary-text pairs (default 4.5 = AA). */
+    contrast: z.number().positive().optional(),
+    /** Maximum OKLCH chroma for the accent role (keeps it from going neon). */
+    accentChromaMax: z.number().positive().optional(),
+  }),
 ]);
 export type PolicyRule = z.infer<typeof PolicyRuleSchema>;
 

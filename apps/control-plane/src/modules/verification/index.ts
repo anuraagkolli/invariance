@@ -1,4 +1,5 @@
 import { pathWithin, type AppManifest, type ModBundle, type PolicyRule } from "@invariance/schema";
+import { StyleSpecSchema, verifyRoleQuality } from "@invariance/design/server";
 import { analyzeHookSource } from "./static-hooks";
 
 export interface VerificationResult {
@@ -80,8 +81,11 @@ export function verifyBundleAgainstManifest(
   const deniedPhases = new Map<string, Set<string>>();
   const immutablePaths = new Map<string, string[]>();
   let budgetPolicy: Extract<PolicyRule, { type: "budget-limit" }> | null = null;
+  let designConstraint: Extract<PolicyRule, { type: "design-constraint" }> | null = null;
   for (const policy of manifest.policies) {
-    if (policy.type === "endpoint-deny") {
+    if (policy.type === "design-constraint") {
+      designConstraint = policy;
+    } else if (policy.type === "endpoint-deny") {
       const set = deniedPhases.get(policy.endpointId) ?? new Set();
       for (const phase of policy.phases) set.add(phase);
       deniedPhases.set(policy.endpointId, set);
@@ -169,6 +173,34 @@ export function verifyBundleAgainstManifest(
         `memory budget ${bundle.capabilities.budgets.memMb}MB exceeds policy max ${budgetPolicy.maxMemMbPerHook}MB`,
       );
     }
+  }
+
+  // Design-quality gate: any bundle carrying design provenance (a theme mod
+  // from the design engine) must meet the contrast/chroma properties the
+  // compiler guarantees. This is the safety net against a tampered or
+  // low-contrast theme. Property-based (not a byte-exact recompile), so a
+  // better compiler never invalidates a live bundle — only unsafe values fail.
+  if (bundle.design) {
+    const specParse = StyleSpecSchema.safeParse(bundle.design.styleSpec);
+    if (!specParse.success) {
+      reasons.push(
+        `design provenance styleSpec is invalid: ${specParse.error.issues
+          .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+          .join("; ")}`,
+      );
+    }
+    const roleMap: Record<string, string> = {};
+    for (const op of bundle.uiOps) {
+      if (op.type === "token-override") roleMap[op.token] = op.value;
+    }
+    reasons.push(
+      ...verifyRoleQuality(roleMap, {
+        ...(designConstraint?.contrast != null ? { contrastFloor: designConstraint.contrast } : {}),
+        ...(designConstraint?.accentChromaMax != null
+          ? { accentChromaMax: designConstraint.accentChromaMax }
+          : {}),
+      }),
+    );
   }
 
   return { ok: reasons.length === 0, reasons: [...new Set(reasons)] };

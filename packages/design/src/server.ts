@@ -25,6 +25,11 @@ export type { StyleSpec, DesignConstraints } from './compiler/style-spec'
 export { ROLE_TOKENS, COLOR_ROLE_TOKENS } from './compiler/roles'
 export type { RoleToken } from './compiler/roles'
 
+// --- Design-quality gate (property-based: contrast + accent chroma) ---
+export { verifyRoleQuality, contrastRatio, chromaOf } from './compiler/quality'
+export type { RoleQualityOptions } from './compiler/quality'
+export { contrastPairs } from './compiler/contrast-pairs'
+
 // --- Deterministic colour clustering (feeds init manifest drafting) ---
 export { clusterColors } from './compiler/cluster'
 export type { ColorObservation, RoleCluster, RoleAssignment, ColorKind } from './compiler/cluster'

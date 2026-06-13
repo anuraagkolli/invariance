@@ -866,5 +866,12 @@ function describePolicy(policy: AppManifest["policies"][number]): string {
     }
     case "budget-limit":
       return `hooks limited to ${policy.maxCpuMsPerHook}ms CPU, ${policy.maxMemMbPerHook}MB memory`;
+    case "design-constraint": {
+      const parts = [
+        policy.contrast !== undefined ? `min contrast ${policy.contrast}:1` : null,
+        policy.accentChromaMax !== undefined ? `accent chroma ≤ ${policy.accentChromaMax}` : null,
+      ].filter(Boolean);
+      return `theme quality: ${parts.length ? parts.join(", ") : "compiler defaults"}`;
+    }
   }
 }
