@@ -40,8 +40,15 @@ These were checked against source during design — they correct intuitive-but-w
 - `variable-rewriter.ts:185-199` rewrites **both** arbitrary and named Tailwind classes to `${prefix}-[var(${varName})]` — i.e. everything becomes `bg-[var(--inv-*)]` **arbitrary-value** syntax, which Tailwind JIT resolves with **no config**. A tailwind-emitter is therefore unnecessary for scanner output (the demo needs `theme.extend` only because it was hand-authored with named utilities like `bg-surface0`).
 - `migrate.ts` already emits `providers.tsx` with `InvarianceProvider` + `CustomizationPanel` + `apiKey={process.env.NEXT_PUBLIC_ANTHROPIC_DEV_API_KEY ?? ''}` (`buildProvidersSource`, `migrate.ts:44`) and wraps `{children}`. It does **not** inline SSR `<style>` (no `renderThemeCss`/`themeFromCookieHeader`/`inv-ssr-theme` anywhere in the file).
 - `scanner-agent.ts` is hard-wired to level 0: the prompt forbids non-zero levels (`:38`), the normalizer force-sets `level: 0` (`:257-272`), and `buildFallback` (`:141-160`) emits no level recommendation. There is **no** existing deterministic level-recommendation path.
-- Deterministic unlock presets exist: `applyUnlock`, `unlockPage`, `VALID_SECTIONS` in `packages/scanner/src/unlock/presets.ts`.
-- The `analyze()` / `writeMigration()` split in `migrate.ts` is the seam: `analyze()` mutates an in-memory ts-morph project and returns a diff; `writeMigration()` commits. The interactive step inserts between them; the new emitters extend the write path.
+- Deterministic unlock presets exist: `applyUnlock`, `unlockPage`, `VALID_SECTIONS` in `packages/scanner/src/unlock/presets.ts`. `applyUnlock` mutates **config only** (page levels + app-wide design sections).
+- **The level-gating model (decisive for Unit C):** `gatekeeper.ts:193-200` computes `allowedLevel = Math.min(registered.level, pageLevel)` and rejects an edit when `KIND_LEVEL[kind] > allowedLevel`. So a slot edit needs **both** the slot's wrapper `level` **and** its page's config level ≥ the kind's level. Enabling one slot for F1 therefore requires THREE coordinated edits, none of which the unlock presets do for the wrapper:
+  1. JSX `<m.slot … level={n}>` — `source-rewriter.ts:185` (`wrapSlotNode`) **hardcodes `level={0}`**; the `SlotEdit` interface has no `level` field.
+  2. config `frontend.pages[route].level` — `build-plan.ts:421` (`buildPagesRecord`) **hardcodes `level: 0`**.
+  3. `frontend.design.colors` — `build-plan.ts:283-286` emits `{ mode: 'palette', palette }` (colors **locked to observed**); "make the sidebar blue" would be palette-clamped until unlocked to `{ mode: 'any' }` via `unlockColors`.
+- `applyWrapperEdits(project, plan)` runs **inside `analyze()`** (`migrate.ts:380`), so chosen levels must be available **before** that call. The selection step threads into `analyze()` (a callback), it cannot sit "between analyze and write" — by then the wrappers are already baked at `level={0}`.
+- `themeToCssEntries` is exported from `invariance/headless` but **not** from the main `invariance` entry (only `renderThemeCss`/`themeFromCookieHeader` are, `core/src/index.ts:57`). Unit A adds the main-entry export (or uses `renderThemeCss`, which internally calls `themeToCssEntries` and passes the same verify-on-load gate the scanner theme already satisfies — proven by `migrate.test.ts:127`).
+- `discoverApp` returns no `globals.css` path (`DiscoveredApp` has only `tailwindConfigPath` + `layoutFile`); Unit A adds `globalsCssFile` detection.
+- Test-fixture convention: `packages/scanner/src/__fixtures__/<name>` (e.g. existing `simple-app`); tests inject a `stubAgent` via `MigrateOptions.agent` to run keyless. The clean-Nebula fixture follows this as `src/__fixtures__/nebula-clean`.
 
 ## 5. The `invariance init` experience
 
@@ -69,33 +76,36 @@ $ invariance init
 Each unit is independently testable. Build order: **E → A → B → C → D** (E as a failing acceptance test first; assertions tighten as units land).
 
 ### Unit A — css-emitter (the "make it render" fix)
-- **What:** `packages/scanner/src/emit/css-emitter.ts` — format the scanner's `ThemeJsonV2` initial theme through `themeToCssEntries()` into the `:root` block, and write/patch it into the discovered `globals.css` (under a generated-tokens marker comment, idempotently).
+- **What:** `packages/scanner/src/emit/css-emitter.ts` — format the scanner's `ThemeJsonV2` initial theme through `themeToCssEntries()` into a `:root` block and append it to the discovered `globals.css` between `/* INVARIANCE-GENERATED:start */` … `/* INVARIANCE-GENERATED:end */` markers (idempotent: re-runs replace only between the markers; never merge into the app's own `:root`). First, **export `themeToCssEntries` from the main `invariance` entry** (`core/src/index.ts` — it's only in `invariance/headless` today). Add **`globalsCssFile` detection to `discoverApp`** (the `./globals.css` sibling of `layoutFile`).
 - **Self-consistency:** the rewriter only references roles/slots the scanner observed, so a partial `:root` is complete *for this source*. A later whole-app theme (Designer → `compileTheme` → full role set) fills the rest at runtime via `applyTheme`.
 - **Shared formatter:** refactor `apps/demo/scripts/gen-default-tokens.mjs` to wrap its compiled roles into a synthetic `ThemeJsonV2` and call `themeToCssEntries`, so demo and scanner share one CSS formatter and cannot diverge.
-- **Cut:** no tailwind-emitter (see §4).
-- **Where:** `emit/css-emitter.ts` (pure, golden-tested); wired into `writeMigration()`.
-- **Depends on:** existing cluster/theme emission + `@invariance/core` `themeToCssEntries`.
+- **Cut:** no tailwind-emitter — `variable-rewriter.ts:185-199` emits `bg-[var(--inv-*)]` arbitrary-value syntax (zero-config); see §4.
+- **Where:** `emit/css-emitter.ts` (pure, golden-tested); wired into `writeMigration()` (needs `globalsCssFile` on `AnalyzeResult`).
+- **Depends on:** existing cluster/theme emission + the new `themeToCssEntries` export.
 
 ### Unit B — SSR `<style>` inlining
 - **What:** extend `injectProvider()` (`migrate.ts`) to patch `layout.tsx` with `themeFromCookieHeader()` → `renderThemeCss(theme, config)` → inline `<style id="inv-ssr-theme">` in `<head>`, matching `apps/demo/src/app/layout.tsx`. Provider/`providers.tsx` emission already exists — leave it.
 - **Where:** `migrate.ts` `injectProvider()` (+ a focused helper); idempotent.
 - **Depends on:** `@invariance/core` `renderThemeCss` / `themeFromCookieHeader`. Independent of A.
 
-### Unit C — interactive unlock (advisory LLM, deterministic mutation)
-- **What:** a step between `analyze()` and `writeMigration()`:
-  - **Advisor (`packages/scanner/src/init/advise.ts`):** produce a recommended level + rationale per slot/page. Default is a **deterministic heuristic** (chrome `preserve:true` → locked; content → F1/F3). An *optional* LLM pass refines only the rationale text. The recommendation is **advisory annotation — never written as the slot's level**.
-  - **Confirm (`packages/scanner/src/init/confirm.ts`):** interactive CLI prompts (accept-all / per-slot override). Confirmed choices drive the existing `applyUnlock`/`unlockPage` presets, which produce the `invariance.config.yaml` levels.
-- **Untouched:** `scanner-agent.ts` stays names-only, level 0. The advisor is a separate module so the naming agent's purity is preserved (DESIGN.md:93).
-- **Depends on:** `analyze()` output + `unlock/presets.ts`. Orthogonal to A/B.
+### Unit C — interactive level selection (advisory LLM, deterministic mutation)
+Per §4, a chosen level must reach **three** places, applied **inside `analyze()` before `applyWrapperEdits` (`migrate.ts:380`)**. So the selection threads in as a callback, not a step "between analyze and write."
+
+- **Plumbing prerequisite — carry the level into the wrapper.** Add `level: number` to `source-rewriter.ts`'s `SlotEdit`; `wrapSlotNode` emits `level={${edit.level}}` instead of the hardcoded `level={0}`. Add `level` to the `SlotLocation` shape in `migrate.ts` + `applyWrapperEdits` so it flows through. Default stays `0` everywhere — `scan` (and every existing test) is unchanged.
+- **Callback seam.** Add `chooseLevels?: (slots: SlotChoiceInput[]) => Promise<Map<string, number>>` to `MigrateOptions`. After the per-page loop builds `slotLocations` + `plan` but **before** `applyVariableRewrites`/`applyWrapperEdits`, `analyze()` calls it; the returned per-slot levels are written onto `slotLocations[].level`, and then derived into config: per page, `unlockPage(config, route, maxSlotLevelOnPage)`; if any chosen level ≥ 1, `applyUnlock(config, 'colors')` (so F1 isn't palette-clamped); higher levels map to `fonts`/`spacing`/`content`/`layout`/`components` unlocks via the existing `SECTION_MIN_LEVEL` ladder. No callback → all 0 (today's behavior, byte-identical).
+- **Advisor (`packages/scanner/src/init/advise.ts`):** produce a recommended level + rationale per slot. Default is a **deterministic heuristic** (`preserve:true` chrome → 0 "keep locked"; content slots → 1 "recolor", section groups → 3 "reorder"). An *optional* LLM pass (separate call) refines **only the rationale text**, never the number. The recommendation is advisory — the human's confirmed number is what's applied.
+- **Confirm (`packages/scanner/src/init/confirm.ts`):** interactive prompts via `node:readline/promises` (no new dep) behind an **injectable prompt function** so tests drive it deterministically. Accept-all or per-slot override.
+- **Untouched:** `scanner-agent.ts` stays names-only, level 0 (the advisor is a separate module; DESIGN.md:93 purity preserved).
+- **Depends on:** `analyze()` + `unlock/presets.ts` + the plumbing prerequisite. Orthogonal to A/B.
 
 ### Unit D — `invariance init` orchestrator
 - **What:** `packages/scanner/bin/invariance-init.ts` + `packages/scanner/src/init/run.ts` sequencing ①–⑥, using `analyze()` → Unit C → `writeMigration()` (with A + B emitters) → `runCheck()` → next-steps report. Add the `invariance-init` bin to `package.json`.
 - **Depends on:** A, B, C.
 
 ### Unit E — clean-Nebula acceptance harness (build first)
-- **What:** `packages/scanner/__fixtures__/nebula-clean` — an unwrapped Next.js Nebula authored with **literal colors / inline styles / arbitrary Tailwind, no `var(--inv-*)` and no token-named utilities** (the realistic "before"), derived by stripping the demo's wrappers and restoring literal values. Reference end-state is the existing `apps/demo`.
+- **What:** `packages/scanner/src/__fixtures__/nebula-clean` (mirrors the existing `simple-app` fixture convention) — a **representative** unwrapped Next.js Nebula: app-router `layout.tsx` + `globals.css` + `tailwind.config.ts` + `package.json`, a shell with sidebar/header slots, a home `page.tsx` with a hero + a card row (a sections group) + editable text. Authored with **literal colors / inline styles / arbitrary Tailwind, no `var(--inv-*)` and no token-named utilities** (the realistic "before"). It exercises every path (multi-slot, text, sections, color/font/spacing extraction, level selection) without reproducing the entire demo — functional parity, not byte parity (§3), so a representative app satisfies the bar.
 - **Two test layers:**
-  1. **Fast integration test** (vitest, colocated): copy the fixture to a temp dir, run `init` with no API key (deterministic naming), assert: emitted artifacts present; output type-checks/compiles; `invariance-check` passes; `themeToCssEntries(initialTheme)` yields AA-passing tokens (reuse `scripts/check-contrast.mjs`).
+  1. **Fast integration test** (vitest, colocated, the primary gate): copy the fixture to a temp dir, run `init`/`migrate` with no API key + a deterministic `chooseLevels` stub (sidebar→F1), assert: wrapped source has `<m.slot name="sidebar" level={1}>`; `globals.css` gains the `INVARIANCE-GENERATED` `:root` block; `layout.tsx` gains the SSR `<style>`; `config.frontend.pages['/'].level >= 1` and `colors.mode === 'any'`; `runCheck` passes; the emitted theme's tokens pass `scripts/check-contrast.mjs` (AA).
   2. **CI-only Playwright visual-QA** (per CLAUDE.md "CI only"): `next build && next start` the scanned temp copy; assert no-flash first paint, all 10 packs apply AA-passing, "make the sidebar blue" contrast-solves.
 - **Depends on:** nothing (stub assertions first; fill in as A–D land).
 
