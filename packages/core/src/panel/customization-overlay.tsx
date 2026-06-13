@@ -16,6 +16,8 @@ import type { ConvTurn } from '../agent/gatekeeper'
 import { applyAnyTheme } from '../runtime/apply'
 import { beginSmoothThemeTransition } from '../runtime/smooth-transition'
 import { upgradeThemeJson } from '../config/upgrade'
+import { deriveConstraints } from '../config/derive-constraints'
+import { invariantChips, type InvariantChip } from './invariant-chips'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,6 +31,7 @@ interface HistoryItem {
   reason?: string
   clarification?: string
   progressText?: string
+  warnings?: string[]
 }
 
 interface CustomizationOverlayProps {
@@ -106,6 +109,17 @@ function CheckIcon() {
   )
 }
 
+// Leads the "protected by invariants" chip row. Sized and stroked to sit quiet
+// beside the muted chip text — it is a reassurance glyph, not a focal point.
+function LockIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
+      <rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M8 11 V7 a4 4 0 0 1 8 0 v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // HistoryCard
 // ---------------------------------------------------------------------------
@@ -161,8 +175,26 @@ function HistoryCard({ item }: { item: HistoryItem }) {
       {item.status === 'thinking' &&
         assistantBubble('#f4f5f7', '#5b6471', item.progressText ?? 'Thinking...')}
 
-      {item.status === 'success' &&
-        assistantBubble('#f1f8f2', '#166534', item.description ?? '', '✓')}
+      {item.status === 'success' && (
+        <>
+          {assistantBubble('#f1f8f2', '#166534', item.description ?? '', '✓')}
+          {item.warnings && item.warnings.length > 0 && (
+            <div
+              style={{
+                marginTop: '4px',
+                paddingLeft: '12px',
+                fontSize: '11.5px',
+                lineHeight: 1.4,
+                color: '#6b7280',
+                maxWidth: '85%',
+                wordBreak: 'break-word',
+              }}
+            >
+              Adjusted to respect your invariants: {item.warnings.join('; ')}
+            </div>
+          )}
+        </>
+      )}
 
       {item.status === 'error' &&
         assistantBubble('#fdf3f3', '#b3261e', item.reason ?? '', '✗')}
@@ -173,6 +205,46 @@ function HistoryCard({ item }: { item: HistoryItem }) {
       {item.status === 'system' &&
         assistantBubble('#f4f5f7', '#5b6471', item.description ?? '')}
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Invariant chip
+// ---------------------------------------------------------------------------
+
+// One "protected by invariants" pill. A locked-accent chip leads with a tiny
+// rounded swatch filled with the locked hex so the constraint reads at a glance.
+function InvariantPill({ chip }: { chip: InvariantChip }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '5px',
+        background: '#f4f5f7',
+        color: '#6b7280',
+        fontSize: '11px',
+        lineHeight: 1,
+        padding: '4px 8px',
+        borderRadius: '999px',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {chip.swatch && (
+        <span
+          aria-hidden="true"
+          style={{
+            width: '10px',
+            height: '10px',
+            borderRadius: '3px',
+            background: chip.swatch,
+            boxShadow: 'inset 0 0 0 1px rgba(17,24,39,0.12)',
+            flexShrink: 0,
+          }}
+        />
+      )}
+      {chip.label}
+    </span>
   )
 }
 
@@ -252,6 +324,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
     llmProvider,
     oaiStructuredMode,
     models,
+    lastReconcile,
   } = useInvariance()
 
   const [input, setInput] = useState('')
@@ -297,6 +370,27 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
   useEffect(() => {
     saveChatHistory(userId, appId, history, convHistory)
   }, [userId, appId, history, convHistory])
+
+  // Surface a recompile triggered by a new brand invariant as a neutral system
+  // bubble. lastReconcile can stay set across panel remounts, so we dedupe on
+  // the reason: appending only when no system item already carries it. (Errors
+  // use status 'error', so this filter never collides with them.) Once the item
+  // exists the .some() check holds, so the history-change re-run is a no-op.
+  useEffect(() => {
+    if (lastReconcile?.action !== 'recompiled') return
+    const reason = lastReconcile.reason
+    if (history.some((h) => h.status === 'system' && h.reason === reason)) return
+    setHistory((h) => [
+      ...h,
+      {
+        id: Math.random().toString(36).slice(2),
+        userMessage: '',
+        status: 'system' as const,
+        description: 'Your theme was updated to respect a new brand invariant — the vibe was kept.',
+        reason,
+      },
+    ])
+  }, [lastReconcile, history])
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -445,7 +539,12 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
     setHistory((h) =>
       h.map((item) =>
         item.id === id
-          ? { ...item, status: 'success' as const, description: result.description }
+          ? {
+              ...item,
+              status: 'success' as const,
+              description: result.description,
+              ...(result.warnings && result.warnings.length > 0 ? { warnings: result.warnings } : {}),
+            }
           : item,
       ),
     )
@@ -473,6 +572,11 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
   // forbidden mode/font never renders a broken chip. Compute once (config is
   // stable for the panel's lifetime).
   const packs = useMemo(() => availablePacks(config), [config])
+
+  // The "protected by invariants" chips — quiet always-on chrome derived from
+  // the app's active constraints. Empty when the app declares no invariants, in
+  // which case the row renders nothing at all.
+  const chips = useMemo(() => invariantChips(deriveConstraints(config)), [config])
 
   async function handleApplyPack(packId: string, packName: string) {
     // phase !== 'chat': a pack tap during the post-success 'revealing' window
@@ -692,6 +796,32 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
             <CloseIcon />
           </button>
         </div>
+
+        {/* Protected-by-invariants chips: quiet reassurance chrome. Renders only
+            when the app declares at least one constraint. */}
+        {chips.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '6px',
+              padding: '8px 18px',
+              borderBottom: '1px solid rgba(17,24,39,0.05)',
+              flexShrink: 0,
+            }}
+          >
+            <span
+              style={{ color: '#9ca3af', display: 'flex', alignItems: 'center', marginRight: '1px' }}
+              title="Protected by invariants"
+            >
+              <LockIcon />
+            </span>
+            {chips.map((chip) => (
+              <InvariantPill key={chip.kind} chip={chip} />
+            ))}
+          </div>
+        )}
 
         {/* History */}
         <div
