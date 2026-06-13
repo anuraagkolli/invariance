@@ -137,4 +137,64 @@ describe('verifyV2', () => {
     const r = verifyV2(theme, config, {})
     expect(r.results.find((t) => t.name === 'fontInRegistry')?.passed).toBe(false)
   })
+
+  // --- accentChromaWithinCap ---
+  // Closes the verify-on-load gap: the cap must bind on a STORED theme, not just
+  // at compile time, so lowering the cap on an applied theme triggers recompile.
+
+  it('accentChromaWithinCap passes when the accent was clamped under the cap', () => {
+    // Compile a vivid pack UNDER a low cap so the accent is genuinely clamped,
+    // then verify against that same cap — a real clamped-and-passing fixture.
+    const vivid = THEME_PACKS.find((p) => p.id === 'retro-arcade')!
+    const clamped = compileTheme(vivid.spec, { accent_chroma_max: 0.10 })
+    const theme: ThemeJsonV2 = {
+      version: 2, base_app_version: 'v1',
+      theme: { roles: clamped.roles, slots: {}, styleSpec: vivid.spec },
+    }
+    const r = verifyV2(theme, config, { accent_chroma_max: 0.10 })
+    const check = r.results.find((t) => t.name === 'accentChromaWithinCap')
+    expect(check?.passed, check?.message).toBe(true)
+  })
+
+  it('accentChromaWithinCap fails an over-cap accent (cap lowered after compile)', () => {
+    // The gap this check closes: a theme compiled WITHOUT a cap carries a vivid
+    // accent (#e94560 ≈ 0.20 chroma). Verified against a freshly-lowered cap of
+    // 0.10 it must FAIL with error severity so reconcile recompiles it.
+    const roles = { ...compiled.roles, '--inv-accent': '#e94560' }
+    const theme: ThemeJsonV2 = { ...goodTheme, theme: { ...goodTheme.theme, roles } }
+    const r = verifyV2(theme, config, { accent_chroma_max: 0.10 })
+    const check = r.results.find((t) => t.name === 'accentChromaWithinCap')
+    expect(check?.passed).toBe(false)
+    expect(check?.severity).toBe('error')
+  })
+
+  it('accentChromaWithinCap exempts a locked accent that exceeds the cap', () => {
+    // A locked accent passes verbatim into roles (roles.ts), so the cap cannot
+    // apply — otherwise a locked-but-vivid accent loops verify-fail → recompile
+    // → same value → fail. The lock wins; the check exempts it.
+    const roles = { ...compiled.roles, '--inv-accent': '#e94560' }
+    const theme: ThemeJsonV2 = { ...goodTheme, theme: { ...goodTheme.theme, roles } }
+    const r = verifyV2(theme, config, {
+      accent_chroma_max: 0.10,
+      locked_tokens: { '--inv-accent': '#e94560' },
+    })
+    const check = r.results.find((t) => t.name === 'accentChromaWithinCap')
+    expect(check?.passed, check?.message).toBe(true)
+  })
+
+  it('accentChromaWithinCap passes (no cap) when no constraint is set', () => {
+    const r = verifyV2(goodTheme, config, {})
+    expect(r.results.find((t) => t.name === 'accentChromaWithinCap')?.passed).toBe(true)
+  })
+
+  it('accentChromaWithinCap passes (warning) for a roles-less theme', () => {
+    const theme: ThemeJsonV2 = {
+      version: 2, base_app_version: 'v1',
+      theme: { roles: {}, slots: { '--inv-sidebar-bg': '#123456' } },
+    }
+    const r = verifyV2(theme, config, { accent_chroma_max: 0.10 })
+    const check = r.results.find((t) => t.name === 'accentChromaWithinCap')
+    expect(check?.passed).toBe(true)
+    expect(check?.severity).toBe('warning')
+  })
 })

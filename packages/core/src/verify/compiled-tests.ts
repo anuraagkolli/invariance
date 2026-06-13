@@ -1,4 +1,4 @@
-import { wcagContrast } from 'culori'
+import { wcagContrast, converter } from 'culori'
 
 import { StyleSpecSchema, CONTRAST_TARGETS } from '../compiler/style-spec'
 import type { DesignConstraints } from '../compiler/style-spec'
@@ -289,7 +289,104 @@ function varRefsResolve(theme: ThemeJsonV2['theme']): TestResult {
   }
 }
 
-// Entry point: runs all six v6 checks and aggregates exactly like the v5 engine.
+// --- accentChromaWithinCap ---
+// Closes the verify-on-load / live-recompile gap for the accent_chroma_max
+// invariant. The compiler clamps chroma at COMPILE time (accentRamp via
+// Math.min, then gamut-maps into sRGB) — but nothing re-checks it afterward, so
+// a stored theme whose accent exceeds a NEWLY-LOWERED cap would pass verifyV2
+// and apply unchanged. With this check present, verifyV2 fails such a theme,
+// and reconcileStoredTheme (which recompiles on verify failure) re-derives the
+// accent ramp under the new cap so the accent visibly desaturates.
+//
+// Lock exemption: a locked --inv-accent passes verbatim into roles even if it
+// exceeds the cap (mirrors roles.ts: `roles['--inv-accent'] = lockedAccent`).
+// The lock wins over the cap, so we must exempt it — otherwise a locked-but-
+// vivid accent would verify-fail, recompile, reproduce the same locked value,
+// fail again: an unrecoverable verify-fail → drop loop. The lock is immutable
+// by design; only the developer can lower it.
+const toOklch = converter('oklch')
+
+function accentChromaWithinCap(
+  theme: ThemeJsonV2['theme'],
+  constraints: DesignConstraints,
+): TestResult {
+  const cap = constraints.accent_chroma_max
+  if (cap === undefined) {
+    return {
+      name: 'accentChromaWithinCap',
+      passed: true,
+      message: 'No accent chroma cap to verify',
+      severity: 'error',
+      autoFixable: false,
+    }
+  }
+
+  const roles = theme?.roles
+  // No compiled roles → not a compiler-produced theme; the cap binds only on
+  // values the compiler emitted (mirrors lockedTokensUntouched/contrastPairs).
+  if (!roles || Object.keys(roles).length === 0) {
+    return {
+      name: 'accentChromaWithinCap',
+      passed: true,
+      message: 'No roles present (not a compiler-produced theme)',
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
+
+  // A locked accent is exempt: it passes verbatim into roles, cap or not.
+  if (constraints.locked_tokens?.['--inv-accent'] !== undefined) {
+    return {
+      name: 'accentChromaWithinCap',
+      passed: true,
+      message: 'accent is locked — chroma cap does not apply',
+      severity: 'error',
+      autoFixable: false,
+    }
+  }
+
+  const accent = roles['--inv-accent']
+  if (!accent) {
+    return {
+      name: 'accentChromaWithinCap',
+      passed: true,
+      message: 'No --inv-accent present — skipping chroma check',
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
+
+  const parsed = toOklch(accent)
+  const c = parsed?.c
+  // Unparseable or achromatic-with-undefined-chroma: don't false-fail on an odd
+  // value (an achromatic accent has chroma ~0 and trivially passes anyway).
+  if (c === undefined) {
+    return {
+      name: 'accentChromaWithinCap',
+      passed: true,
+      message: `--inv-accent '${accent}' has no readable chroma — skipping`,
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
+
+  // EPSILON absorbs gamut-mapping/rounding: the compiler clamps via Math.min
+  // then gamut-maps into sRGB, so a legitimately-clamped accent measures
+  // at-or-just-below the cap. Without slack, a boundary value could false-fail.
+  const EPSILON = 0.005
+  const passed = c <= cap + EPSILON
+  return {
+    name: 'accentChromaWithinCap',
+    passed,
+    message: passed
+      ? `accent chroma ${c.toFixed(3)} within cap ${cap}`
+      : `accent chroma ${c.toFixed(3)} exceeds cap ${cap}`,
+    severity: 'error',
+    autoFixable: false,
+  }
+}
+
+// Entry point: runs all v6 checks and aggregates exactly like the v5 engine.
 // Warnings do not fail the result (consistent with verify/engine.ts pass criteria).
 export function verifyV2(
   theme: ThemeJsonV2,
@@ -302,6 +399,7 @@ export function verifyV2(
     compilerOutputComplete(t),
     lockedTokensUntouched(t, constraints),
     contrastPairsCheck(t, constraints),
+    accentChromaWithinCap(t, constraints),
     fontInRegistry(t),
     varRefsResolve(t),
   ]
