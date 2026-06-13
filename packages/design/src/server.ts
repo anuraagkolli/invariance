@@ -48,3 +48,6 @@ export type { GatekeeperResult, GateKind, ConvTurn } from './agent/gatekeeper'
 
 // --- Config (design constraints parsing) ---
 export { parseConfig } from './config/parser'
+
+// --- StyleSpec intent summary (console / provenance display) ---
+export { summarizeStyleSpec } from './style-summary'

@@ -1,4 +1,4 @@
-import type { AppManifest, UiOp } from "@invariance/schema";
+import type { AppManifest, ModBundle, PolicyRule, UiOp } from "@invariance/schema";
 import { compileTheme, type DesignConstraints, type StyleSpec } from "@invariance/design/server";
 import type { AgentInput, AuthoringAgent } from "./agent";
 import type { ModDraft } from "../registry";
@@ -29,15 +29,53 @@ export interface DesignAwareOptions {
 }
 
 /**
- * Read design constraints from the manifest's `design-constraint` policy.
- *
- * Phase 3 formalises that policy and maps it here (contrast floor, accent
- * chroma cap, allowed modes, font registry, locked tokens). Until then this
- * returns empty constraints — the compiler still solves WCAG AA contrast and
- * clamps accent chroma by construction, so the output is safe regardless.
+ * Read design constraints from the manifest's `design-constraint` policy, so
+ * both authoring and re-fix compile under the developer's invariants (contrast
+ * floor, accent chroma cap). Absent fields fall back to the compiler's own AA
+ * defaults — the output is safe regardless.
  */
-export function designConstraintsFromManifest(_manifest: AppManifest): DesignConstraints {
-  return {};
+export function designConstraintsFromManifest(manifest: AppManifest): DesignConstraints {
+  const policy = manifest.policies.find(
+    (p): p is Extract<PolicyRule, { type: "design-constraint" }> => p.type === "design-constraint",
+  );
+  const constraints: DesignConstraints = {};
+  if (policy?.contrast != null) constraints.contrast = policy.contrast;
+  if (policy?.accentChromaMax != null) constraints.accent_chroma_max = policy.accentChromaMax;
+  return constraints;
+}
+
+/**
+ * Recompile a theme mod's stored StyleSpec under the current manifest — the
+ * deterministic re-fix path. When a developer ships a manifest that tightens a
+ * design constraint, a degraded theme can be regenerated from its provenance
+ * (no LLM, no re-prompt): the compiler re-solves the role tokens under the new
+ * constraints. Non-token ops (slot/style) and the subject's API hooks are
+ * preserved.
+ */
+export function recompileTheme(
+  styleSpec: StyleSpec,
+  currentBundle: ModBundle,
+  manifest: AppManifest,
+  compilerId = COMPILER_ID,
+): ModDraft {
+  const constraints = designConstraintsFromManifest(manifest);
+  const { roles, warnings } = compileTheme(styleSpec, constraints);
+  const tokenOps: UiOp[] = Object.entries(roles).map(([token, value]) => ({
+    type: "token-override",
+    token,
+    value,
+  }));
+  const kept = currentBundle.uiOps.filter((op) => op.type !== "token-override");
+  return {
+    uiOps: [...kept, ...tokenOps],
+    hooks: currentBundle.hooks,
+    capabilities: currentBundle.capabilities,
+    design: {
+      styleSpec: styleSpec as unknown as Record<string, unknown>,
+      compiledBy: compilerId,
+      warnings,
+    },
+  };
 }
 
 /**

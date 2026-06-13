@@ -1,9 +1,11 @@
 import type { SigningKeyPair } from "@invariance/schema/signing";
 import { ModBundleSchema, type ModBundle } from "@invariance/schema";
+import { StyleSpecSchema, type StyleSpec } from "@invariance/design/server";
 import { z } from "zod";
 import type { Store, ModRecord } from "../../store";
 import { assembleBundle, publishBundle, RegistryError, type ModDraft } from "../registry";
 import { verifyBundleAgainstManifest } from "../verification";
+import { recompileTheme } from "./design-author";
 import type { AgentInput, AuthoringAgent } from "./agent";
 
 const DraftShape = z.object({
@@ -191,11 +193,40 @@ export interface RefixModParams {
  * instruction is never stored as a user prompt.
  */
 export async function refixMod(params: RefixModParams): Promise<AuthoringResult> {
-  const { store, appId, subjectId } = params;
+  const { store, keys, appId, subjectId } = params;
   const degraded = await store.latestMod(appId, subjectId);
   if (!degraded || degraded.status !== "degraded") {
     throw new RegistryError(`subject ${subjectId} has no degraded mod to fix`, 409);
   }
+
+  // Deterministic theme re-fix: a degraded theme mod carries the StyleSpec that
+  // produced it, so we recompile it under the current manifest instead of
+  // re-prompting the LLM. The compiler re-solves the role tokens under the new
+  // constraints; if that clears the verifier we publish it. Falls through to the
+  // LLM re-author path for non-theme mods or when recompilation can't satisfy
+  // the new contract.
+  const degradedBundle = ModBundleSchema.parse(JSON.parse(degraded.envelope.payload));
+  const manifest = await store.currentManifest(appId);
+  if (degradedBundle.design?.styleSpec && manifest) {
+    const spec = StyleSpecSchema.safeParse(degradedBundle.design.styleSpec);
+    if (spec.success) {
+      const draft = recompileTheme(spec.data as StyleSpec, degradedBundle, manifest);
+      const rebuilt = await assembleBundle(store, appId, subjectId, draft);
+      if (verifyBundleAgainstManifest(rebuilt, manifest).ok) {
+        const record = await publishBundle(store, keys, rebuilt, degraded.prompts);
+        await store.addEvent({
+          type: "mod_refixed",
+          appId,
+          subjectId,
+          modId: record.modId,
+          detail: { attempts: 0, method: "recompile" },
+          at: Date.now(),
+        });
+        return { ok: true, record, attempts: 0 };
+      }
+    }
+  }
+
   const prompt =
     "Recreate the user's customizations under the new manifest. " +
     `Original requests, in order: ${degraded.prompts.map((p) => JSON.stringify(p)).join("; ")}`;

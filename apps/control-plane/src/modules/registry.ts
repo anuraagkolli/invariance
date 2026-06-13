@@ -166,6 +166,9 @@ export async function revalidateSubject(
     uiOps: stale.uiOps,
     hooks: stale.hooks,
     capabilities: stale.capabilities,
+    // Carry design provenance across migration: the quality gate must re-run on
+    // the rebound theme, and re-fix needs the StyleSpec to recompile from.
+    ...(stale.design ? { design: stale.design } : {}),
   });
   const verdict = verifyBundleAgainstManifest(rebound, manifest);
   if (!verdict.ok) {
