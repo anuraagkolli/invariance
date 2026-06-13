@@ -100,6 +100,8 @@ export async function callDesigner(input: DesignerInput, retryFeedback?: string[
     shadow: data.shadow,
     density: data.density,
     borderWeight: data.borderWeight,
+    typography: data.typography,
+    framing: data.framing,
     rationale: data.rationale,
     ...(data.secondaryHue !== undefined ? { secondaryHue: data.secondaryHue } : {}),
   }

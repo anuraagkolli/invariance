@@ -56,6 +56,8 @@ export function styleSpecWireSchema(pairingIds: readonly string[]) {
       shadow: { type: 'string', enum: ['flat', 'subtle', 'pronounced', 'hard-offset'] },
       density: { type: 'string', enum: ['compact', 'standard', 'comfortable'] },
       borderWeight: { type: 'string', enum: ['hairline', 'standard', 'heavy'] },
+      typography: { type: 'string', enum: ['standard', 'display-caps', 'editorial', 'technical'] },
+      framing: { type: 'string', enum: ['compact', 'standard', 'spacious'] },
       rationale: { type: 'string' },
     },
   } as const
