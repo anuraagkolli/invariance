@@ -1675,7 +1675,9 @@ git commit -m "test(scanner): functional-parity acceptance — scan clean Nebula
 
 ---
 
-## Task 16 (CI-only follow-on): live browser parity
+## Task 16 (CI-only follow-on): live browser parity — **DEFERRED (2026-06-13)**
+
+> **Status: deferred, not done.** The `nebula-clean` fixture is a minimal ts-morph parse-target (no installed `next`/`react`, not in the turbo build graph), so `next build && next start` isn't runnable against it without standing up a separate installable-app harness. Per CLAUDE.md Playwright is CI-only, and this task is explicitly optional. The artifact-level acceptance test (Task 15) already proves functional parity with teeth (wrapped source, themed `:root` + SSR `<style>`, unlocked config, `invariance-check` passes, emitted theme passes `verifyV2` AA). The live-browser checks (no-flash first paint over the wire, 10 packs applying AA-passing in a running app, "sidebar blue" solving through the panel) remain unproven by automation and are the honest gap. To do later: scan a copy of (or strip) the real `apps/demo` into an installable app and drive the existing `apps/demo/scripts/visual-qa.mjs` harness.
 
 > Per CLAUDE.md, Playwright runs in CI only. This task is optional for the core deliverable and may be deferred — `log()` it if skipped so coverage isn't overstated.
 
