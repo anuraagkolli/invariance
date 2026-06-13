@@ -64,26 +64,36 @@ const THEME_WORDS =
 const keywordClassify: ThemeClassifier = (input) => THEME_WORDS.test(input.prompt);
 
 /**
- * Build the design path from env. The Designer is a live LLM call (needs a key),
- * so this only activates when INVARIANCE_DESIGN_API_KEY / ANTHROPIC_API_KEY is
- * set. The classifier is deterministic.
+ * Build the design path from env. The Designer is a live LLM call, so this
+ * activates when EITHER an OpenAI-compatible base URL is set (Ollama/qwen — the
+ * default, no key needed) OR an Anthropic key is set. The classifier is
+ * deterministic. Env:
+ *   INVARIANCE_DESIGN_BASE_URL  (or INVARIANCE_LLM_BASE_URL) e.g. http://localhost:11434/v1
+ *   INVARIANCE_DESIGN_MODEL     (or INVARIANCE_LLM_MODEL)    e.g. qwen2.5:latest
+ *   INVARIANCE_DESIGN_PROVIDER  anthropic | openai-compatible (inferred from base URL)
+ *   INVARIANCE_DESIGN_API_KEY   (or ANTHROPIC_API_KEY)       only for Anthropic
  */
 function designAuthoringFromEnv(): { classify: ThemeClassifier; design: ThemeDesigner } | null {
-  const apiKey = process.env.INVARIANCE_DESIGN_API_KEY ?? process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
   const baseUrl = process.env.INVARIANCE_DESIGN_BASE_URL ?? process.env.INVARIANCE_LLM_BASE_URL;
-  const provider = process.env.INVARIANCE_DESIGN_PROVIDER as
-    | "anthropic"
-    | "openai-compatible"
-    | undefined;
+  const apiKey = process.env.INVARIANCE_DESIGN_API_KEY ?? process.env.ANTHROPIC_API_KEY;
+  if (!baseUrl && !apiKey) return null;
+  const provider = (process.env.INVARIANCE_DESIGN_PROVIDER ??
+    (baseUrl ? "openai-compatible" : "anthropic")) as "anthropic" | "openai-compatible";
+  const model = process.env.INVARIANCE_DESIGN_MODEL ?? process.env.INVARIANCE_LLM_MODEL;
+  // Local models reject native json_schema enforcement; ask for a bare JSON
+  // object and let the Designer's zod-revalidate + retry loop pin the shape.
+  const oaiStructuredMode =
+    provider === "openai-compatible" ? ("json_object" as const) : undefined;
   const design: ThemeDesigner = async (input) => {
     const result = await callDesigner({
       request: input.request,
       constraints: input.constraints,
-      apiKey,
+      apiKey: apiKey ?? process.env.INVARIANCE_LLM_API_KEY ?? "",
+      provider,
       ...(input.currentSpec ? { currentSpec: input.currentSpec } : {}),
       ...(baseUrl ? { baseUrl } : {}),
-      ...(provider ? { provider } : {}),
+      ...(model ? { model } : {}),
+      ...(oaiStructuredMode ? { oaiStructuredMode } : {}),
     });
     if (!result.ok) throw new Error(`designer failed: ${result.error}`);
     return result.spec;
