@@ -1,5 +1,8 @@
 # Scanner Agent — Migration Tool for Existing React/Next.js Apps
 
+> **Archived (v5-era), superseded.** This predates the role-tier token model and the guided onboarding flow. The scanner shipped with deterministic role clustering (CLAUDE.md phase 7), and the "future overlay UI" for unlocking referenced below (§point 4) is now the `invariance init` guided flow — a deterministic level advisor + interactive confirm, built 2026-06-13. Current design and plan:
+> `docs/superpowers/specs/2026-06-13-scanner-onboarding-init-design.md` · `docs/superpowers/plans/2026-06-13-scanner-onboarding-init.md`.
+
 
 
 ## Context

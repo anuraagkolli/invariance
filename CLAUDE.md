@@ -6,7 +6,7 @@ Invariance is a developer framework that makes existing React/Next.js apps custo
 
 Two adoption modes share one brain:
 - **Trial Mode**: a script snippet (`invariance.js`) that demos themes on the rendered DOM of any staging site. Fragile by design, exists to sell Product Mode. F1 + hide only.
-- **Product Mode**: SDK + Scanner. Wrappers and `var(--inv-*)` references live in the developer's source. Governed, render-driven, F1-F4, shipped to all users.
+- **Product Mode**: SDK + Scanner. Wrappers and `var(--inv-*)` references live in the developer's source. Governed, render-driven, F1-F4, shipped to all users. Adopted via one guided command — `invariance init` (scan → choose invariants → wrap → verify).
 
 ### The Quality Pipeline (the heart of v6)
 
@@ -87,11 +87,15 @@ packages/
 │   │   └── sections.tsx         # NEW: renders section order/visibility from context
 │   └── fonts/loader.ts          # NEW: inject <link> for registry fonts on demand
 ├── scanner/src/
-│   ├── roles/cluster.ts         # NEW: deterministic value clustering into roles
-│   └── emit/                    # emits role tier + slot var() references
-├── snippet/                     # NEW: Trial Mode bundle
+│   ├── roles/cluster.ts         # deterministic value clustering into roles
+│   ├── emit/                    # role tier + slot var() refs; css-emitter.ts writes the :root baseline
+│   ├── migrate.ts               # analyze()/writeMigration() seam; provider + SSR injection
+│   └── init/                    # NEW: invariance init flow — advise.ts (deterministic level recs),
+│                                #   confirm.ts (interactive ratify), derive-config.ts (levels→config), run.ts
+├── snippet/                     # Trial Mode bundle
 │   └── src/ (mini-scan.ts, virtual-tokens.ts, observe.ts, persist.ts, export.ts)
-└── cli additions: invariance check (CI guard), invariance migrate-theme (version bumps)
+└── cli: invariance scan (low-level migrate) · invariance init (guided onboarding) ·
+        invariance unlock · invariance check (CI guard) · invariance migrate-theme
 ```
 
 ## theme.json v2
@@ -117,7 +121,7 @@ design:
   legacy_palette: []   # optional hard allowlist, still supported
 ```
 
-After scan: pages level 0 as before, but constraints are relational so unlocking F1 immediately enables high-quality theming.
+After scan: `invariance scan` ships every slot/page at level 0 (locked). `invariance init` adds a guided step — a deterministic advisor recommends a level per slot (chrome locked, content F1), the developer confirms, and the choice raises the JSX `<m.slot level>`, the page level, and unlocks `colors` together (the LLM never picks a level). Constraints are relational, so an unlocked F1 immediately enables high-quality theming.
 
 ## Coding Conventions
 
@@ -144,13 +148,15 @@ Unchanged from v5: strict TS, named exports, no `any`, async/await only, single 
 10. ✅ Trial Mode snippet (`@invariance/snippet`, ~75KB gz, no React via `invariance/headless`): mini-scan/virtual-tokens/observe/persist/export + vanilla-DOM panel; scan-binds elements to roles once, then themes by `:root` role-value swap. *Exit met: snippet themes an unmodified static demo copy (Playwright); exported theme round-trips through `prepareStoredTheme`.*
 11. ✅ Demo polish: one-tap theme packs in the SDK panel (`applyPack`, keyless, self-defending via compile+verifyV2); Playwright visual-QA harness asserting ten distinct AA-passing accents + font links (exit-nonzero on failure); gauntlet sign-off at `docs/gauntlet-signoff.md`. *Exit met: v6 success criteria recorded with evidence.*
 
-**v6 rework complete.** All eleven phases merged to main. Full suite: 546 tests (schema 11 + core 396 + scanner 84 + snippet 55) + the demo app.
+**Onboarding flow (`invariance init`) — 2026-06-13, branch `scanner-onboarding-init` / PR #3.** The scanner now drives the full adoption journey, not just source-wrapping: discover → analyze → a deterministic advisor recommends a customization level per slot and the developer confirms (LLM never picks levels) → wrap source + emit the `:root` token baseline into `globals.css` (via the shared `themeToCssEntries` formatter, also used by the demo's `gen-default-tokens.mjs`) + inject SSR `<style>` inlining + write the unlocked config → run `invariance check`. Proven by a functional-parity acceptance test that scans a representative clean-Nebula fixture (`scanner/src/__fixtures__/nebula-clean`) to a demo-equivalent app. Also fixed a latent scanner bug: same-tag sibling `<section>`s were silently dropped by the wrapper indexer (now wrapped back-to-front by source offset). *Deferred: live-browser parity (packs / "sidebar blue" in a running scanned app) — see the plan's Task 16.*
+
+**v6 rework complete.** All eleven phases merged to main; the `invariance init` onboarding flow follows on its branch/PR. Full suite: 621 tests (schema 16 + core 450 + scanner 100 + snippet 55) + the demo app.
 
 > **Note:** `apps/demo` is the live Nebula demo (built phase 5). The v5-era scanner spec is archived at `docs/scanner-v5.md` and predates the role-tier model. Per-phase implementation plans live in `docs/superpowers/plans/`.
 
 ### Success criteria
 
-Ten consecutive vibe prompts (retro, brutalist, pastel, terminal, glassy, editorial, ocean, sunset, mono, corporate) each produce a distinct, coherent, AA-compliant theme with zero verification failures; "make the sidebar blue" adjusts contrast automatically; snippet-exported theme round-trips into the SDK post-scan; `invariance check` blocks a removed slot in CI.
+Ten consecutive vibe prompts (retro, brutalist, pastel, terminal, glassy, editorial, ocean, sunset, mono, corporate) each produce a distinct, coherent, AA-compliant theme with zero verification failures; "make the sidebar blue" adjusts contrast automatically; snippet-exported theme round-trips into the SDK post-scan; `invariance check` blocks a removed slot in CI; `invariance init` scans a clean Nebula to a runnable, themeable, demo-equivalent app (wrapped source + themed `:root` + SSR + unlocked config, `invariance check` green).
 
 ## Deferred
 

@@ -7,6 +7,8 @@ natural language, with developer-defined invariants the model can never violate.
 pnpm dev   # http://localhost:4321
 ```
 
+> **This demo was hand-wrapped as the reference. To wrap your *own* React/Next.js app the same way, run `invariance init <app>`** (in `packages/scanner`): it scans the source, lets you choose which slots are customizable (advisor recommends, you confirm), and emits wrapped source + a themed `:root` baseline + SSR inlining + the invariant config — a runnable, themeable app equivalent to this one. `invariance scan` is the lower-level non-interactive form.
+
 By default the customization panel's agents run an **open-source model —
 `qwen2.5` via Ollama** — through the app's own `/api/llm` proxy route. No API
 key, no cloud calls:
