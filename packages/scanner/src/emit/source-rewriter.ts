@@ -84,6 +84,31 @@ function indexJsxByPath(sourceFile: SourceFile): Map<string, Node> {
 }
 
 /**
+ * Re-fetch the JsxElement/JsxSelfClosingElement whose source start is exactly
+ * `start`. Used to recover a fresh node reference after a higher-offset
+ * `replaceWithText` edit (which forgets earlier node references). The descendant
+ * at the position may be a token (e.g. the `<`), so climb ancestors until the
+ * JSX element whose own start equals `start`.
+ */
+function jsxElementAtStart(sourceFile: SourceFile, start: number): Node | undefined {
+  const at = sourceFile.getDescendantAtPos(start)
+  if (!at) return undefined
+  let current: Node | undefined = at
+  while (current) {
+    const k = current.getKind()
+    if (
+      (k === SyntaxKind.JsxElement || k === SyntaxKind.JsxSelfClosingElement) &&
+      current.getStart() === start
+    ) {
+      return current
+    }
+    if (current.getStart() < start) return undefined
+    current = current.getParent()
+  }
+  return undefined
+}
+
+/**
  * Unwrap `ParenthesizedExpression` down to the JSX element it contains,
  * so callers always operate on the JSX node itself (never the parens).
  */
@@ -265,15 +290,27 @@ export function applyWrapperEdits(project: Project, plan: MigrationPlan): void {
       wrapTextNode(jsxText, textEdit)
     }
 
-    // Slots: walk ordered longest-path-first so ancestors wrap around descendants.
-    // Re-index the file after each wrap because nodes shift.
-    const slotsForFile = slotLocations
-      .filter((s) => s.file === file)
-      .sort((a, b) => b.jsxPath.length - a.jsxPath.length)
-
-    for (const slot of slotsForFile) {
-      const index = indexJsxByPath(sourceFile)
+    // Slots: resolve every target node to a source start offset in ONE index
+    // pass, then wrap back-to-front (descending start offset). Re-indexing after
+    // each wrap (the old approach) was broken: wrapping one of two same-tag
+    // siblings collapsed the survivor's computed jsxPath (e.g. `Shell>section[1]`
+    // -> `Shell>section`), so its lookup returned undefined and it was silently
+    // dropped. Descending-offset order also subsumes the old longest-path-first
+    // sort: a descendant's start offset is always greater than its ancestor's,
+    // so descendants wrap first, and edits at higher offsets never shift the
+    // start offsets of nodes not yet wrapped.
+    const index = indexJsxByPath(sourceFile)
+    const slotTargets: Array<{ slot: SlotLocation; start: number }> = []
+    for (const slot of slotLocations) {
+      if (slot.file !== file) continue
       const node = index.get(slot.jsxPath)
+      if (!node) continue
+      slotTargets.push({ slot, start: node.getStart() })
+    }
+    slotTargets.sort((a, b) => b.start - a.start)
+
+    for (const { slot, start } of slotTargets) {
+      const node = jsxElementAtStart(sourceFile, start)
       if (!node) continue
       const vars = plan.slotCssVariables[slot.name] ?? []
       wrapSlotNode(node, {
