@@ -35,7 +35,7 @@ export function Shell({ pageName, children }: ShellProps) {
           <Sidebar />
         </m.slot>
 
-        <div className="lg:pl-[230px]">
+        <div className="lg:pl-sidebar">
           <m.slot
             name="header"
             level={1}

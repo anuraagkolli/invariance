@@ -40,7 +40,7 @@ export function SearchOverlay() {
     // resolves transparent — the same gotcha the hsl() gradients avoid. A solid
     // token surface keeps it theme-driven AND actually opaque so results read.
     <div
-      className="fixed inset-x-0 bottom-0 top-[57px] z-30 overflow-y-auto bg-surface0 lg:left-[230px]"
+      className="fixed inset-x-0 bottom-0 top-[57px] z-30 overflow-y-auto bg-surface0 lg:left-sidebar"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) closeSearch()
       }}
@@ -85,10 +85,7 @@ export function SearchOverlay() {
         )}
 
         {results.length > 0 && (
-          <div
-            className="mt-8 grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6"
-            style={{ gap: 'calc(var(--inv-density-unit) * 3)' }}
-          >
+          <div className="mt-8 grid grid-cols-3 gap-sm sm:grid-cols-4 lg:grid-cols-6">
             {results.map((title) => (
               <TitleCard key={title.id} title={title} shape="standard" />
             ))}

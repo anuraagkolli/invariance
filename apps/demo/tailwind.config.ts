@@ -32,6 +32,29 @@ const config: Config = {
         inv1: 'var(--inv-shadow-1)',
         inv2: 'var(--inv-shadow-2)',
       },
+      // Themed spacing/geometry scale. Tailwind reads `spacing` for width,
+      // padding, gap AND margin, so one key (e.g. `sm`) serves `gap-sm`, `px-sm`
+      // and `w-sm`. The sidebar/card widths live here too so layout utilities
+      // resolve to the same compiler-emitted tokens a theme rewrites.
+      spacing: {
+        '2xs': 'var(--inv-space-2xs)',
+        xs: 'var(--inv-space-xs)',
+        sm: 'var(--inv-space-sm)',
+        md: 'var(--inv-space-md)',
+        lg: 'var(--inv-space-lg)',
+        xl: 'var(--inv-space-xl)',
+        '2xl': 'var(--inv-space-2xl)',
+        section: 'var(--inv-section-gap)',
+        sidebar: 'var(--inv-sidebar-w)',
+        card: 'var(--inv-card-w)',
+        'card-wide': 'var(--inv-card-w-wide)',
+      },
+      minHeight: {
+        hero: 'var(--inv-hero-min-h)',
+      },
+      borderWidth: {
+        themed: 'var(--inv-border-width)',
+      },
     },
   },
   plugins: [],

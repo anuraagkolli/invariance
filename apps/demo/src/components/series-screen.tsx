@@ -42,7 +42,14 @@ function SeriesRow({ row }: { row: GenreRow }) {
       props={{ titles: row.titles, shape: 'standard' }}
     >
       <section className="flex flex-col gap-3">
-        <h2 className="font-display text-lg font-semibold tracking-tight text-textPrimary sm:text-xl">
+        <h2
+          className="font-display text-lg text-textPrimary sm:text-xl"
+          style={{
+            textTransform: 'var(--inv-display-transform)' as React.CSSProperties['textTransform'],
+            letterSpacing: 'var(--inv-display-tracking)',
+            fontWeight: 'var(--inv-display-weight)' as React.CSSProperties['fontWeight'],
+          }}
+        >
           <m.text name={`series-heading-${row.slot}`}>{row.genre}</m.text>
         </h2>
         <CarouselRow titles={row.titles} shape="standard" />
@@ -57,11 +64,18 @@ function SeriesRow({ row }: { row: GenreRow }) {
 export function SeriesScreen() {
   return (
     <Shell pageName="series">
-      <div className="flex flex-col gap-2 px-6 pt-12 sm:px-10">
+      <div className="flex flex-col gap-2 px-2xl pt-2xl">
         <span className="font-mono text-xs uppercase tracking-[0.34em] text-accent">
           Browse Series
         </span>
-        <h1 className="font-display text-3xl font-bold tracking-tight text-textPrimary sm:text-4xl">
+        <h1
+          className="font-display text-3xl text-textPrimary sm:text-4xl"
+          style={{
+            textTransform: 'var(--inv-display-transform)' as React.CSSProperties['textTransform'],
+            letterSpacing: 'var(--inv-display-tracking)',
+            fontWeight: 'var(--inv-display-weight)' as React.CSSProperties['fontWeight'],
+          }}
+        >
           <m.text name="series-page-title">Series by Genre</m.text>
         </h1>
         <p className="max-w-xl text-sm text-textSecondary">
@@ -71,10 +85,7 @@ export function SeriesScreen() {
         </p>
       </div>
 
-      <div
-        className="flex flex-col px-6 py-10 sm:px-10"
-        style={{ gap: 'calc(var(--inv-density-unit) * 11)' }}
-      >
+      <div className="flex flex-col gap-section px-2xl py-xl">
         {/* Same reorderable-sections pattern as home: each child keyed by its
             m.slot name so F3 ordering/hiding applies on /series too. */}
         <m.sections>

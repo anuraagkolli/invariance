@@ -41,7 +41,14 @@ function Row({ name, row }: { name: string; row: TitleRow }) {
       props={{ titles: row.titles, shape }}
     >
       <section className="flex flex-col gap-3">
-        <h2 className="font-display text-lg font-semibold tracking-tight text-textPrimary sm:text-xl">
+        <h2
+          className="font-display text-lg text-textPrimary sm:text-xl"
+          style={{
+            textTransform: 'var(--inv-display-transform)' as React.CSSProperties['textTransform'],
+            letterSpacing: 'var(--inv-display-tracking)',
+            fontWeight: 'var(--inv-display-weight)' as React.CSSProperties['fontWeight'],
+          }}
+        >
           <m.text name={`heading-${row.id}`}>{row.heading}</m.text>
         </h2>
         <CarouselRow titles={row.titles} shape={shape} />
@@ -66,10 +73,7 @@ export function HomeScreen() {
         <Hero title={HERO_TITLE} />
       </m.slot>
 
-      <div
-        className="flex flex-col px-6 py-10 sm:px-10"
-        style={{ gap: 'calc(var(--inv-density-unit) * 11)' }}
-      >
+      <div className="flex flex-col gap-section px-2xl py-xl">
         {/* Only the carousel rows are reorderable (F3). Hero/header/sidebar/
             footer stay outside m.sections — not reorderable. */}
         <m.sections>

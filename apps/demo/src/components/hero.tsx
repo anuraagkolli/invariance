@@ -26,18 +26,26 @@ function backdropStyle(hue: number): React.CSSProperties {
 export function Hero({ title }: HeroProps) {
   return (
     <section
-      className="relative overflow-hidden text-[var(--inv-hero-text)]"
+      className="relative flex min-h-hero flex-col justify-center overflow-hidden text-[var(--inv-hero-text)]"
       style={backdropStyle(title.hue)}
     >
       {/* bottom fade into the page */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-surface0 to-transparent" />
 
-      <div className="relative flex max-w-2xl flex-col gap-5 px-6 py-20 sm:px-10 sm:py-28">
+      <div className="relative flex max-w-2xl flex-col gap-5 px-2xl py-2xl">
         <span className="font-mono text-xs uppercase tracking-[0.34em] text-accent">
           Featured Today
         </span>
 
-        <h1 className="font-display font-bold uppercase leading-[0.95] tracking-tight text-[var(--inv-hero-text)]" style={{ fontSize: 'clamp(3rem, 6vw, 5rem)' }}>
+        <h1
+          className="font-display leading-[0.95] text-[var(--inv-hero-text)]"
+          style={{
+            fontSize: 'clamp(3rem, 6vw, 5rem)',
+            textTransform: 'var(--inv-display-transform)' as React.CSSProperties['textTransform'],
+            letterSpacing: 'var(--inv-display-tracking)',
+            fontWeight: 'var(--inv-display-weight)' as React.CSSProperties['fontWeight'],
+          }}
+        >
           <m.text name="hero-title">{title.title}</m.text>
         </h1>
 
@@ -61,7 +69,7 @@ export function Hero({ title }: HeroProps) {
           <button
             type="button"
             className="flex items-center gap-2 rounded-base border bg-surface2 px-6 py-2.5 text-sm font-semibold text-textPrimary transition-colors hover:bg-surface1"
-            style={{ borderColor: 'var(--inv-border)' }}
+            style={{ borderColor: 'var(--inv-border)', borderWidth: 'var(--inv-border-width)' }}
           >
             <span aria-hidden>+</span> My List
           </button>

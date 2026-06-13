@@ -32,13 +32,21 @@ export function Sidebar() {
 
   return (
     <aside
-      className="fixed inset-y-0 left-0 z-20 hidden w-[230px] flex-col border-r bg-[var(--inv-sidebar-bg)] text-[var(--inv-sidebar-text)] lg:flex"
-      style={{ borderColor: 'var(--inv-sidebar-border)' }}
+      className="fixed inset-y-0 left-0 z-20 hidden w-sidebar flex-col border-r bg-[var(--inv-sidebar-bg)] text-[var(--inv-sidebar-text)] lg:flex"
+      style={{
+        borderColor: 'var(--inv-sidebar-border)',
+        borderRightWidth: 'var(--inv-border-width)',
+      }}
     >
       <div className="px-6 pb-8 pt-7">
         <Link
           href="/"
-          className="font-display text-2xl font-bold uppercase tracking-[0.32em] text-[var(--inv-sidebar-text)]"
+          className="font-display text-2xl text-[var(--inv-sidebar-text)]"
+          style={{
+            textTransform: 'var(--inv-display-transform)' as React.CSSProperties['textTransform'],
+            letterSpacing: 'var(--inv-display-tracking)',
+            fontWeight: 'var(--inv-display-weight)' as React.CSSProperties['fontWeight'],
+          }}
         >
           Nebula
         </Link>

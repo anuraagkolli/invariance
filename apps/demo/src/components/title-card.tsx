@@ -29,8 +29,14 @@ function posterFallbackStyle(hue: number): React.CSSProperties {
 }
 
 export function TitleCard({ title, shape = 'standard' }: TitleCardProps) {
-  const aspect = shape === 'wide' ? 'aspect-[16/9]' : 'aspect-[2/3]'
+  // Originals stay 16:9 by design; standard posters take their aspect from the
+  // theme's framing token so a spacious vibe can run taller posters than a
+  // compact one. The ratio is merged into the poster fallback style below.
+  const isWide = shape === 'wide'
   const { openTitle } = useTitleModal()
+  const posterStyle: React.CSSProperties = isWide
+    ? posterFallbackStyle(title.hue)
+    : { ...posterFallbackStyle(title.hue), aspectRatio: 'var(--inv-card-aspect)' }
   return (
     <article className="group/card flex w-full flex-col gap-2" data-title-id={title.id}>
       <button
@@ -40,8 +46,8 @@ export function TitleCard({ title, shape = 'standard' }: TitleCardProps) {
         className="block w-full rounded-lg2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface0"
       >
         <div
-          className={`relative ${aspect} w-full overflow-hidden rounded-lg2 shadow-inv1 ring-1 ring-inset ring-border/40 transition-all duration-200 ease-out group-hover/card:-translate-y-1 group-hover/card:shadow-inv2 group-hover/card:ring-2 group-hover/card:ring-ring`}
-          style={posterFallbackStyle(title.hue)}
+          className={`relative ${isWide ? 'aspect-[16/9]' : ''} w-full overflow-hidden rounded-lg2 shadow-inv1 ring-1 ring-inset ring-border/40 transition-all duration-200 ease-out group-hover/card:-translate-y-1 group-hover/card:shadow-inv2 group-hover/card:ring-2 group-hover/card:ring-ring`}
+          style={posterStyle}
         >
           {/* real photo poster */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
