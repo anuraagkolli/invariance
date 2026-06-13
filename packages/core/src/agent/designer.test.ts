@@ -91,6 +91,25 @@ describe('buildDesignerPrompt', () => {
     expect(prompt).toContain('--inv-surface-0')
     expect((prompt.match(/"rationale"/g) ?? []).length).toBe(3)
   })
+
+  it('teaches the typography and framing structural fields', () => {
+    const prompt = buildDesignerPrompt({
+      constraints: {},
+      fewShot: selectFewShotPacks('retro', THEME_PACKS, 3),
+    })
+    // The structural fields must be named with WHEN-to-pick guidance so a future
+    // edit can't silently drop them: structure carries vibe as much as color.
+    expect(prompt).toContain('typography')
+    expect(prompt).toContain('framing')
+    expect(prompt).toContain('display-caps')
+    expect(prompt).toContain('editorial')
+    expect(prompt).toContain('technical')
+    expect(prompt).toContain('spacious')
+    // New structural tokens are annotated in the role vocabulary.
+    expect(prompt).toContain('--inv-display-transform')
+    expect(prompt).toContain('--inv-sidebar-w')
+    expect(prompt).toContain('--inv-space-2xs')
+  })
 })
 
 describe('callDesigner baseUrl threading', () => {

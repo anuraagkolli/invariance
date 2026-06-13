@@ -28,6 +28,7 @@ export interface DesignerPromptInput {
 // Build the Designer system prompt. Section order:
 // 1. Role + mission
 // 2. Role vocabulary (imported from ROLE_TOKENS — single source of truth)
+// 2b. Structural field semantics (typography + framing carry vibe like color)
 // 3. Developer constraint block (only lines whose value is present)
 // 4. Taste principles 1, 2, 6 verbatim from the design-taste skill
 // 5. Pack-shortcut rule
@@ -60,7 +61,27 @@ Text: --inv-text-primary, --inv-text-secondary, --inv-text-disabled.
 Accent: --inv-accent, --inv-accent-hover, --inv-accent-contrast (text ON accent), --inv-accent-subtle (tinted background).
 Structure: --inv-border, --inv-border-strong, --inv-ring (focus).
 Type: --inv-font-display, --inv-font-body, --inv-font-mono.
-Shape/space: --inv-radius-base, --inv-radius-lg, --inv-shadow-1, --inv-shadow-2, --inv-density-unit, --inv-border-width.`,
+Shape/space: --inv-radius-base, --inv-radius-lg, --inv-shadow-1, --inv-shadow-2, --inv-density-unit, --inv-border-width.
+Type treatment (set by the typography field): --inv-display-transform, --inv-display-tracking, --inv-display-weight (how headings are cased, tracked, and weighted).
+Spacing scale (set by the density field): --inv-space-2xs … --inv-space-2xl (one rhythm ramp; tight vs airy).
+Layout geometry (set by the framing field): --inv-sidebar-w, --inv-card-w, --inv-card-w-wide, --inv-card-aspect, --inv-hero-min-h, --inv-section-gap (chrome widths, card sizing, hero height, section breathing room).`,
+  )
+
+  // Section 2b: structural field semantics — type treatment and layout carry vibe
+  // as much as color does. Color alone rarely sells a strong vibe.
+  sections.push(
+    `STRUCTURE CARRIES VIBE (the typography and framing fields move structure, not color — a strong request should usually move at least one of them):
+
+typography (heading treatment):
+  standard      clean, neutral sans headings — modern, SaaS, default.
+  display-caps  UPPERCASE, wide tracking, heavy — loud/retro/brutalist/poster/arcade energy.
+  editorial     normal case, lighter weight, tight tracking — serif/magazine/calm/luxury.
+  technical     UPPERCASE, medium tracking and weight — mono/terminal/data/label feel.
+
+framing (layout rhythm):
+  compact   narrow sidebar, small cards, short hero, tight rhythm — dense/utilitarian/terminal/arcade.
+  standard  balanced default.
+  spacious  wide sidebar, large cards, tall hero, airy rhythm — editorial/calm/premium/coastal.`,
   )
 
   // Section 3: developer constraint block (only when values are present)
@@ -91,7 +112,7 @@ Shape/space: --inv-radius-base, --inv-radius-lg, --inv-shadow-1, --inv-shadow-2,
 
 2. Spend boldness in one place. One loud decision (the accent, the display face, the shadow language), everything else disciplined. Two loud decisions compete; three is noise.
 
-6. The default answer to "more X" is to move 2-3 StyleSpec fields, not all 12. Restraint reads as intent.`,
+6. The default answer to "more X" is to move 2-3 StyleSpec fields, not all 14. Restraint reads as intent. The structural fields (typography, framing) count toward that 2-3 budget — and they are often the right ones to spend it on: a vibe rarely lands on color alone.`,
   )
 
   // Section 5: pack-shortcut rule
@@ -109,7 +130,7 @@ Shape/space: --inv-radius-base, --inv-radius-lg, --inv-shadow-1, --inv-shadow-2,
   // Section 7: current design (only when present — relative requests move 2-3 fields)
   if (currentSpec) {
     sections.push(
-      `CURRENT DESIGN (the active spec — for relative requests like "make it warmer" or "more contrast", move 2-3 fields from this, not all 12):\n${JSON.stringify(currentSpec, null, 2)}`,
+      `CURRENT DESIGN (the active spec — for relative requests like "make it warmer" or "more contrast", move 2-3 fields from this, not all 14):\n${JSON.stringify(currentSpec, null, 2)}`,
     )
   }
 
