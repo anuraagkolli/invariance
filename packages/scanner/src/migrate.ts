@@ -17,6 +17,8 @@ import { applyVariableRewrites } from './emit/variable-rewriter'
 import { buildMigrationPlan } from './plan/build-plan'
 import { buildSlotPlan } from './plan/slot-plan'
 import { loadTailwindMaps } from './tailwind/resolve'
+import { deriveConfigFromLevels } from './init/derive-config'
+import type { ChosenLevels } from './init/derive-config'
 import type { InvarianceConfig } from 'invariance'
 import type {
   CandidateSection,
@@ -29,6 +31,13 @@ import type {
 
 export type ScannerAgent = typeof callScannerAgent
 
+export interface SlotChoiceInput {
+  name: string
+  page: string
+  preserve: boolean
+  description?: string
+}
+
 export interface MigrateOptions {
   appRoot: string
   apiKey: string
@@ -36,6 +45,10 @@ export interface MigrateOptions {
   /** Optional override for the LLM-backed semantic naming agent. Tests inject
    *  a stub to run migrate() without an Anthropic API key. */
   agent?: ScannerAgent
+  /** Optional interactive level selection. Invoked after naming/plan-build,
+   *  before wrapper edits, with one entry per discovered slot. Returns a map of
+   *  slotName -> chosen level. Absent → every slot stays level 0 (scan default). */
+  chooseLevels?: (slots: SlotChoiceInput[]) => Promise<Map<string, number>>
 }
 
 // ---------------------------------------------------------------------------
@@ -270,6 +283,8 @@ export async function analyze(opts: MigrateOptions): Promise<AnalyzeResult> {
     file: string
     jsxPath: string
     preserve: boolean
+    level: number
+    page: string
     description?: string
     aliases?: string[]
   }
@@ -386,6 +401,8 @@ export async function analyze(opts: MigrateOptions): Promise<AnalyzeResult> {
         file: slot.file,
         jsxPath: slot.jsxPath,
         preserve: slot.preserve,
+        level: slot.level, // 0 from the scanner-agent; raised by chooseLevels below
+        page: page.route,
         ...(slot.description ? { description: slot.description } : {}),
         ...(slot.aliases && slot.aliases.length > 0 ? { aliases: slot.aliases } : {}),
       })
@@ -419,6 +436,27 @@ export async function analyze(opts: MigrateOptions): Promise<AnalyzeResult> {
   }).__slotLocations = slotLocations
   ;(plan as unknown as { __textLocations: TextLocation[] }).__textLocations = textLocations
   ;(plan as unknown as { __pageLocations: PageLocation[] }).__pageLocations = pageLocations
+
+  // Interactive level selection (optional). Runs before wrapper edits so chosen
+  // levels are baked into the m.slot wrappers, and derives the config (page
+  // levels + section unlocks) deterministically. The model never picks levels.
+  if (opts.chooseLevels) {
+    const inputs: SlotChoiceInput[] = slotLocations.map((s) => ({
+      name: s.name,
+      page: s.page,
+      preserve: s.preserve,
+      ...(s.description ? { description: s.description } : {}),
+    }))
+    const chosen = await opts.chooseLevels(inputs)
+
+    const byPage: ChosenLevels = {}
+    for (const loc of slotLocations) {
+      const level = chosen.get(loc.name) ?? 0
+      loc.level = level
+      ;(byPage[loc.page] ??= {})[loc.name] = level
+    }
+    plan.config = deriveConfigFromLevels(plan.config, byPage)
+  }
 
   // Apply variable rewrites first (touches string literals / class tokens) then
   // wrapper edits (which replace whole JSX subtrees).

@@ -199,6 +199,35 @@ describe('writeMigration — SSR inlining', () => {
   })
 })
 
+describe('analyze — chooseLevels callback', () => {
+  it('sets wrapper levels and derives config from chosen levels', async () => {
+    const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-lvl-'))
+    const root = path.join(tmp, 'nebula-clean')
+    await copyDir(path.resolve(__dirname, '__fixtures__/nebula-clean'), root)
+
+    const { analyze } = await import('./migrate')
+    const seen: string[] = []
+    const result = await analyze({
+      appRoot: root,
+      apiKey: '',
+      dryRun: true,
+      chooseLevels: async (slots) => {
+        for (const s of slots) seen.push(s.name)
+        // Set ALL slots to level 1 so at least one wrapped slot has level={1}.
+        const map = new Map<string, number>()
+        for (const s of slots) map.set(s.name, 1)
+        return map
+      },
+    })
+
+    expect(seen.length).toBeGreaterThan(0)
+    // A slot wrapper got level={1} in the diff.
+    expect(result.diff).toMatch(/<m\.slot name="[^"]+" level=\{1\}/)
+    // Colors unlocked to any.
+    expect(result.plan.config.frontend?.design?.colors?.mode).toBe('any')
+  })
+})
+
 describe('injectSsrInlining — helper-before-root guard', () => {
   it('inserts cookie lines into the root layout body, not an earlier helper return', async () => {
     const { injectSsrInlining } = await import('./migrate')
