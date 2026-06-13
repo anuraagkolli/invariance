@@ -30,6 +30,8 @@ export function LockControls({ overlay, baseLevels, currentAccent, onSave }: Loc
   const [accentLocked, setAccentLocked] = useState(false)
   const [accent, setAccent] = useState('#e94560')
   const [sections, setSections] = useState<string[]>([])
+  const [chromaCap, setChromaCap] = useState(0.18)
+  const [contrastFloor, setContrastFloor] = useState(4.5)
   const [busy, setBusy] = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
 
@@ -39,6 +41,8 @@ export function LockControls({ overlay, baseLevels, currentAccent, onSave }: Loc
     setAccentLocked(typeof overlay.accentLock === 'string')
     setAccent(overlay.accentLock ?? currentAccent ?? '#e94560')
     setSections(overlay.lockedSections ?? [])
+    setChromaCap(overlay.chromaCap ?? 0.18)
+    setContrastFloor(overlay.contrastFloor ?? 4.5)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlay, currentAccent])
 
@@ -49,6 +53,8 @@ export function LockControls({ overlay, baseLevels, currentAccent, onSave }: Loc
         pageLevels: levels,
         ...(accentLocked ? { accentLock: accent } : {}),
         ...(sections.length > 0 ? { lockedSections: sections } : {}),
+        chromaCap,
+        contrastFloor,
       }
       await onSave(next)
       setSavedAt(Date.now())
@@ -127,6 +133,54 @@ export function LockControls({ overlay, baseLevels, currentAccent, onSave }: Loc
             </label>
           ))}
         </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h3 className="text-xs font-medium uppercase tracking-wide text-white/40">Color invariants</h3>
+        <label className="flex items-center justify-between gap-3 text-sm text-white/80">
+          <span>Chroma cap</span>
+          <span className="font-mono text-xs text-white/50">chroma ≤ {chromaCap.toFixed(2)}</span>
+        </label>
+        <input
+          type="range"
+          min="0.10"
+          max="0.25"
+          step="0.01"
+          value={chromaCap}
+          onChange={(e) => setChromaCap(Number(e.target.value))}
+          aria-label="Accent chroma cap"
+          className="accent-emerald-400"
+        />
+        <p className="text-[11px] leading-snug text-white/35">
+          Lower the cap and every theme desaturates — applied themes recompile live.
+        </p>
+
+        <label className="mt-2 flex items-center justify-between gap-3 text-sm text-white/80">
+          <span>Contrast floor</span>
+          <span className="font-mono text-xs text-white/50">≥ {contrastFloor.toFixed(1)}</span>
+        </label>
+        <div className="flex gap-1.5">
+          {[
+            { value: 4.5, label: '4.5 — AA' },
+            { value: 7, label: '7.0 — AAA' },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setContrastFloor(opt.value)}
+              className={
+                contrastFloor === opt.value
+                  ? 'flex-1 rounded-md bg-emerald-500/90 px-2 py-1 text-xs font-semibold text-black'
+                  : 'flex-1 rounded-md border border-white/15 bg-[#15161a] px-2 py-1 text-xs text-white/70 transition-colors hover:bg-white/[0.06]'
+              }
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] leading-snug text-white/35">
+          Raise the floor to AAA and low-contrast themes recompile to meet it.
+        </p>
       </div>
 
       <footer className="flex items-center justify-between">

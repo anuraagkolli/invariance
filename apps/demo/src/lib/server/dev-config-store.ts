@@ -47,5 +47,14 @@ export function sanitizeOverlay(raw: unknown): DevConfigOverlay {
     if (sections.length > 0) overlay.lockedSections = sections
   }
 
+  if (typeof o.chromaCap === 'number' && Number.isFinite(o.chromaCap)) {
+    overlay.chromaCap = Math.max(0.1, Math.min(0.25, o.chromaCap))
+  }
+
+  if (typeof o.contrastFloor === 'number' && Number.isFinite(o.contrastFloor)) {
+    // The UI emits exactly 4.5 (AA) or 7 (AAA); snap to that two-step set.
+    overlay.contrastFloor = o.contrastFloor >= 7 ? 7 : 4.5
+  }
+
   return overlay
 }

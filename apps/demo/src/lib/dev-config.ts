@@ -12,6 +12,10 @@ export interface DevConfigOverlay {
   accentLock?: string | null
   // m.slot section names the user may not hide/remove
   lockedSections?: string[]
+  // caps accent chroma; overrides constraints.accent_chroma_max (in [0.10, 0.25])
+  chromaCap?: number
+  // minimum WCAG ratio; overrides constraints.contrast (in [1, 21])
+  contrastFloor?: number
 }
 
 export const EMPTY_OVERLAY: DevConfigOverlay = {}
@@ -37,12 +41,29 @@ export function mergeInvarianceConfig(base: InvarianceConfig, overlay: DevConfig
     merged.frontend!.pages = pages
   }
 
+  // Accumulate every constraint override (accent lock, chroma cap, contrast
+  // floor) into one object and apply it in a single spread, so a config that
+  // sets several overlay fields doesn't clobber the others.
+  const constraintOverrides: NonNullable<NonNullable<InvarianceConfig['frontend']>['design']>['constraints'] = {}
+
   if (typeof overlay.accentLock === 'string' && HEX_RE.test(overlay.accentLock)) {
-    const design = { ...merged.frontend?.design }
-    design.constraints = {
-      ...design.constraints,
-      locked_tokens: { ...design.constraints?.locked_tokens, '--inv-accent': overlay.accentLock },
+    constraintOverrides.locked_tokens = {
+      ...merged.frontend?.design?.constraints?.locked_tokens,
+      '--inv-accent': overlay.accentLock,
     }
+  }
+
+  if (typeof overlay.chromaCap === 'number' && Number.isFinite(overlay.chromaCap) && overlay.chromaCap >= 0.1 && overlay.chromaCap <= 0.25) {
+    constraintOverrides.accent_chroma_max = overlay.chromaCap
+  }
+
+  if (typeof overlay.contrastFloor === 'number' && Number.isFinite(overlay.contrastFloor) && overlay.contrastFloor >= 1 && overlay.contrastFloor <= 21) {
+    constraintOverrides.contrast = '>= ' + overlay.contrastFloor
+  }
+
+  if (Object.keys(constraintOverrides).length > 0) {
+    const design = { ...merged.frontend?.design }
+    design.constraints = { ...design.constraints, ...constraintOverrides }
     merged.frontend!.design = design
   }
 

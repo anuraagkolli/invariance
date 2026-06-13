@@ -58,4 +58,49 @@ describe('mergeInvarianceConfig', () => {
     expect(pages.length).toBeGreaterThan(0)
     expect(pages.every((p) => p.level === 0)).toBe(true)
   })
+
+  it('a chromaCap overlay sets accent_chroma_max and preserves other base constraints', () => {
+    const merged = mergeInvarianceConfig(base(), { chromaCap: 0.12 })
+    const constraints = merged.frontend?.design?.constraints
+    expect(constraints?.accent_chroma_max).toBe(0.12)
+    expect(constraints?.contrast).toBe('>= 4.5')
+    expect(constraints?.font_registry).toBe('default')
+    expect(constraints?.allowed_modes).toEqual(['light', 'dark'])
+  })
+
+  it('a contrastFloor overlay sets constraints.contrast and preserves the rest', () => {
+    const merged = mergeInvarianceConfig(base(), { contrastFloor: 7 })
+    const constraints = merged.frontend?.design?.constraints
+    expect(constraints?.contrast).toBe('>= 7')
+    expect(constraints?.accent_chroma_max).toBe(0.25)
+    expect(constraints?.font_registry).toBe('default')
+    expect(constraints?.allowed_modes).toEqual(['light', 'dark'])
+  })
+
+  it('accentLock + chromaCap + contrastFloor together yield all three, none clobbered', () => {
+    const merged = mergeInvarianceConfig(base(), {
+      accentLock: '#E94560',
+      chromaCap: 0.15,
+      contrastFloor: 7,
+    })
+    const constraints = merged.frontend?.design?.constraints
+    expect(constraints?.locked_tokens).toEqual({ '--inv-accent': '#E94560' })
+    expect(constraints?.accent_chroma_max).toBe(0.15)
+    expect(constraints?.contrast).toBe('>= 7')
+    // base constraints still present
+    expect(constraints?.font_registry).toBe('default')
+    expect(constraints?.allowed_modes).toEqual(['light', 'dark'])
+  })
+
+  it('ignores an out-of-range chromaCap, leaving the base cap untouched', () => {
+    const merged = mergeInvarianceConfig(base(), { chromaCap: 0.5 })
+    expect(merged.frontend?.design?.constraints?.accent_chroma_max).toBe(0.25)
+  })
+
+  it('does not mutate base when only chroma/contrast overlay fields are set', () => {
+    const original = base()
+    const snapshot = JSON.parse(JSON.stringify(original))
+    mergeInvarianceConfig(original, { chromaCap: 0.12, contrastFloor: 7 })
+    expect(original).toEqual(snapshot)
+  })
 })
