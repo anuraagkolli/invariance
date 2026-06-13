@@ -16,7 +16,10 @@
   "dependencies": {
     "@hono/node-server": "^1.13.0",
     "@invariance/control-plane": "workspace:*",
+    "@invariance/design": "workspace:*",
+    "@invariance/design-schema": "workspace:*",
     "@invariance/schema": "workspace:*",
+    "ts-morph": "^22.0.0",
     "tsx": "^4.19.0"
   },
   "devDependencies": {

@@ -15,6 +15,14 @@ export function chromaOf(value: string): number | null {
   return c && typeof c.c === 'number' ? c.c : null
 }
 
+/** Full OKLCH {l,c,h} of a colour string (h defaults to 0 for achromatics), or
+ *  null when it can't be read as a colour. Used by init to infer a StyleSpec. */
+export function oklchOf(value: string): { l: number; c: number; h: number } | null {
+  const c = toOklch(value)
+  if (!c || typeof c.l !== 'number' || typeof c.c !== 'number') return null
+  return { l: c.l, c: c.c, h: typeof c.h === 'number' ? c.h : 0 }
+}
+
 export interface RoleQualityOptions {
   /** Minimum contrast for the primary-text pairs (default 4.5 = WCAG AA). */
   contrastFloor?: number

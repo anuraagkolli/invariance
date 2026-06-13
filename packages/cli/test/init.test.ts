@@ -1,11 +1,27 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { AppManifestSchema, type AppManifest } from "@invariance/schema";
+import { ROLE_TOKENS, StyleSpecSchema } from "@invariance/design/server";
 import { initDetailed } from "../src/cli";
 import { draftManifest, manifestFromScan } from "../src/draft";
 import { scanRepo } from "../src/scan";
+
+/** Recursively snapshot relative path -> contents (skips node_modules). */
+async function snapshotDir(dir: string): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  async function walk(d: string): Promise<void> {
+    for (const entry of await readdir(d, { withFileTypes: true })) {
+      if (entry.name === "node_modules" || entry.name === ".git") continue;
+      const p = join(d, entry.name);
+      if (entry.isDirectory()) await walk(p);
+      else out.set(relative(dir, p), await readFile(p, "utf8"));
+    }
+  }
+  await walk(dir);
+  return out;
+}
 
 /** A miniature React+Express app with everything the scanner looks for. */
 async function fixtureRepo(): Promise<string> {
@@ -132,16 +148,41 @@ describe("initDetailed", () => {
     const dir = await fixtureRepo();
     const outcome = await initDetailed({}, dir, null);
     expect(outcome.source).toBe("scan");
-    expect(outcome.counts).toEqual({ tokens: 3, endpoints: 2, components: 2 });
+    // 3 observed CSS tokens + the 38 role tokens the design engine manages.
+    expect(outcome.counts.tokens).toBe(3 + ROLE_TOKENS.length);
+    expect(outcome.counts.endpoints).toBe(2);
+    expect(outcome.counts.components).toBe(2);
 
     const manifest = AppManifestSchema.parse(
       JSON.parse(await readFile(outcome.manifestFile, "utf8")),
     ) as AppManifest;
     expect(manifest.appId).toBe("acme-shop"); // from package.json name
 
+    // The full role-token vocabulary is declared — the app is compiler-ready.
+    const names = new Set(manifest.designTokens.map((t) => t.name));
+    for (const token of ROLE_TOKENS) expect(names.has(token), `missing ${token}`).toBe(true);
+
+    // A schema-valid StyleSpec is inferred and reported.
+    expect(() => StyleSpecSchema.parse(outcome.styleSpec)).not.toThrow();
+
     const guide = await readFile(outcome.guideFile, "utf8");
     expect(guide).toContain("InvarianceProvider"); // react wiring
     expect(guide).toContain("createInvarianceMiddleware"); // express wiring
     expect(guide).toContain('appId: "acme-shop"');
+  });
+
+  it("writes only the manifest + guide — never edits existing source", async () => {
+    const dir = await fixtureRepo();
+    const before = await snapshotDir(dir);
+    await initDetailed({}, dir, null);
+    const after = await snapshotDir(dir);
+
+    // Every pre-existing file is byte-identical.
+    for (const [path, content] of before) {
+      expect(after.get(path), `${path} was modified`).toBe(content);
+    }
+    // The only new files are the two generated artifacts.
+    const created = [...after.keys()].filter((p) => !before.has(p)).sort();
+    expect(created).toEqual(["INVARIANCE.md", "invariance.manifest.json"]);
   });
 });

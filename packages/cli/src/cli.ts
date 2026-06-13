@@ -4,8 +4,10 @@ import { AppManifestSchema } from "@invariance/schema";
 import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import type { StyleSpec } from "@invariance/design/server";
 import { draftManifest, type JsonLlm } from "./draft";
 import { renderGuide } from "./guide";
+import { declareRoleTokens, inferDesign } from "./infer-spec";
 import { llmFromEnv } from "./llm";
 import { scanRepo } from "./scan";
 
@@ -79,6 +81,9 @@ export interface InitOutcome {
   guideFile: string;
   source: "ai" | "scan";
   counts: { tokens: number; endpoints: number; components: number };
+  /** The default StyleSpec inferred from the app's observed colours. The manifest
+   *  declares the role tokens compiled from it; the Designer refines it later. */
+  styleSpec: StyleSpec;
 }
 
 /**
@@ -106,18 +111,25 @@ export async function initDetailed(
   const llm = flags["no-ai"] === "true" ? null : (llmOverride !== undefined ? llmOverride : llmFromEnv());
   const draft = await draftManifest(scan, appId, llm);
 
-  await writeFile(manifestFile, `${JSON.stringify(draft.manifest, null, 2)}\n`);
+  // Infer a default StyleSpec from the app's observed colours and compile it,
+  // then declare the 38 role tokens in the manifest so the app is theme-ready.
+  // (Analysis only — init never edits source.)
+  const { styleSpec, roles } = inferDesign(scan, cwd);
+  const manifest = declareRoleTokens(draft.manifest, roles);
+
+  await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
   const guideFile = resolve(cwd, "INVARIANCE.md");
-  await writeFile(guideFile, renderGuide(scan, draft.manifest));
+  await writeFile(guideFile, renderGuide(scan, manifest));
 
   return {
     manifestFile,
     guideFile,
     source: draft.source,
+    styleSpec,
     counts: {
-      tokens: draft.manifest.designTokens.length,
-      endpoints: draft.manifest.endpoints.length,
-      components: draft.manifest.components.length,
+      tokens: manifest.designTokens.length,
+      endpoints: manifest.endpoints.length,
+      components: manifest.components.length,
     },
   };
 }
