@@ -10,14 +10,15 @@ interface TitleCardProps {
   shape?: 'standard' | 'wide'
 }
 
-// CSS-only "poster": a diagonal gradient from the title's hue plus a soft
-// radial highlight and the name set in display type. No images, but it should
-// read as a slick wall of art, not a placeholder.
-function posterStyle(hue: number): React.CSSProperties {
+function posterImageUrl(id: string, shape: 'standard' | 'wide'): string {
+  const w = shape === 'wide' ? 640 : 400
+  const h = shape === 'wide' ? 360 : 600
+  return `https://picsum.photos/seed/${id}/${w}/${h}`
+}
+
+function posterFallbackStyle(hue: number): React.CSSProperties {
   const top = `hsl(${hue} 55% 38%)`
   const bottom = `hsl(${(hue + 40) % 360} 60% 18%)`
-  // Alpha lives inside the hsl() function: `hsl(...)55` is invalid CSS and the
-  // browser drops the whole backgroundImage (posters render flat black).
   const glow = `hsl(${hue} 70% 62% / 0.33)`
   return {
     backgroundImage: [
@@ -32,9 +33,6 @@ export function TitleCard({ title, shape = 'standard' }: TitleCardProps) {
   const { openTitle } = useTitleModal()
   return (
     <article className="group/card flex w-full flex-col gap-2" data-title-id={title.id}>
-      {/* The poster is a real button: keyboard-focusable, opens the detail modal.
-          The hover lift/ring lives on the inner div (group-hover) so the focus
-          ring from focus-visible reads cleanly without fighting the hover ring. */}
       <button
         type="button"
         onClick={() => openTitle(title.id)}
@@ -43,15 +41,30 @@ export function TitleCard({ title, shape = 'standard' }: TitleCardProps) {
       >
         <div
           className={`relative ${aspect} w-full overflow-hidden rounded-lg2 shadow-inv1 ring-1 ring-inset ring-border/40 transition-all duration-200 ease-out group-hover/card:-translate-y-1 group-hover/card:shadow-inv2 group-hover/card:ring-2 group-hover/card:ring-ring`}
-          style={posterStyle(title.hue)}
+          style={posterFallbackStyle(title.hue)}
         >
+          {/* real photo poster */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={posterImageUrl(title.id, shape)}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+
+          {/* hue-tinted overlay so the accent colour still reads through */}
+          <div
+            className="absolute inset-0 mix-blend-color opacity-30"
+            style={{ background: `hsl(${title.hue} 80% 40%)` }}
+          />
+
           {/* maturity badge */}
-          <span className="absolute right-2 top-2 rounded-base bg-surface0/70 px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-wide text-textPrimary backdrop-blur-sm">
+          <span className="absolute right-2 top-2 rounded-base bg-black/60 px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-wide text-white backdrop-blur-sm">
             {title.maturity}
           </span>
 
           {/* bottom scrim + title */}
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent p-3">
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-3">
             <h3 className="font-display text-sm font-semibold uppercase leading-tight tracking-[0.14em] text-white drop-shadow-sm">
               {title.title}
             </h3>

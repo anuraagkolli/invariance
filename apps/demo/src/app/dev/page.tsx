@@ -103,20 +103,29 @@ export default function DevPage() {
   return (
     <main className="min-h-screen bg-[#0a0b0d] px-6 py-10 text-white sm:px-10">
       <div className="mx-auto flex max-w-5xl flex-col gap-8">
-        <header>
-          <p className="font-mono text-xs uppercase tracking-[0.34em] text-white/50">
-            Invariance · Developer
-          </p>
-          <h1
-            className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl"
-            style={{ fontFamily: "'Space Grotesk', system-ui, sans-serif" }}
+        <header className="flex items-start justify-between gap-4">
+          <div>
+            <p className="font-mono text-xs uppercase tracking-[0.34em] text-white/50">
+              Invariance · Developer
+            </p>
+            <h1
+              className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl"
+              style={{ fontFamily: "'Space Grotesk', system-ui, sans-serif" }}
+            >
+              Nebula — edits &amp; invariants
+            </h1>
+            <p className="mt-1 max-w-2xl text-sm text-white/60">
+              Every change your users make, versioned with the prompt that produced
+              it. Lock what they may not touch; the pipeline enforces the rest.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => router.push('/')}
+            className="mt-1 flex shrink-0 items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
           >
-            Nebula — edits &amp; invariants
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-white/60">
-            Every change your users make, versioned with the prompt that produced
-            it. Lock what they may not touch; the pipeline enforces the rest.
-          </p>
+            <span aria-hidden>←</span> User view
+          </button>
         </header>
 
         {error ? (

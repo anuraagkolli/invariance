@@ -1,6 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import { usePathname } from 'next/navigation'
 import {
   InvarianceProvider,
   CustomizationPanel,
@@ -21,8 +22,8 @@ const componentLibrary = { CarouselRow, GridRow }
 // config arrives from the server layout: the static base merged with the
 // developer's lock/unlock overlay (see /dev), serialized across the boundary.
 export function Providers({ config, children }: { config: InvarianceConfig; children: ReactNode }) {
-  // Provider/baseUrl/model/key come from NEXT_PUBLIC_* env (see invariance-config).
-  // Spread so the default (Anthropic) path stays exactly { apiKey } — no new props.
+  const pathname = usePathname()
+  const isDevPage = pathname === '/dev'
   const llm = llmProviderProps()
   return (
     <InvarianceProvider
@@ -43,7 +44,7 @@ export function Providers({ config, children }: { config: InvarianceConfig; chil
           <SearchOverlay />
         </TitleModalProvider>
       </SearchProvider>
-      <CustomizationPanel />
+      {!isDevPage && <CustomizationPanel />}
     </InvarianceProvider>
   )
 }
