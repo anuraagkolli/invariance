@@ -198,3 +198,52 @@ describe('writeMigration — SSR inlining', () => {
     expect(providers).toContain('export const config')
   })
 })
+
+describe('injectSsrInlining — helper-before-root guard', () => {
+  it('inserts cookie lines into the root layout body, not an earlier helper return', async () => {
+    const { injectSsrInlining } = await import('./migrate')
+
+    // Layout with a helper component whose `return (` appears BEFORE the root
+    // layout's `export default function`.
+    const layoutWithHelper = `import type { ReactNode } from 'react'
+
+function HelperBanner() {
+  return (
+    <div>helper</div>
+  )
+}
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+      </head>
+      <body>{children}</body>
+    </html>
+  )
+}
+`
+
+    const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'inv-ssr-helper-'))
+    const layoutFile = path.join(tmp, 'layout.tsx')
+    await fsp.writeFile(layoutFile, layoutWithHelper, 'utf-8')
+
+    await injectSsrInlining(layoutFile)
+
+    const result = await fsp.readFile(layoutFile, 'utf-8')
+
+    // The cookie lines must appear AFTER the root export, not inside HelperBanner.
+    const cookieIdx = result.indexOf('const cookieHeader = headers()')
+    const exportIdx = result.indexOf('export default async function')
+
+    expect(cookieIdx, 'cookieHeader line not found in output').toBeGreaterThan(-1)
+    expect(exportIdx, 'export default async function not found in output').toBeGreaterThan(-1)
+    expect(cookieIdx).toBeGreaterThan(exportIdx)
+
+    // Verify the helper function body does NOT contain the cookie line.
+    const helperEnd = result.indexOf('export default async function')
+    const helperBody = result.slice(0, helperEnd)
+    expect(helperBody).not.toContain('const cookieHeader')
+  })
+})

@@ -130,7 +130,7 @@ async function injectProvider(
 // themed. Idempotent (keys off the inv-ssr-theme marker). Requires a <head>
 // anchor and a `return (` in the default export; a layout without these is
 // left untouched (the client still themes post-hydration, just with a flash).
-async function injectSsrInlining(layoutFile: string): Promise<void> {
+export async function injectSsrInlining(layoutFile: string): Promise<void> {
   let src = await fs.readFile(layoutFile, 'utf-8')
   if (src.includes('inv-ssr-theme')) return
   if (!src.includes('</head>') || !/return\s*\(/.test(src)) return
@@ -150,13 +150,19 @@ async function injectSsrInlining(layoutFile: string): Promise<void> {
   // Make the default export async (function form; covers the fixture + common case).
   src = src.replace(/export default function /, 'export default async function ')
 
-  // Insert the SSR computation just before the first `return (`.
-  src = src.replace(
-    /(\n[ \t]*)return\s*\(/,
-    `$1const cookieHeader = headers().get('cookie')` +
-      `$1const ssrTheme = themeFromCookieHeader(cookieHeader, config)` +
-      `$1const ssrCss = renderThemeCss(ssrTheme, config)$1return (`,
-  )
+  // Insert the SSR computation before the root layout's `return (` — anchored
+  // after the default export so a helper component's earlier return isn't hit.
+  const fnIdx = src.indexOf('export default async function')
+  if (fnIdx !== -1) {
+    const head = src.slice(0, fnIdx)
+    const tail = src.slice(fnIdx).replace(
+      /(\n[ \t]*)return\s*\(/,
+      `$1const cookieHeader = headers().get('cookie')` +
+        `$1const ssrTheme = themeFromCookieHeader(cookieHeader, config)` +
+        `$1const ssrCss = renderThemeCss(ssrTheme, config)$1return (`,
+    )
+    src = head + tail
+  }
 
   // Inject the <style> just before </head>.
   src = src.replace(
