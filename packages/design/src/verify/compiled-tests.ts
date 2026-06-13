@@ -1,0 +1,411 @@
+import { wcagContrast, converter } from 'culori'
+
+import { StyleSpecSchema, CONTRAST_TARGETS } from '../compiler/style-spec'
+import type { DesignConstraints } from '../compiler/style-spec'
+import { ROLE_TOKENS } from '../compiler/roles'
+import { contrastPairs } from '../compiler/contrast-pairs'
+import { FONT_PAIRINGS, DEFAULT_MONO_STACK } from '../registries/font-pairings'
+import type { ThemeJsonV2, InvarianceConfig } from '../config/types'
+import type { TestResult, VerificationResult } from './types'
+
+// --- styleSpecValid ---
+// Absent styleSpec = pass (precision-edit-only themes have none).
+// Present spec must validate under the full zod schema.
+function styleSpecValid(theme: ThemeJsonV2['theme']): TestResult {
+  const spec = theme?.styleSpec
+  if (!spec) {
+    return {
+      name: 'styleSpecValid',
+      passed: true,
+      message: 'No styleSpec present (precision-edit-only theme)',
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
+  const parsed = StyleSpecSchema.safeParse(spec)
+  if (parsed.success) {
+    return {
+      name: 'styleSpecValid',
+      passed: true,
+      message: 'styleSpec is valid',
+      severity: 'error',
+      autoFixable: false,
+    }
+  }
+  const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`)
+  return {
+    name: 'styleSpecValid',
+    passed: false,
+    message: `Invalid styleSpec: ${issues.join('; ')}`,
+    severity: 'error',
+    autoFixable: false,
+  }
+}
+
+// --- compilerOutputComplete ---
+// Completeness is a property of COMPILED themes only. The styleSpec is the
+// compiler's provenance marker: the Designer→Compiler path always attaches one
+// (verified in pipeline.ts), and only that path can produce the full 38-token
+// set. A scanner seed carries partial roles (only the values it observed) and
+// no styleSpec — requiring all 38 there would reject the app's own initial
+// theme, including at runtime via the provider's verify-on-load. So gate on
+// styleSpec presence: absent → pass (warning); present → every token required.
+// Skip when roles are absent or empty (theme not compiler-produced).
+function compilerOutputComplete(theme: ThemeJsonV2['theme']): TestResult {
+  if (!theme?.styleSpec) {
+    return {
+      name: 'compilerOutputComplete',
+      passed: true,
+      message: 'No styleSpec — completeness applies to compiled themes only',
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
+  const roles = theme?.roles
+  if (!roles || Object.keys(roles).length === 0) {
+    return {
+      name: 'compilerOutputComplete',
+      passed: true,
+      message: 'No roles present (not a compiler-produced theme)',
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
+  const missing = ROLE_TOKENS.filter((token) => !roles[token] || roles[token] === '')
+  return {
+    name: 'compilerOutputComplete',
+    passed: missing.length === 0,
+    message: missing.length === 0
+      ? 'All role tokens present'
+      : `Missing role tokens: ${missing.join(', ')}`,
+    severity: 'error',
+    autoFixable: false,
+  }
+}
+
+// --- lockedTokensUntouched ---
+// Every locked_tokens entry must appear byte-identical in the roles map.
+function lockedTokensUntouched(
+  theme: ThemeJsonV2['theme'],
+  constraints: DesignConstraints,
+): TestResult {
+  const locked = constraints.locked_tokens
+  if (!locked || Object.keys(locked).length === 0) {
+    return {
+      name: 'lockedTokensUntouched',
+      passed: true,
+      message: 'No locked tokens to verify',
+      severity: 'error',
+      autoFixable: false,
+    }
+  }
+  const roles = theme?.roles ?? {}
+  // A theme with no compiled roles cannot have touched a lock — the locked
+  // value still comes from the app's own CSS defaults. Absence only becomes
+  // suspicious in a compiled theme (roles present), where a missing locked
+  // key means something removed it.
+  if (Object.keys(roles).length === 0) {
+    return {
+      name: 'lockedTokensUntouched',
+      passed: true,
+      message: 'No roles present — locked tokens untouched by construction',
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
+  const violations: string[] = []
+  for (const [token, expected] of Object.entries(locked)) {
+    if (roles[token] !== expected) {
+      violations.push(`${token}: expected ${expected}, got ${roles[token] ?? '(absent)'}`)
+    }
+  }
+  return {
+    name: 'lockedTokensUntouched',
+    passed: violations.length === 0,
+    message: violations.length === 0
+      ? 'All locked tokens untouched'
+      : `Locked token violations: ${violations.join('; ')}`,
+    severity: 'error',
+    autoFixable: false,
+  }
+}
+
+// --- contrastPairs ---
+// Independent recompute of the full pair matrix using wcagContrast directly.
+// Derives primaryTarget from spec.contrast (if present) raised by any
+// constraints.contrast floor. Skips pairs whose tokens are absent in roles
+// (consistent with the golden test SKIP behavior) but fails present-but-below pairs.
+function contrastPairsCheck(
+  theme: ThemeJsonV2['theme'],
+  constraints: DesignConstraints,
+): TestResult {
+  const roles = theme?.roles
+  if (!roles || Object.keys(roles).length === 0) {
+    return {
+      name: 'contrastPairs',
+      passed: true,
+      message: 'No roles present — skipping contrast check',
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
+
+  const spec = theme?.styleSpec
+  // Derive the primary target from the spec's contrast setting, floored by the
+  // developer constraint so the constraint can only raise it, never lower it.
+  const specTarget = spec ? (CONTRAST_TARGETS[spec.contrast] ?? 4.5) : 4.5
+  const primaryTarget = Math.max(specTarget, constraints.contrast ?? 0)
+
+  // Raise the secondary target to match the developer's floor so verifyV2 stays
+  // at least as strict as the compiler's own secondary-text ramp computation.
+  const secondaryTarget = Math.max(4.5, constraints.contrast ?? 0)
+  const pairs = contrastPairs(primaryTarget, secondaryTarget)
+  const violations: string[] = []
+
+  for (const [fg, bg, target] of pairs) {
+    const fgVal = roles[fg]
+    const bgVal = roles[bg]
+    // Skip pairs where either token is absent (not all themes use every token).
+    if (!fgVal || !bgVal) continue
+    const ratio = wcagContrast(fgVal, bgVal)
+    if (ratio !== undefined && ratio < target) {
+      violations.push(`${fg} on ${bg}: ${ratio.toFixed(2)} < ${target}`)
+    }
+  }
+
+  return {
+    name: 'contrastPairs',
+    passed: violations.length === 0,
+    message: violations.length === 0
+      ? 'All contrast pairs pass'
+      : `Contrast failures: ${violations.join('; ')}`,
+    severity: 'error',
+    autoFixable: false,
+  }
+}
+
+// --- fontInRegistry ---
+// Registry membership is a property of COMPILED themes only — the Designer
+// picks fonts FROM the registry. A scanned app's --inv-font-body is the
+// developer's own font, which legitimately is not a registry pairing. Gate on
+// styleSpec presence (same marker as compilerOutputComplete): absent → pass
+// (warning); present → the three font tokens must match a registered pairing's
+// display/body/mono value, or DEFAULT_MONO_STACK for --inv-font-mono.
+function fontInRegistry(theme: ThemeJsonV2['theme']): TestResult {
+  if (!theme?.styleSpec) {
+    return {
+      name: 'fontInRegistry',
+      passed: true,
+      message: 'No styleSpec — registry membership applies to compiled themes only',
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
+  const roles = theme?.roles
+  if (!roles) {
+    return {
+      name: 'fontInRegistry',
+      passed: true,
+      message: 'No roles present — skipping font check',
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
+
+  // Build a set of all valid font stack values from the registry.
+  const validDisplay = new Set(FONT_PAIRINGS.map((p) => p.display))
+  const validBody = new Set(FONT_PAIRINGS.map((p) => p.body))
+  const validMono = new Set<string>([
+    DEFAULT_MONO_STACK,
+    ...FONT_PAIRINGS.map((p) => p.mono).filter((m): m is string => m !== undefined),
+  ])
+
+  const violations: string[] = []
+
+  const displayVal = roles['--inv-font-display']
+  if (displayVal && !validDisplay.has(displayVal)) {
+    violations.push(`--inv-font-display: '${displayVal}' not in registry`)
+  }
+
+  const bodyVal = roles['--inv-font-body']
+  if (bodyVal && !validBody.has(bodyVal)) {
+    violations.push(`--inv-font-body: '${bodyVal}' not in registry`)
+  }
+
+  const monoVal = roles['--inv-font-mono']
+  if (monoVal && !validMono.has(monoVal)) {
+    violations.push(`--inv-font-mono: '${monoVal}' not in registry`)
+  }
+
+  return {
+    name: 'fontInRegistry',
+    passed: violations.length === 0,
+    message: violations.length === 0
+      ? 'All font tokens are from the registry'
+      : `Font tokens outside registry: ${violations.join('; ')}`,
+    severity: 'error',
+    autoFixable: false,
+  }
+}
+
+// --- varRefsResolve ---
+// Every var(--inv-X) reference in theme.slots must point at a key that exists
+// in roles or slots. Dangling references would produce invisible tokens at runtime.
+function varRefsResolve(theme: ThemeJsonV2['theme']): TestResult {
+  const slots = theme?.slots
+  if (!slots || Object.keys(slots).length === 0) {
+    return {
+      name: 'varRefsResolve',
+      passed: true,
+      message: 'No slots to check',
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
+
+  const roles = theme?.roles ?? {}
+  // All resolvable keys = union of roles keys and slots keys themselves.
+  const known = new Set([...Object.keys(roles), ...Object.keys(slots)])
+  const VAR_REF = /var\((--inv-[a-z0-9-]+)\)/g
+
+  const dangling: string[] = []
+  for (const [slotKey, value] of Object.entries(slots)) {
+    for (const match of value.matchAll(VAR_REF)) {
+      const ref = match[1]
+      if (ref && !known.has(ref)) {
+        dangling.push(`${slotKey} → ${ref}`)
+      }
+    }
+  }
+
+  return {
+    name: 'varRefsResolve',
+    passed: dangling.length === 0,
+    message: dangling.length === 0
+      ? 'All var() references resolve'
+      : `Dangling var() references: ${dangling.join('; ')}`,
+    severity: 'error',
+    autoFixable: false,
+  }
+}
+
+// --- accentChromaWithinCap ---
+// Closes the verify-on-load / live-recompile gap for the accent_chroma_max
+// invariant. The compiler clamps chroma at COMPILE time (accentRamp via
+// Math.min, then gamut-maps into sRGB) — but nothing re-checks it afterward, so
+// a stored theme whose accent exceeds a NEWLY-LOWERED cap would pass verifyV2
+// and apply unchanged. With this check present, verifyV2 fails such a theme,
+// and reconcileStoredTheme (which recompiles on verify failure) re-derives the
+// accent ramp under the new cap so the accent visibly desaturates.
+//
+// Lock exemption: a locked --inv-accent passes verbatim into roles even if it
+// exceeds the cap (mirrors roles.ts: `roles['--inv-accent'] = lockedAccent`).
+// The lock wins over the cap, so we must exempt it — otherwise a locked-but-
+// vivid accent would verify-fail, recompile, reproduce the same locked value,
+// fail again: an unrecoverable verify-fail → drop loop. The lock is immutable
+// by design; only the developer can lower it.
+const toOklch = converter('oklch')
+
+function accentChromaWithinCap(
+  theme: ThemeJsonV2['theme'],
+  constraints: DesignConstraints,
+): TestResult {
+  const cap = constraints.accent_chroma_max
+  if (cap === undefined) {
+    return {
+      name: 'accentChromaWithinCap',
+      passed: true,
+      message: 'No accent chroma cap to verify',
+      severity: 'error',
+      autoFixable: false,
+    }
+  }
+
+  const roles = theme?.roles
+  // No compiled roles → not a compiler-produced theme; the cap binds only on
+  // values the compiler emitted (mirrors lockedTokensUntouched/contrastPairs).
+  if (!roles || Object.keys(roles).length === 0) {
+    return {
+      name: 'accentChromaWithinCap',
+      passed: true,
+      message: 'No roles present (not a compiler-produced theme)',
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
+
+  // A locked accent is exempt: it passes verbatim into roles, cap or not.
+  if (constraints.locked_tokens?.['--inv-accent'] !== undefined) {
+    return {
+      name: 'accentChromaWithinCap',
+      passed: true,
+      message: 'accent is locked — chroma cap does not apply',
+      severity: 'error',
+      autoFixable: false,
+    }
+  }
+
+  const accent = roles['--inv-accent']
+  if (!accent) {
+    return {
+      name: 'accentChromaWithinCap',
+      passed: true,
+      message: 'No --inv-accent present — skipping chroma check',
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
+
+  const parsed = toOklch(accent)
+  const c = parsed?.c
+  // Unparseable or achromatic-with-undefined-chroma: don't false-fail on an odd
+  // value (an achromatic accent has chroma ~0 and trivially passes anyway).
+  if (c === undefined) {
+    return {
+      name: 'accentChromaWithinCap',
+      passed: true,
+      message: `--inv-accent '${accent}' has no readable chroma — skipping`,
+      severity: 'warning',
+      autoFixable: false,
+    }
+  }
+
+  // EPSILON absorbs gamut-mapping/rounding: the compiler clamps via Math.min
+  // then gamut-maps into sRGB, so a legitimately-clamped accent measures
+  // at-or-just-below the cap. Without slack, a boundary value could false-fail.
+  const EPSILON = 0.005
+  const passed = c <= cap + EPSILON
+  return {
+    name: 'accentChromaWithinCap',
+    passed,
+    message: passed
+      ? `accent chroma ${c.toFixed(3)} within cap ${cap}`
+      : `accent chroma ${c.toFixed(3)} exceeds cap ${cap}`,
+    severity: 'error',
+    autoFixable: false,
+  }
+}
+
+// Entry point: runs all v6 checks and aggregates exactly like the v5 engine.
+// Warnings do not fail the result (consistent with verify/engine.ts pass criteria).
+export function verifyV2(
+  theme: ThemeJsonV2,
+  config: InvarianceConfig,
+  constraints: DesignConstraints,
+): VerificationResult {
+  const t = theme.theme
+  const results: TestResult[] = [
+    styleSpecValid(t),
+    compilerOutputComplete(t),
+    lockedTokensUntouched(t, constraints),
+    contrastPairsCheck(t, constraints),
+    accentChromaWithinCap(t, constraints),
+    fontInRegistry(t),
+    varRefsResolve(t),
+  ]
+
+  return {
+    passed: results.every((r) => r.passed || r.severity === 'warning'),
+    results,
+  }
+}
