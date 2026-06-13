@@ -1,16 +1,58 @@
 :root {
-  /* Base values mirror the design tokens in invariance.manifest.json; the
-     overlay overrides them per user at runtime. */
-  --inv-bg: #0b0b0f;
-  --inv-surface: #16161d;
-  --inv-nav-bg: #0b0b0fd9;
-  --inv-accent: #e50914;
-  --inv-accent-2: #8a5cff;
-  --inv-text: #f5f5f7;
-  --inv-text-muted: #8c8c98;
-  --inv-radius: 8px;
-  --inv-row-gap: 44px;
-  --inv-card-width: 200px;
+  /* Invariance role tokens — the vocabulary the design engine themes. These
+     defaults are a dark, red-accent baseline; the client overlay overrides them
+     per user at runtime with the compiler's output (a designed, AA-safe theme). */
+  --inv-surface-0: #0b0b0d;
+  --inv-surface-1: #212125;
+  --inv-surface-2: #3c3d43;
+  --inv-text-primary: #f7f8ff;
+  --inv-text-secondary: #9597a5;
+  --inv-text-disabled: #757683;
+  --inv-accent: #ef4d60;
+  --inv-accent-hover: #ff8289;
+  --inv-accent-contrast: #1f212b;
+  --inv-accent-subtle: #562d2e;
+  --inv-border: #757683;
+  --inv-border-strong: #b4b6c4;
+  --inv-ring: #cc2644;
+  --inv-font-display: 'Space Grotesk', system-ui, sans-serif;
+  --inv-font-body: 'Inter', system-ui, sans-serif;
+  --inv-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  --inv-radius-base: 4px;
+  --inv-radius-lg: 8px;
+  --inv-shadow-1: 0 2px 8px rgb(0 0 0 / 0.24);
+  --inv-shadow-2: 0 12px 32px rgb(0 0 0 / 0.35);
+  --inv-density-unit: 4px;
+  --inv-border-width: 2px;
+  --inv-display-transform: none;
+  --inv-display-tracking: 0;
+  --inv-display-weight: 600;
+  --inv-space-2xs: 3px;
+  --inv-space-xs: 6px;
+  --inv-space-sm: 12px;
+  --inv-space-md: 18px;
+  --inv-space-lg: 28px;
+  --inv-space-xl: 44px;
+  --inv-space-2xl: 64px;
+  --inv-sidebar-w: 230px;
+  --inv-card-w: 168px;
+  --inv-card-w-wide: 320px;
+  --inv-card-aspect: 2 / 3;
+  --inv-hero-min-h: 420px;
+  --inv-section-gap: 44px;
+
+  /* Demo semantic aliases -> role tokens, so a compiled theme restyles the app
+     while component CSS keeps its readable names. The overlay overrides the role
+     tokens; these var() refs resolve through to the new values. */
+  --inv-bg: var(--inv-surface-0);
+  --inv-surface: var(--inv-surface-1);
+  --inv-nav-bg: color-mix(in srgb, var(--inv-surface-0) 85%, transparent);
+  --inv-text: var(--inv-text-primary);
+  --inv-text-muted: var(--inv-text-secondary);
+  --inv-accent-2: var(--inv-accent-hover);
+  --inv-radius: var(--inv-radius-lg);
+  --inv-row-gap: var(--inv-space-xl);
+  --inv-card-width: var(--inv-card-w-wide);
 }
 
 * { box-sizing: border-box; }
