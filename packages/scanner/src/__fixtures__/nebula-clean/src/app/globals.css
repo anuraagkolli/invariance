@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --app-gutter: 24px;
+}
+
+body {
+  margin: 0;
+  background: #0a0b0d;
+  color: #f4f9ff;
+  font-family: Inter, system-ui, sans-serif;
+}
