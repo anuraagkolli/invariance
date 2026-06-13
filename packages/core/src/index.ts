@@ -103,6 +103,11 @@ export { beginSmoothThemeTransition } from './runtime/smooth-transition'
 export { prepareStoredTheme } from './runtime/load-theme'
 export type { PreparedTheme } from './runtime/load-theme'
 
+// Reconciliation: keep, recompile-from-styleSpec (vibe preserved), or drop a stored
+// theme when invariant config changes. The provider runs this on load.
+export { reconcileStoredTheme } from './runtime/reconcile-theme'
+export type { ReconcileResult } from './runtime/reconcile-theme'
+
 // Agent Pipeline (v6)
 export { callClaude } from './agent/api'
 export type { ClaudeCallOptions, ClaudeCallResult, UsageEvent, UsageHandler } from './agent/api'

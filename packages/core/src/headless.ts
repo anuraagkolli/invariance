@@ -50,6 +50,8 @@ export type { ThemeJsonV2, ThemeSectionV2, AnyThemeJson } from './config/types'
 export { isV2Theme } from './config/types'
 export { prepareStoredTheme } from './runtime/load-theme'
 export type { PreparedTheme } from './runtime/load-theme'
+export { reconcileStoredTheme } from './runtime/reconcile-theme'
+export type { ReconcileResult } from './runtime/reconcile-theme'
 
 // The single safe-CSS-token-value predicate (a pure regex allowlist, no zod). The
 // snippet imports THIS rather than ThemeJsonV2Schema for its persist/export gate so
