@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import path from 'path'
+import { promises as fsp } from 'fs'
+import os from 'os'
 import { ThemeJsonV2Schema, verifyV2, deriveConstraints, prepareStoredTheme } from 'invariance'
 import { migrate } from './migrate'
 import type { ScannerAgent } from './migrate'
@@ -146,5 +148,32 @@ describe('migrate — end-to-end on fixture', () => {
         agent: stubAgent,
       }),
     ).rejects.toThrow(/already migrated/)
+  })
+})
+
+async function copyDir(src: string, dest: string): Promise<void> {
+  await fsp.mkdir(dest, { recursive: true })
+  for (const entry of await fsp.readdir(src, { withFileTypes: true })) {
+    const s = path.join(src, entry.name)
+    const d = path.join(dest, entry.name)
+    if (entry.isDirectory()) await copyDir(s, d)
+    else await fsp.copyFile(s, d)
+  }
+}
+
+describe('writeMigration — globals.css baseline', () => {
+  it('writes the generated :root block into globals.css', async () => {
+    const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-'))
+    const root = path.join(tmp, 'nebula-clean')
+    await copyDir(path.resolve(__dirname, '__fixtures__/nebula-clean'), root)
+
+    const { analyze, writeMigration } = await import('./migrate')
+    const result = await analyze({ appRoot: root, apiKey: '', dryRun: false })
+    await writeMigration(result)
+
+    const css = await fsp.readFile(path.join(root, 'src/app/globals.css'), 'utf-8')
+    expect(css).toContain('INVARIANCE-GENERATED:start')
+    expect(css).toMatch(/--inv-[a-z0-9-]+:/)
+    expect(css).toContain('--app-gutter: 24px') // app's own :root preserved
   })
 })

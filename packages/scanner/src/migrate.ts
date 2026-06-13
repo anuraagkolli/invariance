@@ -10,6 +10,7 @@ import { loadProject } from './ast/parse'
 import { callScannerAgent } from './agent/scanner-agent'
 import { discoverApp } from './discover'
 import { emitConfigYaml, emitInitialThemeJson } from './emit/config-emitter'
+import { patchGlobalsCss } from './emit/css-emitter'
 import { renderReport } from './emit/report'
 import { applyWrapperEdits } from './emit/source-rewriter'
 import { applyVariableRewrites } from './emit/variable-rewriter'
@@ -161,6 +162,8 @@ export interface AnalyzeResult extends ScannerResult {
   appRoot: string
   /** Layout file discovered for provider injection, if any. */
   layoutFile: string | null
+  /** globals.css discovered for the :root baseline, if any. */
+  globalsCssFile: string | null
 }
 
 /**
@@ -397,7 +400,7 @@ export async function analyze(opts: MigrateOptions): Promise<AnalyzeResult> {
   }
   const diff = diffParts.join('\n')
 
-  return { plan, diff, report, project, appRoot, layoutFile: discovered.layoutFile }
+  return { plan, diff, report, project, appRoot, layoutFile: discovered.layoutFile, globalsCssFile: discovered.globalsCssFile }
 }
 
 /**
@@ -415,6 +418,9 @@ export async function writeMigration(result: AnalyzeResult): Promise<void> {
     themeJson,
     'utf-8',
   )
+  if (result.globalsCssFile) {
+    await patchGlobalsCss(result.globalsCssFile, result.plan.initialTheme)
+  }
   if (result.layoutFile) {
     await injectProvider(result.layoutFile, result.appRoot, result.plan.config)
   }
