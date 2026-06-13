@@ -14,6 +14,11 @@
       "require": "./dist/headless.js",
       "import": "./dist/headless.js",
       "types": "./dist/headless.d.ts"
+    },
+    "./server": {
+      "require": "./dist/server.js",
+      "import": "./dist/server.js",
+      "types": "./dist/server.d.ts"
     }
   },
   "scripts": {

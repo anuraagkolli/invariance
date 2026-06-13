@@ -48,6 +48,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.13.0
         version: 1.19.14(hono@4.12.25)
+      '@invariance/design':
+        specifier: workspace:*
+        version: link:../../packages/design
       '@invariance/schema':
         specifier: workspace:*
         version: link:../../packages/schema

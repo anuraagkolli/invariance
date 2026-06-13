@@ -2,6 +2,7 @@ import {
   AppManifestSchema,
   ModBundleSchema,
   type AppManifest,
+  type BundleDesign,
   type CapabilityManifest,
   type HookModule,
   type ModBundle,
@@ -16,6 +17,8 @@ export interface ModDraft {
   uiOps?: UiOp[];
   hooks?: HookModule[];
   capabilities?: CapabilityManifest;
+  /** Design provenance for theme mods (StyleSpec + compiler version). */
+  design?: BundleDesign;
 }
 
 export interface PointerView {
@@ -80,6 +83,7 @@ export async function assembleBundle(
       ...(draft.capabilities ?? {}),
       budgets: { cpuMs: 50, memMb: 32, ...(draft.capabilities?.budgets ?? {}) },
     },
+    ...(draft.design ? { design: draft.design } : {}),
     createdAt: new Date().toISOString(),
   });
 }

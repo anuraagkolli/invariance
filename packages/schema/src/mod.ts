@@ -61,6 +61,23 @@ export const ManifestBindingSchema = z.object({
 });
 
 /**
+ * Design provenance for theme mods: the StyleSpec the design engine produced
+ * and the compiler that expanded it into the token-override uiOps. Carried so
+ * the console can show intent ("warm, editorial, high-contrast") instead of 38
+ * hex strings, and so re-fix can recompile under a new manifest without
+ * re-prompting. Optional — only theme mods carry it. `styleSpec` is kept
+ * schema-loose here (validated by the design engine, not this package) so the
+ * platform schema stays independent of @invariance/design-schema. CDN-safe:
+ * 12 enum/number fields + a rationale string, no PII.
+ */
+export const BundleDesignSchema = z.object({
+  styleSpec: z.record(z.unknown()),
+  compiledBy: z.string().min(1),
+  warnings: z.array(z.string()).default([]),
+});
+export type BundleDesign = z.infer<typeof BundleDesignSchema>;
+
+/**
  * A Mod Bundle is the only artifact runtimes execute: declarative UI ops plus
  * sandboxed hooks, with an explicit capability manifest. Bundles are immutable
  * once signed; a new revision supersedes via the registry pointer. The
@@ -83,6 +100,8 @@ export const ModBundleSchema = z
       writes: [],
       budgets: { cpuMs: 50, memMb: 32 },
     }),
+    /** Provenance for theme mods (StyleSpec + compiler); see BundleDesignSchema. */
+    design: BundleDesignSchema.optional(),
     createdAt: z.string().datetime(),
   })
   .superRefine((bundle, ctx) => {

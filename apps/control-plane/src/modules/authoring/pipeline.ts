@@ -10,6 +10,9 @@ const DraftShape = z.object({
   uiOps: z.array(z.unknown()).optional(),
   hooks: z.array(z.unknown()).optional(),
   capabilities: z.unknown().optional(),
+  // Design provenance for theme drafts (the design-aware agent attaches it);
+  // passed through to the bundle, validated by ModBundleSchema on assemble.
+  design: z.unknown().optional(),
 });
 
 export interface AuthoringResultOk {
