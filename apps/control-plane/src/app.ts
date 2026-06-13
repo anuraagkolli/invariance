@@ -11,6 +11,12 @@ import { loadKeys } from "./keys";
 import type { AuthoringAgent } from "./modules/authoring/agent";
 import { AnthropicAgent } from "./modules/authoring/anthropic";
 import { OpenAiCompatAgent } from "./modules/authoring/openai-compat";
+import {
+  createDesignAwareAgent,
+  type ThemeClassifier,
+  type ThemeDesigner,
+} from "./modules/authoring/design-author";
+import { callDesigner } from "@invariance/design/server";
 import { modAdminView, modDetailView, summarizeApp } from "./modules/analytics";
 import { authorMod, refixMod } from "./modules/authoring/pipeline";
 import {
@@ -36,12 +42,53 @@ export interface ControlPlaneOptions {
   agent?: AuthoringAgent;
   /** Verifier-in-the-loop repair attempts per prompt (default 3; local models want ~5). */
   maxAuthoringAttempts?: number;
+  /**
+   * Inject the design path (classify + Designer) directly — used by tests and
+   * advanced hosts. When omitted, the live path is wired automatically from env
+   * (a keyword classifier + callDesigner) whenever a design API key is set.
+   */
+  designAuthoring?: { classify: ThemeClassifier; design: ThemeDesigner };
 }
 
 function defaultAgent(): AuthoringAgent | null {
   if (process.env.INVARIANCE_LLM_BASE_URL) return new OpenAiCompatAgent();
   if (process.env.ANTHROPIC_API_KEY) return new AnthropicAgent();
   return null;
+}
+
+// Deterministic theme classifier: routes look/vibe prompts to the design path,
+// everything else to the base authoring agent. (A future phase can upgrade this
+// to the Gatekeeper LLM for nuanced intent; this keyword gate needs no key.)
+const THEME_WORDS =
+  /\b(theme|look|vibe|style|styl(e|ing)|aesthetic|colou?r|accent|palette|dark|light|mode|font|typography|retro|brutal(ist)?|pastel|minimal|modern|warm|cool|moody|bright|tone|brand|rounded|sharp)\b/i;
+const keywordClassify: ThemeClassifier = (input) => THEME_WORDS.test(input.prompt);
+
+/**
+ * Build the design path from env. The Designer is a live LLM call (needs a key),
+ * so this only activates when INVARIANCE_DESIGN_API_KEY / ANTHROPIC_API_KEY is
+ * set. The classifier is deterministic.
+ */
+function designAuthoringFromEnv(): { classify: ThemeClassifier; design: ThemeDesigner } | null {
+  const apiKey = process.env.INVARIANCE_DESIGN_API_KEY ?? process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+  const baseUrl = process.env.INVARIANCE_DESIGN_BASE_URL ?? process.env.INVARIANCE_LLM_BASE_URL;
+  const provider = process.env.INVARIANCE_DESIGN_PROVIDER as
+    | "anthropic"
+    | "openai-compatible"
+    | undefined;
+  const design: ThemeDesigner = async (input) => {
+    const result = await callDesigner({
+      request: input.request,
+      constraints: input.constraints,
+      apiKey,
+      ...(input.currentSpec ? { currentSpec: input.currentSpec } : {}),
+      ...(baseUrl ? { baseUrl } : {}),
+      ...(provider ? { provider } : {}),
+    });
+    if (!result.ok) throw new Error(`designer failed: ${result.error}`);
+    return result.spec;
+  };
+  return { classify: keywordClassify, design };
 }
 
 export const ModDraftSchema = z.object({
@@ -59,7 +106,14 @@ export interface ControlPlane {
 export function createControlPlane(options: ControlPlaneOptions = {}): ControlPlane {
   const store = options.store ?? new MemoryStore();
   const keys = options.keys ?? loadKeys();
-  const agent = options.agent ?? defaultAgent();
+  let agent = options.agent ?? defaultAgent();
+  // Wrap the base agent so theme prompts route through the design engine
+  // (Designer StyleSpec -> compiler -> token-override ops). Injected deps win;
+  // otherwise the live path is built from env when a design key is present.
+  const design = options.designAuthoring ?? designAuthoringFromEnv();
+  if (agent && design) {
+    agent = createDesignAwareAgent(agent, design);
+  }
   const maxAttempts =
     options.maxAuthoringAttempts ??
     (Number(process.env.INVARIANCE_AUTHORING_MAX_ATTEMPTS) || undefined);
