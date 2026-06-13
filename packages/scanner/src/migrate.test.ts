@@ -177,3 +177,24 @@ describe('writeMigration — globals.css baseline', () => {
     expect(css).toContain('--app-gutter: 24px') // app's own :root preserved
   })
 })
+
+describe('writeMigration — SSR inlining', () => {
+  it('patches layout.tsx with cookie-driven renderThemeCss + inline style', async () => {
+    const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-ssr-'))
+    const root = path.join(tmp, 'nebula-clean')
+    await copyDir(path.resolve(__dirname, '__fixtures__/nebula-clean'), root)
+
+    const { analyze, writeMigration } = await import('./migrate')
+    const result = await analyze({ appRoot: root, apiKey: '', dryRun: false })
+    await writeMigration(result)
+
+    const layout = await fsp.readFile(path.join(root, 'src/app/layout.tsx'), 'utf-8')
+    expect(layout).toContain("from 'next/headers'")
+    expect(layout).toMatch(/renderThemeCss|themeFromCookieHeader/)
+    expect(layout).toContain('inv-ssr-theme')
+    expect(layout).toMatch(/export default async function/)
+    // providers.tsx exports config for the layout to consume
+    const providers = await fsp.readFile(path.join(root, 'src/app/providers.tsx'), 'utf-8')
+    expect(providers).toContain('export const config')
+  })
+})

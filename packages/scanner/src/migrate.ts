@@ -59,7 +59,7 @@ import type { InvarianceConfig, ThemeJson } from 'invariance'
 
 import initialThemeJson from '${relativeThemePath}'
 
-const config: InvarianceConfig = ${configJson}
+export const config: InvarianceConfig = ${configJson}
 
 interface ProvidersProps {
   children: ReactNode
@@ -124,6 +124,47 @@ async function injectProvider(
   )
 
   await fs.writeFile(layoutFile, layoutSource, 'utf-8')
+}
+
+// Adds cookie-driven SSR theme inlining to a root layout so first paint is
+// themed. Idempotent (keys off the inv-ssr-theme marker). Requires a <head>
+// anchor and a `return (` in the default export; a layout without these is
+// left untouched (the client still themes post-hydration, just with a flash).
+async function injectSsrInlining(layoutFile: string): Promise<void> {
+  let src = await fs.readFile(layoutFile, 'utf-8')
+  if (src.includes('inv-ssr-theme')) return
+  if (!src.includes('</head>') || !/return\s*\(/.test(src)) return
+
+  function addImport(source: string, line: string): string {
+    if (source.includes(line)) return source
+    const lastImportIdx = source.lastIndexOf('\nimport ')
+    if (lastImportIdx === -1) return line + '\n' + source
+    const eol = source.indexOf('\n', lastImportIdx + 1)
+    return source.slice(0, eol + 1) + line + '\n' + source.slice(eol + 1)
+  }
+
+  src = addImport(src, "import { headers } from 'next/headers'")
+  src = addImport(src, "import { renderThemeCss, themeFromCookieHeader } from 'invariance'")
+  src = addImport(src, "import { config } from './providers'")
+
+  // Make the default export async (function form; covers the fixture + common case).
+  src = src.replace(/export default function /, 'export default async function ')
+
+  // Insert the SSR computation just before the first `return (`.
+  src = src.replace(
+    /(\n[ \t]*)return\s*\(/,
+    `$1const cookieHeader = headers().get('cookie')` +
+      `$1const ssrTheme = themeFromCookieHeader(cookieHeader, config)` +
+      `$1const ssrCss = renderThemeCss(ssrTheme, config)$1return (`,
+  )
+
+  // Inject the <style> just before </head>.
+  src = src.replace(
+    /<\/head>/,
+    `  {ssrCss ? <style id="inv-ssr-theme" dangerouslySetInnerHTML={{ __html: ssrCss }} /> : null}\n      </head>`,
+  )
+
+  await fs.writeFile(layoutFile, src, 'utf-8')
 }
 
 function routeToPageName(route: string): string {
@@ -423,6 +464,7 @@ export async function writeMigration(result: AnalyzeResult): Promise<void> {
   }
   if (result.layoutFile) {
     await injectProvider(result.layoutFile, result.appRoot, result.plan.config)
+    await injectSsrInlining(result.layoutFile)
   }
 }
 
