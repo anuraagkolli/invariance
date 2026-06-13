@@ -159,7 +159,7 @@ function HistoryCard({ item }: { item: HistoryItem }) {
       )}
 
       {item.status === 'thinking' &&
-        assistantBubble('#f4f5f7', '#6b7280', item.progressText ?? 'Thinking...')}
+        assistantBubble('#f4f5f7', '#5b6471', item.progressText ?? 'Thinking...')}
 
       {item.status === 'success' &&
         assistantBubble('#f1f8f2', '#166534', item.description ?? '', '✓')}
@@ -171,7 +171,7 @@ function HistoryCard({ item }: { item: HistoryItem }) {
         assistantBubble('#f3f6fd', '#1e40af', item.clarification ?? '')}
 
       {item.status === 'system' &&
-        assistantBubble('#f4f5f7', '#6b7280', item.description ?? '')}
+        assistantBubble('#f4f5f7', '#5b6471', item.description ?? '')}
     </div>
   )
 }
@@ -706,13 +706,15 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: '20px 8px',
-                color: '#b6bcc6',
+                color: '#6b7280',
                 fontSize: '12.5px',
                 textAlign: 'center',
                 gap: '8px',
               }}
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              {/* Decorative glyph stays lighter than the hint text — only the
+                  readable text needs the AA-darkened tone. */}
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ color: '#b6bcc6' }}>
                 <path
                   d="M12 2 L13.5 9 L20 10.5 L13.5 12 L12 19 L10.5 12 L4 10.5 L10.5 9 Z"
                   fill="currentColor"
@@ -741,7 +743,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
                 style={{
                   fontSize: '10px',
                   fontWeight: 600,
-                  color: '#9ca3af',
+                  color: '#6b7280',
                   textTransform: 'uppercase',
                   letterSpacing: '0.08em',
                   marginBottom: '8px',
@@ -829,7 +831,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
                 style={{
                   fontSize: '10px',
                   fontWeight: 600,
-                  color: '#9ca3af',
+                  color: '#6b7280',
                   textTransform: 'uppercase',
                   letterSpacing: '0.08em',
                   marginBottom: '8px',
@@ -885,6 +887,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
               display: 'flex',
               gap: '8px',
               alignItems: 'center',
+              margin: 0,
               background: inputFocused ? '#ffffff' : '#f3f4f6',
               border: inputFocused ? '1px solid rgba(99,102,241,0.45)' : '1px solid transparent',
               boxShadow: inputFocused ? '0 0 0 3px rgba(99,102,241,0.12)' : 'none',
@@ -904,6 +907,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
               data-inv-input="true"
               style={{
                 flex: 1,
+                minWidth: 0,
                 border: 'none',
                 outline: 'none',
                 background: 'transparent',
@@ -955,17 +959,16 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
                 border: 'none',
                 cursor: 'pointer',
                 fontSize: '11px',
-                color: '#9ca3af',
-                textDecoration: 'none',
+                color: '#6b7280',
+                textDecoration: 'underline',
+                textUnderlineOffset: '2px',
                 padding: '2px 4px',
               }}
               onMouseEnter={(e) => {
                 ;(e.currentTarget as HTMLButtonElement).style.color = '#b3261e'
-                ;(e.currentTarget as HTMLButtonElement).style.textDecoration = 'underline'
               }}
               onMouseLeave={(e) => {
-                ;(e.currentTarget as HTMLButtonElement).style.color = '#9ca3af'
-                ;(e.currentTarget as HTMLButtonElement).style.textDecoration = 'none'
+                ;(e.currentTarget as HTMLButtonElement).style.color = '#6b7280'
               }}
             >
               Reset all
@@ -1079,6 +1082,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
 
       {/* Keyframe animations */}
       <style>{`
+        [data-inv-input]::placeholder { color: #6b7280; opacity: 1 }
         @keyframes invariance-fade-in {
           from { opacity: 0; }
           to   { opacity: 1; }
