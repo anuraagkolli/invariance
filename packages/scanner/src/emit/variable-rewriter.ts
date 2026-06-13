@@ -1,13 +1,22 @@
 import { Node, Project, SourceFile, SyntaxKind } from 'ts-morph'
+import type { JsxAttribute, JsxOpeningElement, JsxSelfClosingElement } from 'ts-morph'
 
 import type { ObservedValue } from '../types'
+import { jsxPathOf } from '../ast/parse'
 import { roleForCssProperty } from './variable-naming'
 
 // ---------------------------------------------------------------------------
 // Variable rewriter: replaces literal design values (hex colors, tailwind
 // arbitrary values, tailwind named classes) with references to the --inv-*
 // CSS variables assigned to the enclosing slot.
+//
+// Each observed value carries the jsxPath of the element it was seen on, so a
+// rewrite targets exactly that element. This is what lets two sibling slots
+// share a literal value yet each reference its own token: without per-element
+// targeting, the first slot processed would consume every file-wide occurrence.
 // ---------------------------------------------------------------------------
+
+type OpeningLike = JsxOpeningElement | JsxSelfClosingElement
 
 export interface VariableRewriteOptions {
   valuesBySlot: Map<string, ObservedValue[]>
@@ -73,74 +82,99 @@ function replaceStringLiteralValue(node: Node, newValue: string): void {
   node.replaceWithText(`${quote}${newValue}${quote}`)
 }
 
-function rewriteInlineStyle(
-  sourceFile: SourceFile,
-  observed: ObservedValue,
-  varName: string,
-): boolean {
-  if (observed.source.kind !== 'inline-style') return false
-  const property = observed.source.property
-  let changed = false
-  sourceFile.forEachDescendant((node) => {
-    if (changed) return
-    if (node.getKind() !== SyntaxKind.PropertyAssignment) return
-    const pa = node.asKindOrThrow(SyntaxKind.PropertyAssignment)
-    const name = pa.getName()
-    if (name !== property) return
-    const init = pa.getInitializer()
-    if (!init) return
-    if (init.getKind() !== SyntaxKind.StringLiteral) return
-    const literal = init.asKindOrThrow(SyntaxKind.StringLiteral)
-    if (literal.getLiteralText() !== observed.value) return
-    replaceStringLiteralValue(literal, `var(${varName})`)
-    changed = true
-  })
-  return changed
+function getNamedAttribute(opening: OpeningLike, name: string): JsxAttribute | null {
+  for (const attr of opening.getAttributes()) {
+    if (attr.getKind() !== SyntaxKind.JsxAttribute) continue
+    const typed = attr as JsxAttribute
+    if (typed.getNameNode().getText() === name) return typed
+  }
+  return null
 }
 
-function rewriteClassNameToken(
+/**
+ * Find the JSX opening element at the given jsxPath. jsxPaths are unique within
+ * a function; if a file declares several components that produce the same path,
+ * `line` disambiguates. Returns undefined when no element matches.
+ */
+function findOpeningAt(
   sourceFile: SourceFile,
+  jsxPath: string,
+  line: number,
+): OpeningLike | undefined {
+  const matches: OpeningLike[] = []
+  for (const el of sourceFile.getDescendantsOfKind(SyntaxKind.JsxOpeningElement)) {
+    if (jsxPathOf(el.compilerNode) === jsxPath) matches.push(el)
+  }
+  for (const el of sourceFile.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement)) {
+    if (jsxPathOf(el.compilerNode) === jsxPath) matches.push(el)
+  }
+  if (matches.length <= 1) return matches[0]
+  return (
+    matches.find((el) => sourceFile.getLineAndColumnAtPos(el.getStart()).line === line) ??
+    matches[0]
+  )
+}
+
+/** Rewrite a string-literal inline-style value on the target element only. */
+function rewriteInlineStyleOn(
+  opening: OpeningLike,
+  property: string,
+  value: string,
+  varName: string,
+): boolean {
+  for (const pa of opening.getDescendantsOfKind(SyntaxKind.PropertyAssignment)) {
+    if (pa.getName() !== property) continue
+    const init = pa.getInitializer()
+    if (!init || init.getKind() !== SyntaxKind.StringLiteral) continue
+    const literal = init.asKindOrThrow(SyntaxKind.StringLiteral)
+    const text = literal.getLiteralText()
+    if (text === value) {
+      replaceStringLiteralValue(literal, `var(${varName})`)
+      return true
+    }
+    // Compound/shorthand value (e.g. "1px solid #707883"): replace only the
+    // observed color token, preserving the width/style around it.
+    if (text.includes(value)) {
+      replaceStringLiteralValue(literal, text.replace(value, `var(${varName})`))
+      return true
+    }
+  }
+  return false
+}
+
+/** Rewrite one className token on the target element only. */
+function rewriteClassNameTokenOn(
+  opening: OpeningLike,
   oldToken: string,
   newToken: string,
 ): boolean {
-  let changed = false
-  sourceFile.forEachDescendant((node) => {
-    if (changed) return
-    if (node.getKind() !== SyntaxKind.JsxAttribute) return
-    const attr = node.asKindOrThrow(SyntaxKind.JsxAttribute)
-    if (attr.getNameNode().getText() !== 'className') return
-    const init = attr.getInitializer()
-    if (!init) return
-    // className="..." (StringLiteral)
-    if (init.getKind() === SyntaxKind.StringLiteral) {
-      const lit = init.asKindOrThrow(SyntaxKind.StringLiteral)
-      const raw = lit.getLiteralText()
-      const tokens = raw.split(/\s+/)
-      const idx = tokens.indexOf(oldToken)
-      if (idx === -1) return
-      tokens[idx] = newToken
-      replaceStringLiteralValue(lit, tokens.join(' '))
-      changed = true
-      return
+  const attr = getNamedAttribute(opening, 'className')
+  if (!attr) return false
+  const init = attr.getInitializer()
+  if (!init) return false
+
+  const replaceIn = (lit: Node): boolean => {
+    const raw = (lit as Node & { getLiteralText(): string }).getLiteralText()
+    const tokens = raw.split(/\s+/)
+    const idx = tokens.indexOf(oldToken)
+    if (idx === -1) return false
+    tokens[idx] = newToken
+    replaceStringLiteralValue(lit, tokens.join(' '))
+    return true
+  }
+
+  // className="..."
+  if (init.getKind() === SyntaxKind.StringLiteral) {
+    return replaceIn(init.asKindOrThrow(SyntaxKind.StringLiteral))
+  }
+  // className={'...'}
+  if (init.getKind() === SyntaxKind.JsxExpression) {
+    const inner = init.asKindOrThrow(SyntaxKind.JsxExpression).getExpression()
+    if (inner && inner.getKind() === SyntaxKind.StringLiteral) {
+      return replaceIn(inner.asKindOrThrow(SyntaxKind.StringLiteral))
     }
-    // className={'...'} (JsxExpression wrapping a StringLiteral)
-    if (init.getKind() === SyntaxKind.JsxExpression) {
-      const jsxExpr = init.asKindOrThrow(SyntaxKind.JsxExpression)
-      const inner = jsxExpr.getExpression()
-      if (!inner) return
-      if (inner.getKind() === SyntaxKind.StringLiteral) {
-        const lit = inner.asKindOrThrow(SyntaxKind.StringLiteral)
-        const raw = lit.getLiteralText()
-        const tokens = raw.split(/\s+/)
-        const idx = tokens.indexOf(oldToken)
-        if (idx === -1) return
-        tokens[idx] = newToken
-        replaceStringLiteralValue(lit, tokens.join(' '))
-        changed = true
-      }
-    }
-  })
-  return changed
+  }
+  return false
 }
 
 function tailwindPrefixForRole(role: string): string | null {
@@ -173,8 +207,18 @@ export function applyVariableRewrites(
         continue
       }
 
+      const opening = observed.jsxPath
+        ? findOpeningAt(sourceFile, observed.jsxPath, observed.line)
+        : undefined
+      if (!opening) {
+        warn(
+          `could not locate element at ${observed.jsxPath || '(no path)'} for ${observed.role}=${observed.value} in ${observed.file}`,
+        )
+        continue
+      }
+
       if (observed.source.kind === 'inline-style') {
-        if (!rewriteInlineStyle(sourceFile, observed, varName)) {
+        if (!rewriteInlineStyleOn(opening, observed.source.property, observed.value, varName)) {
           warn(
             `could not rewrite inline-style ${observed.source.property}=${observed.value} in ${observed.file}`,
           )
@@ -187,7 +231,7 @@ export function applyVariableRewrites(
         // source.raw is the inner bracket content (e.g. "#1a1a2e"); rebuild full token.
         const oldToken = `${prefix}-[${observed.source.raw}]`
         const newToken = `${prefix}-[var(${varName})]`
-        if (!rewriteClassNameToken(sourceFile, oldToken, newToken)) {
+        if (!rewriteClassNameTokenOn(opening, oldToken, newToken)) {
           warn(`could not rewrite tailwind-arbitrary ${oldToken} in ${observed.file}`)
         }
         continue
@@ -197,7 +241,7 @@ export function applyVariableRewrites(
         const prefix = tailwindPrefixForRole(role) ?? observed.source.prefix
         const oldToken = observed.source.className
         const newToken = `${prefix}-[var(${varName})]`
-        if (!rewriteClassNameToken(sourceFile, oldToken, newToken)) {
+        if (!rewriteClassNameTokenOn(opening, oldToken, newToken)) {
           warn(`could not rewrite tailwind-named ${oldToken} in ${observed.file}`)
         }
       }

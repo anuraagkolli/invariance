@@ -19,7 +19,12 @@ import { readJsonIfExists, slotTokensFromTheme } from './theme-tokens'
 // ---------------------------------------------------------------------------
 
 export interface CheckViolation {
-  kind: 'missing-slot' | 'missing-token' | 'missing-section' | 'hardcoded-value'
+  kind:
+    | 'missing-slot'
+    | 'missing-token'
+    | 'missing-section'
+    | 'hardcoded-value'
+    | 'unused-slot-token'
   /** The slot / token / section name (or the literal value, for hardcoded). */
   name: string
   /** Human-readable explanation for the report. */
@@ -143,6 +148,25 @@ function computeViolations(
         name: literal,
         detail: `hardcoded value "${literal}" found inside wrapped slot "${slot}"; it should reference a var(--inv-*) token`,
       })
+    }
+  }
+
+  // unused-slot-token: a slot declares a token in cssVariables that its own
+  // markup never references via var(). This is the attribution-bug signature —
+  // the panel can edit the token but nothing on screen changes — which the
+  // existing missing-token check misses (a token in cssVariables counts as
+  // "present"). Subtree refs are a superset (include nested child slots), so
+  // this only fires when a declared token is genuinely unused.
+  for (const [slot, declared] of inventory.declaredBySlot) {
+    const refs = inventory.refsBySlot.get(slot) ?? new Set<string>()
+    for (const token of declared) {
+      if (!refs.has(token)) {
+        violations.push({
+          kind: 'unused-slot-token',
+          name: token,
+          detail: `slot "${slot}" declares token "${token}" in cssVariables but never references var(${token}) in its own markup`,
+        })
+      }
     }
   }
 

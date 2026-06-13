@@ -68,7 +68,7 @@ function buildProvidersSource(
 
 import type { ReactNode } from 'react'
 import { InvarianceProvider, CustomizationPanel } from 'invariance'
-import type { InvarianceConfig, ThemeJson } from 'invariance'
+import type { InvarianceConfig, ThemeJsonV2 } from 'invariance'
 
 import initialThemeJson from '${relativeThemePath}'
 
@@ -83,7 +83,7 @@ export function Providers({ children }: ProvidersProps) {
     <InvarianceProvider
       config={config}
       apiKey={process.env.NEXT_PUBLIC_ANTHROPIC_DEV_API_KEY ?? ''}
-      initialTheme={initialThemeJson as ThemeJson}
+      initialTheme={initialThemeJson as ThemeJsonV2}
       storage="localStorage"
     >
       {children}
@@ -328,18 +328,12 @@ export async function analyze(opts: MigrateOptions): Promise<AnalyzeResult> {
       fileObserved.set(file, values)
     }
 
-    // Assign observed values to their containing section via jsxPath prefix match.
+    // Attach the file's observed values to each section. buildSlotPlan dedupes
+    // by identity and attributes each value to the most specific slot whose
+    // jsxPath contains the value's own element (ObservedValue.jsxPath), so which
+    // section a value is attached to here does not affect attribution.
     for (const section of sections) {
-      const values = fileObserved.get(section.file) ?? []
-      for (const v of values) {
-        // slot-plan matches by sectionJsxPath; the value's location isn't tracked
-        // by jsxPath in ObservedValue, so we attach all file-level values and
-        // rely on buildSlotPlan's prefix matching. We attach the full file set
-        // to each section to let slot-plan re-assign, then dedupe.
-      }
-      // Simpler: assign all values from the same file to the outermost section
-      // so slot-plan can filter by jsxPath prefix.
-      section.values = values
+      section.values = fileObserved.get(section.file) ?? []
     }
 
     // Extract text nodes from ALL files associated with this page (not just the page file).

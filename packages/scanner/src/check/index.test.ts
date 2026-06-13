@@ -96,7 +96,7 @@ describe('runCheck — CI guard on a migrated app', () => {
     // Re-introduce a raw hex inside the sidebar slot's subtree, simulating a
     // developer who hand-edited a var() reference back to a literal.
     const source = await fs.readFile(pageFile, 'utf-8')
-    const dirty = source.replace("var(--inv-sidebar-bg-1)", '#1a1a2e')
+    const dirty = source.replace('var(--inv-sidebar-bg)', '#1a1a2e')
     expect(dirty).not.toBe(source)
     await fs.writeFile(pageFile, dirty, 'utf-8')
 
@@ -104,6 +104,42 @@ describe('runCheck — CI guard on a migrated app', () => {
     const hard = result.violations.filter((v) => v.kind === 'hardcoded-value')
     expect(hard.length).toBeGreaterThan(0)
     expect(hard.some((v) => v.detail.includes('sidebar'))).toBe(true)
+
+    await fs.writeFile(pageFile, source, 'utf-8')
+  })
+
+  it('flags a hardcoded color embedded in a border shorthand inside a slot', async () => {
+    // A raw hex inside a compound shorthand (borderRight: '1px solid #hex') is a
+    // color the panel can't reach — the scanner's own onboarding now rewrites
+    // these, so the guard must catch one reappearing.
+    const source = await fs.readFile(pageFile, 'utf-8')
+    const dirty = source.replace(
+      "padding: 'var(--inv-sidebar-pad)'",
+      "padding: 'var(--inv-sidebar-pad)', borderRight: '1px solid #123456'",
+    )
+    expect(dirty).not.toBe(source)
+    await fs.writeFile(pageFile, dirty, 'utf-8')
+
+    const result = await runCheck(path.join(tmpRoot, 'app'))
+    const hard = result.violations.filter((v) => v.kind === 'hardcoded-value')
+    expect(hard.some((v) => v.name === '#123456' && v.detail.includes('sidebar'))).toBe(true)
+
+    await fs.writeFile(pageFile, source, 'utf-8')
+  })
+
+  it('flags a slot token declared in cssVariables but never referenced in its subtree', async () => {
+    // The exact shape of the attribution bug: a slot keeps a token in its
+    // cssVariables list while its markup stops referencing it (here, repoint the
+    // bg ref to a sibling). The token still "exists" so missing-token won't fire;
+    // unused-slot-token must.
+    const source = await fs.readFile(pageFile, 'utf-8')
+    const dirty = source.replace('var(--inv-sidebar-bg)', 'var(--inv-sidebar-text)')
+    expect(dirty).not.toBe(source)
+    await fs.writeFile(pageFile, dirty, 'utf-8')
+
+    const result = await runCheck(path.join(tmpRoot, 'app'))
+    const unused = result.violations.filter((v) => v.kind === 'unused-slot-token')
+    expect(unused.map((v) => v.name)).toContain('--inv-sidebar-bg')
 
     await fs.writeFile(pageFile, source, 'utf-8')
   })
@@ -116,14 +152,14 @@ describe('runCheck — CI guard on a migrated app', () => {
     // it missing.
     const source = await fs.readFile(pageFile, 'utf-8')
     const dropped = source
-      .replace('var(--inv-sidebar-text-1)', 'var(--inv-sidebar-text)')
-      .replace(/, '--inv-sidebar-text-1'/, '')
+      .replace('var(--inv-sidebar-text)', 'var(--inv-sidebar-bg)')
+      .replace(/, '--inv-sidebar-text'/, '')
     expect(dropped).not.toBe(source)
     await fs.writeFile(pageFile, dropped, 'utf-8')
 
     const result = await runCheck(path.join(tmpRoot, 'app'))
     const missingTokens = result.violations.filter((v) => v.kind === 'missing-token')
-    expect(missingTokens.map((v) => v.name)).toContain('--inv-sidebar-text-1')
+    expect(missingTokens.map((v) => v.name)).toContain('--inv-sidebar-text')
 
     await fs.writeFile(pageFile, source, 'utf-8')
   })

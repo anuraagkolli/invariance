@@ -76,16 +76,22 @@ describe('migrate — end-to-end on fixture', () => {
     const required = result.plan.config.frontend?.structure?.required_sections ?? []
     expect(required).toEqual(expect.arrayContaining(['sidebar', 'main-content']))
 
-    // v2 initial theme: at least one sidebar slot var resolves to a role ref.
-    // The slot var holding the white page bg references surface-0; the dark
-    // panel (#1A1A2E, coherence-dropped from surface roles — see clusterer)
-    // stays a literal.
+    // v2 initial theme: a slot var whose value clustered to a role becomes a
+    // var(--inv-<role>) reference; a coherence-dropped value stays a literal.
+    // Each slot owns only the tokens for the markup it wraps. The white page
+    // background is on the <main> (the aside is a dark panel), so its #FFFFFF
+    // background var lives in main-content and references surface-0.
     const slots = result.plan.initialTheme.theme?.slots ?? {}
+    const mainVars = result.plan.slotCssVariables['main-content'] ?? []
+    expect(mainVars.length).toBeGreaterThan(0)
+    const mainInits = result.plan.slotVariableInitialValues['main-content'] ?? {}
+    const whiteBgVar = mainVars.find((v) => mainInits[v] === '#FFFFFF' && v.includes('-bg'))
+    expect(whiteBgVar && slots[whiteBgVar]).toBe('var(--inv-surface-0)')
+    // The sidebar's dark #1A1A2E background is the body ink — coherence-dropped
+    // from the surface roles — so it stays a literal.
+    const sidebarInits = result.plan.slotVariableInitialValues['sidebar'] ?? {}
     const sidebarVars = result.plan.slotCssVariables['sidebar'] ?? []
     expect(sidebarVars.length).toBeGreaterThan(0)
-    const sidebarInits = result.plan.slotVariableInitialValues['sidebar'] ?? {}
-    const whiteVar = sidebarVars.find((v) => sidebarInits[v] === '#FFFFFF')
-    expect(whiteVar && slots[whiteVar]).toBe('var(--inv-surface-0)')
     const darkVar = sidebarVars.find((v) => sidebarInits[v] === '#1A1A2E')
     expect(darkVar && slots[darkVar]).toBe('#1A1A2E') // literal, not a surface ref
   })
@@ -196,6 +202,28 @@ describe('writeMigration — SSR inlining', () => {
     // providers.tsx exports config for the layout to consume
     const providers = await fsp.readFile(path.join(root, 'src/app/providers.tsx'), 'utf-8')
     expect(providers).toContain('export const config')
+  })
+})
+
+describe('writeMigration — generated providers typecheck against the v2 theme', () => {
+  it('casts the imported v2 theme JSON to ThemeJsonV2, not the v1 ThemeJson', async () => {
+    const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-prov-'))
+    const root = path.join(tmp, 'nebula-clean')
+    await copyDir(path.resolve(__dirname, '__fixtures__/nebula-clean'), root)
+
+    const { analyze, writeMigration } = await import('./migrate')
+    const result = await analyze({ appRoot: root, apiKey: '', dryRun: false })
+    await writeMigration(result)
+
+    // The emitter always writes a v2 theme.json (roles + slots whose values are
+    // strings). Casting that import to the v1 ThemeJson — whose theme.slots is
+    // Record<string, Record<string, string>> — does not typecheck, so a
+    // developer's `next build` on the onboarded app would fail. It must cast to
+    // ThemeJsonV2, which InvarianceProvider accepts via AnyThemeJson.
+    expect(result.plan.initialTheme.version).toBe(2)
+    const providers = await fsp.readFile(path.join(root, 'src/app/providers.tsx'), 'utf-8')
+    expect(providers).toContain('as ThemeJsonV2')
+    expect(providers).toMatch(/import type \{[^}]*ThemeJsonV2[^}]*\} from ['"]invariance['"]/)
   })
 })
 

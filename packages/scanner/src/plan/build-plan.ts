@@ -152,6 +152,21 @@ export function buildMigrationPlan(params: BuildMigrationPlanParams): MigrationP
   let firstSlot: string | undefined
   let lastSlot: string | undefined
 
+  // Role clustering sees every observed color, independent of slot attribution:
+  // colors on elements outside any slot (e.g. the page-root background) still
+  // inform the role palette. We push one observation per element (deduped by
+  // object identity within an extraction); the clusterer then aggregates these
+  // by value, so the most-used color wins representative selection — e.g. white
+  // observed on two backgrounds counts as two.
+  for (const extraction of params.extractions) {
+    for (const value of uniqueExtractionValues(extraction)) {
+      const obsKind = colorKind(value.role)
+      if (!obsKind) continue
+      const canonical = normalizeHex(value.value) ?? value.value
+      colorObservations.push({ hex: canonical, kind: obsKind })
+    }
+  }
+
   for (const extraction of params.extractions) {
     const semantic = semanticByPage.get(extraction.page)
     if (!semantic) {
@@ -221,12 +236,6 @@ export function buildMigrationPlan(params: BuildMigrationPlanParams): MigrationP
           const kind = colorKind(value.role)
           if (kind) slotVarMeta.set(varName, { kind, hex: canonical })
         }
-
-        // Feed every color observation (with its kind) into the clusterer. We
-        // count per-occurrence (not per unique var) so the most-used value wins
-        // representative selection — e.g. white observed on two backgrounds.
-        const obsKind = colorKind(value.role)
-        if (obsKind) colorObservations.push({ hex: canonical, kind: obsKind })
 
         sourceEdits.push({
           file: value.file,
@@ -396,6 +405,23 @@ export function buildMigrationPlan(params: BuildMigrationPlanParams): MigrationP
     slotVariableInitialValues,
     warnings,
   }
+}
+
+// Collect an extraction's observed values without the per-section duplication
+// (migrate attaches the file's values to every section, so the same value
+// object appears once per section). Deduped by object identity, so two distinct
+// elements sharing a literal value are still both counted.
+function uniqueExtractionValues(ex: StaticExtraction): ObservedValue[] {
+  const seen = new Set<ObservedValue>()
+  const out: ObservedValue[] = []
+  for (const section of ex.sections) {
+    for (const v of section.values) {
+      if (seen.has(v)) continue
+      seen.add(v)
+      out.push(v)
+    }
+  }
+  return out
 }
 
 // Narrow an observed CSS role to the color kinds the clusterer understands.

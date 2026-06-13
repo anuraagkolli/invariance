@@ -9,6 +9,7 @@ function value(role: string, val: string, file = 'page.tsx'): ObservedValue {
     source: { kind: 'inline-style', property: role },
     file,
     line: 1,
+    jsxPath: '',
   }
 }
 
@@ -24,7 +25,9 @@ function extraction(
       jsxPath: s.jsxPath,
       tagName: 'div',
       snippet: '',
-      values: s.values,
+      // Each value is observed on the element at the section's path; buildSlotPlan
+      // attributes by the value's own jsxPath.
+      values: s.values.map((v) => ({ ...v, jsxPath: v.jsxPath || s.jsxPath })),
     })),
     texts: [],
     allColors: new Set(),

@@ -2,6 +2,7 @@ import { SourceFile, SyntaxKind } from 'ts-morph'
 import type { JsxAttribute, JsxOpeningElement, JsxSelfClosingElement } from 'ts-morph'
 
 import type { ObservedValue, TailwindMaps } from '../types'
+import { jsxPathOf } from './parse'
 
 type OpeningLike = JsxOpeningElement | JsxSelfClosingElement
 
@@ -85,6 +86,7 @@ export function extractFonts(sourceFile: SourceFile, tw: TailwindMaps): Observed
     const styleAttr = getNamedAttribute(opening, 'style')
     if (!styleAttr) continue
     const line = sourceFile.getLineAndColumnAtPos(opening.getStart()).line
+    const jsxPath = jsxPathOf(opening.compilerNode)
     for (const { property, value } of readInlineStyleObject(styleAttr)) {
       if (property !== 'fontFamily') continue
       const family = value.trim()
@@ -95,6 +97,7 @@ export function extractFonts(sourceFile: SourceFile, tw: TailwindMaps): Observed
         source: { kind: 'inline-style', property: 'fontFamily' },
         file: filePath,
         line,
+        jsxPath,
       })
     }
   }
@@ -110,12 +113,16 @@ export function extractFonts(sourceFile: SourceFile, tw: TailwindMaps): Observed
       source: { kind: 'inline-style', property: 'fontFamily' },
       file: filePath,
       line: 1,
+      // No JSX element backs an import-based font; it only seeds the font role
+      // (aggregated separately) and must not attribute to a slot or be rewritten.
+      jsxPath: '',
     })
   }
 
   // 2. Tailwind font-* classes.
   for (const opening of getOpeningElements(sourceFile)) {
     const line = sourceFile.getLineAndColumnAtPos(opening.getStart()).line
+    const jsxPath = jsxPathOf(opening.compilerNode)
     const classAttr = getNamedAttribute(opening, 'className')
     if (!classAttr) continue
     const classString = getClassNameString(classAttr)
@@ -135,6 +142,7 @@ export function extractFonts(sourceFile: SourceFile, tw: TailwindMaps): Observed
           source: { kind: 'tailwind-named', prefix: 'font', className: token },
           file: filePath,
           line,
+          jsxPath,
         })
       }
     }

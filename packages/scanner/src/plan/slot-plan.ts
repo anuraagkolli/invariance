@@ -18,17 +18,22 @@ export function buildSlotPlan(
   extraction: StaticExtraction,
   semantic: SemanticResult,
 ): SlotPlanEntry[] {
-  // Sort semantic slots by descending jsxPath length so that nested sections
-  // match the most specific slot first.
+  // Sort semantic slots by descending jsxPath length so that a value nested
+  // inside multiple slots attributes to the most specific (innermost) one.
   const orderedSlots = [...semantic.slots].sort(
     (a, b) => b.jsxPath.length - a.jsxPath.length,
   )
 
-  // Collect every (observed value, containing section) pair.
-  const pairs: Array<{ value: ObservedValue; sectionJsxPath: string }> = []
+  // Collect the unique observed values. Sections in the same file share one
+  // values array (migrate attaches the file's values to each section), so
+  // dedupe by object identity to avoid attributing a value more than once.
+  const seen = new Set<ObservedValue>()
+  const values: ObservedValue[] = []
   for (const section of extraction.sections) {
     for (const value of section.values) {
-      pairs.push({ value, sectionJsxPath: section.jsxPath })
+      if (seen.has(value)) continue
+      seen.add(value)
+      values.push(value)
     }
   }
 
@@ -37,17 +42,22 @@ export function buildSlotPlan(
     assigned.set(slot.name, [])
   }
 
-  for (const pair of pairs) {
+  // Attribute each value to the most specific slot whose jsxPath contains the
+  // value's own element. Matching on the value's location (not its section's)
+  // is what keeps a slot's tokens bound to the markup the slot actually wraps —
+  // two sibling slots sharing a literal each get their own token.
+  for (const value of values) {
+    if (!value.jsxPath) continue // no JSX element (e.g. import-based font)
     let matched: SemanticResult['slots'][number] | undefined
     for (const slot of orderedSlots) {
-      if (slot.file !== extraction.pageFile && slot.file !== pair.value.file) continue
-      if (isPrefixMatch(pair.sectionJsxPath, slot.jsxPath)) {
+      if (slot.file !== value.file) continue
+      if (isPrefixMatch(value.jsxPath, slot.jsxPath)) {
         matched = slot
         break
       }
     }
     if (matched) {
-      assigned.get(matched.name)?.push(pair.value)
+      assigned.get(matched.name)?.push(value)
     }
   }
 

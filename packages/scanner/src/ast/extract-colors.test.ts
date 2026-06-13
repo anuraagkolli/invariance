@@ -71,6 +71,39 @@ describe('extractColors — inline style', () => {
   })
 })
 
+describe('extractColors — border/outline shorthands', () => {
+  it('extracts the color embedded in a borderRight shorthand', () => {
+    const sf = parse(`
+      export default function P() {
+        return <aside style={{ borderRight: '1px solid #707883' }} />
+      }
+    `)
+    const values = extractColors(sf, emptyTailwind())
+    expect(values).toHaveLength(1)
+    expect(values[0]).toMatchObject({ role: 'border', value: '#707883' })
+    expect(values[0]?.source).toMatchObject({ kind: 'inline-style', property: 'borderRight' })
+  })
+
+  it('extracts the color from a border shorthand', () => {
+    const sf = parse(`
+      export default function P() {
+        return <div style={{ border: '2px dashed #abc' }} />
+      }
+    `)
+    const values = extractColors(sf, emptyTailwind())
+    expect(values.find((v) => v.role === 'border')?.value).toBe('#abc')
+  })
+
+  it('ignores a border shorthand with no color (width/keyword only)', () => {
+    const sf = parse(`
+      export default function P() {
+        return <div style={{ border: '1px solid' }} />
+      }
+    `)
+    expect(extractColors(sf, emptyTailwind())).toHaveLength(0)
+  })
+})
+
 describe('extractColors — tailwind arbitrary values', () => {
   it('extracts bg-[#hex] class', () => {
     const sf = parse(`

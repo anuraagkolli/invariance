@@ -18,6 +18,11 @@ export interface ObservedValue {
   /** Source file and JSX element location. */
   file: string
   line: number
+  /** Dotted jsxPath of the JSX element this value was observed on, e.g.
+   *  "div>main>section[1]". Empty when the value has no JSX element (e.g. a
+   *  Next.js font import). Used to attribute the value to its containing slot
+   *  and to target the exact node during rewriting. */
+  jsxPath: string
 }
 
 /** A JSX text literal that could become an m.text node. */

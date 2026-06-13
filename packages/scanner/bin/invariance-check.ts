@@ -60,6 +60,7 @@ const KIND_LABEL: Record<CheckViolation['kind'], string> = {
   'missing-token': 'Missing tokens',
   'missing-section': 'Missing sections',
   'hardcoded-value': 'Hardcoded values',
+  'unused-slot-token': 'Unused slot tokens',
 }
 
 function printHuman(result: CheckResult, appRoot: string): void {
@@ -81,6 +82,7 @@ function printHuman(result: CheckResult, appRoot: string): void {
     'missing-token',
     'missing-section',
     'hardcoded-value',
+    'unused-slot-token',
   ]
   for (const kind of order) {
     const group = result.violations.filter((v) => v.kind === kind)

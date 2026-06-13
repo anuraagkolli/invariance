@@ -24,6 +24,7 @@ describe('applyVariableRewrites — inline style', () => {
       source: { kind: 'inline-style', property: 'backgroundColor' },
       file: '/page.tsx',
       line: 2,
+      jsxPath: 'div',
     }
     applyVariableRewrites(project, {
       valuesBySlot: new Map([['sidebar', [observed]]]),
@@ -33,6 +34,31 @@ describe('applyVariableRewrites — inline style', () => {
     expect(project.getSourceFileOrThrow('/page.tsx').getFullText()).toContain(
       "backgroundColor: 'var(--inv-sidebar-bg)'",
     )
+  })
+})
+
+describe('applyVariableRewrites — compound (shorthand) inline style', () => {
+  it('replaces only the color token, preserving the rest of the declaration', () => {
+    const project = makeProject(
+      '/page.tsx',
+      `export default function P() {\n  return <aside style={{ borderRight: '1px solid #707883' }} />\n}\n`,
+    )
+    const observed: ObservedValue = {
+      role: 'border',
+      value: '#707883',
+      source: { kind: 'inline-style', property: 'borderRight' },
+      file: '/page.tsx',
+      line: 2,
+      jsxPath: 'aside',
+    }
+    applyVariableRewrites(project, {
+      valuesBySlot: new Map([['sidebar', [observed]]]),
+      slotCssVariables: { sidebar: ['--inv-sidebar-border'] },
+      slotVariableInitialValues: { sidebar: { '--inv-sidebar-border': '#707883' } },
+    })
+    const out = project.getSourceFileOrThrow('/page.tsx').getFullText()
+    expect(out).toContain("borderRight: '1px solid var(--inv-sidebar-border)'")
+    expect(out).not.toContain('#707883')
   })
 })
 
@@ -48,6 +74,7 @@ describe('applyVariableRewrites — tailwind arbitrary value', () => {
       source: { kind: 'tailwind-arbitrary', prefix: 'bg', raw: '#1a1a2e' },
       file: '/page.tsx',
       line: 2,
+      jsxPath: 'div',
     }
     applyVariableRewrites(project, {
       valuesBySlot: new Map([['sidebar', [observed]]]),
@@ -73,6 +100,7 @@ describe('applyVariableRewrites — collision suffix picks right variable', () =
       source: { kind: 'inline-style', property: 'backgroundColor' },
       file: '/page.tsx',
       line: 2,
+      jsxPath: 'div',
     }
     applyVariableRewrites(project, {
       valuesBySlot: new Map([['sidebar', [observed]]]),
@@ -104,6 +132,7 @@ describe('applyVariableRewrites — misses are non-fatal', () => {
       source: { kind: 'inline-style', property: 'backgroundColor' },
       file: '/page.tsx',
       line: 2,
+      jsxPath: 'div',
     }
     applyVariableRewrites(project, {
       valuesBySlot: new Map([['sidebar', [observed]]]),

@@ -38,6 +38,10 @@ export interface SourceInventory {
    * so precision here is load-bearing.
    */
   literalsBySlot: Map<string, string[]>
+  /** Slot name -> the --inv-* tokens it declares in its cssVariables={[...]}. */
+  declaredBySlot: Map<string, Set<string>>
+  /** Slot name -> the --inv-* tokens referenced via var() within its subtree. */
+  refsBySlot: Map<string, Set<string>>
 }
 
 // A --inv-* token name: lowercase letters, digits, hyphens after the prefix.
@@ -46,12 +50,20 @@ const TOKEN_NAME = /^--inv-[a-z0-9-]+$/
 
 // Color CSS properties not covered by roleForCssProperty (it returns null for
 // these). roleForCssProperty handles backgroundColor/background/color/border*
-// color; these are the remaining paint properties that hold a color literal.
+// color; these are the remaining paint properties that hold a color literal —
+// including the directional border shorthands and outline, whose compound
+// values ("1px solid #707883") embed a color (colorLiteralsFromStyleObject
+// scans the value for it). 'border' itself is already a roleForCssProperty hit.
 const EXTRA_COLOR_STYLE_PROPS = new Set<string>([
   'fill',
   'stroke',
   'outlineColor',
   'boxShadow',
+  'borderTop',
+  'borderRight',
+  'borderBottom',
+  'borderLeft',
+  'outline',
 ])
 
 // A bare color literal: hex, rgb()/rgba(), or hsl()/hsla(). Named CSS colors
@@ -246,6 +258,8 @@ export function scanMigratedSource(appRoot: string): SourceInventory {
   const sections = new Set<string>()
   const tokens = new Set<string>()
   const literalsBySlot = new Map<string, string[]>()
+  const declaredBySlot = new Map<string, Set<string>>()
+  const refsBySlot = new Map<string, Set<string>>()
 
   for (const sf of project.getSourceFiles()) {
     const fullText = sf.getFullText()
@@ -271,7 +285,20 @@ export function scanMigratedSource(appRoot: string): SourceInventory {
           slots.add(name)
           // The slot's declared tokens count as referenced tokens, so a token
           // that lives only in cssVariables (rare) still registers as present.
-          for (const t of cssVariablesAttr(node)) tokens.add(t)
+          const declared = cssVariablesAttr(node)
+          for (const t of declared) tokens.add(t)
+          const dset = declaredBySlot.get(name) ?? new Set<string>()
+          for (const t of declared) dset.add(t)
+          declaredBySlot.set(name, dset)
+          // var() tokens referenced within this slot's subtree. getText() spans
+          // the whole element, so nested child slots' refs are included too — a
+          // superset, which keeps the unused-slot-token check free of false
+          // positives (it can only under-report, never wrongly accuse).
+          const rset = refsBySlot.get(name) ?? new Set<string>()
+          for (const m of node.getText().matchAll(TOKEN_REF)) {
+            if (m[1]) rset.add(m[1])
+          }
+          refsBySlot.set(name, rset)
           // Color literals inside this slot's subtree — attributed to the slot.
           // This is the only place we attribute literals: scoped to the wrapped
           // region (and, within it, to color attributes only) keeps the
@@ -292,5 +319,5 @@ export function scanMigratedSource(appRoot: string): SourceInventory {
     })
   }
 
-  return { slots, sections, tokens, literalsBySlot }
+  return { slots, sections, tokens, literalsBySlot, declaredBySlot, refsBySlot }
 }

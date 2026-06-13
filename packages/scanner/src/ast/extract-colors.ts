@@ -6,6 +6,7 @@ import type {
 } from 'ts-morph'
 
 import type { ObservedValue, TailwindMaps } from '../types'
+import { jsxPathOf } from './parse'
 
 type OpeningLike = JsxOpeningElement | JsxSelfClosingElement
 
@@ -44,6 +45,27 @@ const HSL_RE = /^hsla?\([^)]+\)$/
 function isColorLiteral(value: string): boolean {
   const v = value.trim()
   return HEX_RE.test(v) || RGB_RE.test(v) || HSL_RE.test(v)
+}
+
+// Shorthand properties whose value is a compound declaration ("1px solid #707883")
+// that embeds a color. The whole value isn't a color literal, so we pull the
+// color token out and let the rewriter replace just that substring. All map to
+// the 'border' role (outline reads as a border edge for theming purposes).
+const SHORTHAND_BORDER_PROPS = new Set<string>([
+  'border',
+  'borderTop',
+  'borderRight',
+  'borderBottom',
+  'borderLeft',
+  'outline',
+])
+
+// First color token inside a compound value: hex, rgb()/rgba(), or hsl()/hsla().
+const COLOR_IN_VALUE = /#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)|hsla?\([^)]*\)/
+
+function firstColorLiteral(value: string): string | null {
+  const m = COLOR_IN_VALUE.exec(value)
+  return m ? m[0] : null
 }
 
 function getOpeningElements(sourceFile: SourceFile): OpeningLike[] {
@@ -142,21 +164,37 @@ export function extractColors(
 
   for (const opening of getOpeningElements(sourceFile)) {
     const line = sourceFile.getLineAndColumnAtPos(opening.getStart()).line
+    const jsxPath = jsxPathOf(opening.compilerNode)
 
     // 1. Inline style={{ ... }}
     const styleAttr = getNamedAttribute(opening, 'style')
     if (styleAttr) {
       for (const { property, value } of readInlineStyleObject(styleAttr)) {
-        if (!COLOR_STYLE_PROPS.has(property)) continue
-        if (!isColorLiteral(value)) continue
-        const role = STYLE_PROP_TO_ROLE[property] ?? 'bg'
-        out.push({
-          role,
-          value: value.trim(),
-          source: { kind: 'inline-style', property },
-          file: filePath,
-          line,
-        })
+        if (COLOR_STYLE_PROPS.has(property)) {
+          if (!isColorLiteral(value)) continue
+          const role = STYLE_PROP_TO_ROLE[property] ?? 'bg'
+          out.push({
+            role,
+            value: value.trim(),
+            source: { kind: 'inline-style', property },
+            file: filePath,
+            line,
+            jsxPath,
+          })
+        } else if (SHORTHAND_BORDER_PROPS.has(property)) {
+          // Compound shorthand (e.g. "1px solid #707883"): capture the embedded
+          // color so it doesn't leak as a hardcoded literal past onboarding.
+          const color = firstColorLiteral(value)
+          if (!color) continue
+          out.push({
+            role: 'border',
+            value: color,
+            source: { kind: 'inline-style', property },
+            file: filePath,
+            line,
+            jsxPath,
+          })
+        }
       }
     }
 
@@ -181,6 +219,7 @@ export function extractColors(
                   source: { kind: 'tailwind-arbitrary', prefix, raw },
                   file: filePath,
                   line,
+                  jsxPath,
                 })
               }
             }
@@ -204,6 +243,7 @@ export function extractColors(
             source: { kind: 'tailwind-named', prefix, className: token },
             file: filePath,
             line,
+            jsxPath,
           })
         }
       }

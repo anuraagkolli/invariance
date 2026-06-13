@@ -2,6 +2,7 @@ import { Node, SourceFile, SyntaxKind } from 'ts-morph'
 import type { JsxAttribute, JsxOpeningElement, JsxSelfClosingElement } from 'ts-morph'
 
 import type { ObservedValue, TailwindMaps } from '../types'
+import { jsxPathOf } from './parse'
 
 type OpeningLike = JsxOpeningElement | JsxSelfClosingElement
 
@@ -116,6 +117,7 @@ export function extractSpacing(
 
   for (const opening of getOpeningElements(sourceFile)) {
     const line = sourceFile.getLineAndColumnAtPos(opening.getStart()).line
+    const jsxPath = jsxPathOf(opening.compilerNode)
 
     // 1. Inline style={{ padding: '16px' }}
     const styleAttr = getNamedAttribute(opening, 'style')
@@ -130,6 +132,7 @@ export function extractSpacing(
           source: { kind: 'inline-style', property },
           file: filePath,
           line,
+          jsxPath,
         })
       }
     }
@@ -153,6 +156,7 @@ export function extractSpacing(
           source: { kind: 'tailwind-named', prefix: parsed.prefix, className: token },
           file: filePath,
           line,
+          jsxPath,
         })
       }
     }
