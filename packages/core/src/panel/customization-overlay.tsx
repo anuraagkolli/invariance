@@ -53,7 +53,7 @@ const EXAMPLE_PROMPTS = [
 
 function SendIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <line x1="22" y1="2" x2="11" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <polygon points="22 2 15 22 11 13 2 9 22 2" fill="currentColor" />
     </svg>
@@ -65,6 +65,17 @@ function CloseIcon() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+// Mirrors the host trigger button's wand so the panel reads as the same tool
+// the user just clicked.
+function WandIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
+      <line x1="3" y1="21" x2="13" y2="11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M14 3 L14.9 6.6 L18.5 7.5 L14.9 8.4 L14 12 L13.1 8.4 L9.5 7.5 L13.1 6.6 Z" fill="currentColor" />
     </svg>
   )
 }
@@ -100,9 +111,10 @@ function CheckIcon() {
 // ---------------------------------------------------------------------------
 
 function HistoryCard({ item }: { item: HistoryItem }) {
+  // Assistant bubbles are flat tinted fills (no borders) — the glassy card
+  // already supplies the depth, so borders would read as visual noise.
   function assistantBubble(
     bg: string,
-    border: string,
     textColor: string,
     content: string,
     prefix?: string,
@@ -111,10 +123,10 @@ function HistoryCard({ item }: { item: HistoryItem }) {
       <div
         style={{
           background: bg,
-          border: `1px solid ${border}`,
-          borderRadius: '12px 12px 12px 2px',
-          padding: '8px 12px',
+          borderRadius: '14px 14px 14px 4px',
+          padding: '7px 12px',
           fontSize: '13px',
+          lineHeight: 1.45,
           color: textColor,
           maxWidth: '85%',
           wordBreak: 'break-word',
@@ -132,11 +144,11 @@ function HistoryCard({ item }: { item: HistoryItem }) {
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '6px' }}>
           <div
             style={{
-              background: '#6366f1',
+              background: '#111827',
               color: '#ffffff',
-              borderRadius: '12px 12px 2px 12px',
-              padding: '8px 12px',
-              fontSize: '14px',
+              borderRadius: '14px 14px 4px 14px',
+              padding: '7px 12px',
+              fontSize: '13px',
               maxWidth: '85%',
               wordBreak: 'break-word',
             }}
@@ -147,19 +159,19 @@ function HistoryCard({ item }: { item: HistoryItem }) {
       )}
 
       {item.status === 'thinking' &&
-        assistantBubble('#f3f4f6', '#e5e7eb', '#6b7280', item.progressText ?? 'Thinking...')}
+        assistantBubble('#f4f5f7', '#6b7280', item.progressText ?? 'Thinking...')}
 
       {item.status === 'success' &&
-        assistantBubble('#f0fdf4', '#bbf7d0', '#166534', item.description ?? '', '✓')}
+        assistantBubble('#f1f8f2', '#166534', item.description ?? '', '✓')}
 
       {item.status === 'error' &&
-        assistantBubble('#fef2f2', '#fecaca', '#991b1b', item.reason ?? '', '✗')}
+        assistantBubble('#fdf3f3', '#b3261e', item.reason ?? '', '✗')}
 
       {item.status === 'clarification' &&
-        assistantBubble('#eff6ff', '#bfdbfe', '#1e40af', item.clarification ?? '')}
+        assistantBubble('#f3f6fd', '#1e40af', item.clarification ?? '')}
 
       {item.status === 'system' &&
-        assistantBubble('#f3f4f6', '#e5e7eb', '#6b7280', item.description ?? '')}
+        assistantBubble('#f4f5f7', '#6b7280', item.description ?? '')}
     </div>
   )
 }
@@ -243,6 +255,9 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
   } = useInvariance()
 
   const [input, setInput] = useState('')
+  // Drives the pill container's focus ring — the ring lives on the wrapper,
+  // not the input, so a style-mutating focus handler can't reach it directly.
+  const [inputFocused, setInputFocused] = useState(false)
   const saved = loadChatHistory(userId, appId)
   const [history, setHistory] = useState<HistoryItem[]>(saved.history)
   const [convHistory, setConvHistory] = useState<ConvTurn[]>(saved.convHistory)
@@ -591,7 +606,9 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
         style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.35)',
+          // Light scrim: the glassy card lets the app glow through, so the
+          // backdrop only needs to hint at modality, not dim the page.
+          background: 'rgba(0,0,0,0.22)',
           zIndex: 9998,
           // Swapping animation-name restarts the animation, so returning to
           // 'chat' after an error replays the entrance without a re-mount.
@@ -618,9 +635,12 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
           width: '480px',
           maxWidth: 'calc(100vw - 48px)',
           maxHeight: '70vh',
-          background: '#ffffff',
-          borderRadius: '16px',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.1)',
+          background: 'rgba(255,255,255,0.92)',
+          backdropFilter: 'blur(20px) saturate(1.4)',
+          WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+          border: '1px solid rgba(17,24,39,0.06)',
+          borderRadius: '20px',
+          boxShadow: '0 24px 80px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.06)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -632,25 +652,25 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         }}
       >
-        {/* Header */}
+        {/* Header: single compact row — wand glyph, title, spacer, close.
+            The old subtitle's guidance now lives in the input placeholder. */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '16px 20px',
-            borderBottom: '1px solid #f3f4f6',
+            gap: '8px',
+            padding: '14px 18px 12px',
+            borderBottom: '1px solid rgba(17,24,39,0.05)',
             flexShrink: 0,
           }}
         >
-          <div>
-            <h2 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: '#111827' }}>
-              Customize this page
-            </h2>
-            <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#9ca3af' }}>
-              Describe what you&apos;d like to change
-            </p>
-          </div>
+          <span style={{ color: '#6366f1', display: 'flex' }}>
+            <WandIcon />
+          </span>
+          <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#111827', letterSpacing: '-0.01em' }}>
+            Customize
+          </h2>
+          <div style={{ flex: 1 }} />
           <button
             type="button"
             onClick={onClose}
@@ -676,7 +696,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
         {/* History */}
         <div
           ref={historyRef}
-          style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}
+          style={{ flex: 1, overflowY: 'auto', padding: '14px 18px' }}
         >
           {history.length === 0 && (
             <div
@@ -685,14 +705,14 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: '24px 8px',
-                color: '#d1d5db',
-                fontSize: '13px',
+                padding: '20px 8px',
+                color: '#b6bcc6',
+                fontSize: '12.5px',
                 textAlign: 'center',
                 gap: '8px',
               }}
             >
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path
                   d="M12 2 L13.5 9 L20 10.5 L13.5 12 L12 19 L10.5 12 L4 10.5 L10.5 9 Z"
                   fill="currentColor"
@@ -708,7 +728,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
 
         {/* Input area */}
         <div
-          style={{ padding: '12px 16px 16px', borderTop: '1px solid #f3f4f6', flexShrink: 0 }}
+          style={{ padding: '12px 18px 14px', borderTop: '1px solid rgba(17,24,39,0.05)', flexShrink: 0 }}
         >
           {/* Seeded example prompts. PERSISTENT (not just the empty state): a
               user who applied a theme can always change their mind from here.
@@ -719,11 +739,11 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
             <div style={{ marginBottom: '12px' }}>
               <div
                 style={{
-                  fontSize: '11px',
+                  fontSize: '10px',
                   fontWeight: 600,
                   color: '#9ca3af',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
+                  letterSpacing: '0.08em',
                   marginBottom: '8px',
                 }}
               >
@@ -738,27 +758,27 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
                     disabled={isThinking}
                     data-inv-prompt={prompt}
                     style={{
-                      background: '#f3f4f6',
-                      border: '1px solid #e5e7eb',
+                      background: '#ffffff',
+                      border: '1px solid #e8eaee',
                       borderRadius: '999px',
-                      padding: '5px 11px',
+                      padding: '5px 12px',
                       fontSize: '12px',
-                      color: '#374151',
+                      color: '#4b5563',
                       cursor: isThinking ? 'default' : 'pointer',
                       transition: 'background 0.15s, border-color 0.15s, color 0.15s',
                       whiteSpace: 'nowrap',
                     }}
                     onMouseEnter={(e) => {
                       if (!isThinking) {
-                        ;(e.currentTarget as HTMLButtonElement).style.background = '#eef2ff'
+                        ;(e.currentTarget as HTMLButtonElement).style.background = '#f5f7ff'
                         ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#c7d2fe'
                         ;(e.currentTarget as HTMLButtonElement).style.color = '#4338ca'
                       }
                     }}
                     onMouseLeave={(e) => {
-                      ;(e.currentTarget as HTMLButtonElement).style.background = '#f3f4f6'
-                      ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#e5e7eb'
-                      ;(e.currentTarget as HTMLButtonElement).style.color = '#374151'
+                      ;(e.currentTarget as HTMLButtonElement).style.background = '#ffffff'
+                      ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#e8eaee'
+                      ;(e.currentTarget as HTMLButtonElement).style.color = '#4b5563'
                     }}
                   >
                     {prompt}
@@ -773,7 +793,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
                     background: '#6366f1',
                     border: '1px solid #6366f1',
                     borderRadius: '999px',
-                    padding: '5px 12px',
+                    padding: '5px 13px',
                     fontSize: '12px',
                     fontWeight: 500,
                     color: '#ffffff',
@@ -802,16 +822,16 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
               NOT disabled when apiKey is absent (only the prompt input needs a key).
               Hidden entirely if the app's constraints forbid every pack. The panel
               UI is fixed-light (NOT themed by --inv vars), so the chips use the
-              same inline palette as the rest of the panel (#f3f4f6 / #111827). */}
+              same inline palette as the rest of the panel (white pill / #4b5563). */}
           {packs.length > 0 && (
             <div style={{ marginBottom: '12px' }}>
               <div
                 style={{
-                  fontSize: '11px',
+                  fontSize: '10px',
                   fontWeight: 600,
                   color: '#9ca3af',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
+                  letterSpacing: '0.08em',
                   marginBottom: '8px',
                 }}
               >
@@ -826,27 +846,27 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
                     disabled={isThinking}
                     data-inv-pack={pack.id}
                     style={{
-                      background: '#f3f4f6',
-                      border: '1px solid #e5e7eb',
+                      background: '#ffffff',
+                      border: '1px solid #e8eaee',
                       borderRadius: '999px',
-                      padding: '5px 11px',
+                      padding: '5px 12px',
                       fontSize: '12px',
-                      color: '#374151',
+                      color: '#4b5563',
                       cursor: isThinking ? 'default' : 'pointer',
                       transition: 'background 0.15s, border-color 0.15s, color 0.15s',
                       whiteSpace: 'nowrap',
                     }}
                     onMouseEnter={(e) => {
                       if (!isThinking) {
-                        ;(e.currentTarget as HTMLButtonElement).style.background = '#eef2ff'
+                        ;(e.currentTarget as HTMLButtonElement).style.background = '#f5f7ff'
                         ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#c7d2fe'
                         ;(e.currentTarget as HTMLButtonElement).style.color = '#4338ca'
                       }
                     }}
                     onMouseLeave={(e) => {
-                      ;(e.currentTarget as HTMLButtonElement).style.background = '#f3f4f6'
-                      ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#e5e7eb'
-                      ;(e.currentTarget as HTMLButtonElement).style.color = '#374151'
+                      ;(e.currentTarget as HTMLButtonElement).style.background = '#ffffff'
+                      ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#e8eaee'
+                      ;(e.currentTarget as HTMLButtonElement).style.color = '#4b5563'
                     }}
                   >
                     {pack.name}
@@ -856,9 +876,22 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
             </div>
           )}
 
+          {/* The form doubles as the pill container around input + send. The
+              focus ring lives HERE (driven by inputFocused state) so the whole
+              pill lights up, not just the borderless input inside it. */}
           <form
             onSubmit={(e) => { void handleSubmit(e) }}
-            style={{ display: 'flex', gap: '8px', alignItems: 'center' }}
+            style={{
+              display: 'flex',
+              gap: '8px',
+              alignItems: 'center',
+              background: inputFocused ? '#ffffff' : '#f3f4f6',
+              border: inputFocused ? '1px solid rgba(99,102,241,0.45)' : '1px solid transparent',
+              boxShadow: inputFocused ? '0 0 0 3px rgba(99,102,241,0.12)' : 'none',
+              borderRadius: '999px',
+              padding: '4px 4px 4px 16px',
+              transition: 'background 0.15s, border-color 0.15s, box-shadow 0.15s',
+            }}
           >
             <input
               ref={inputRef}
@@ -867,47 +900,31 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={isThinking}
-              placeholder={
-                isThinking
-                  ? 'Thinking...'
-                  : 'Describe a change... (e.g. "make the sidebar dark blue")'
-              }
+              placeholder={isThinking ? 'Thinking...' : 'Describe a change…'}
               data-inv-input="true"
               style={{
                 flex: 1,
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                padding: '9px 12px',
-                fontSize: '13px',
-                color: '#111827',
-                background: isThinking ? '#f3f4f6' : '#f9fafb',
+                border: 'none',
                 outline: 'none',
-                transition: 'border-color 0.15s, box-shadow 0.15s',
+                background: 'transparent',
+                padding: '8px 0',
+                fontSize: '13.5px',
+                color: '#111827',
                 cursor: isThinking ? 'default' : 'text',
               }}
-              onFocus={(e) => {
-                if (!isThinking) {
-                  ;(e.currentTarget as HTMLInputElement).style.borderColor = '#6366f1'
-                  ;(e.currentTarget as HTMLInputElement).style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'
-                  ;(e.currentTarget as HTMLInputElement).style.background = '#ffffff'
-                }
-              }}
-              onBlur={(e) => {
-                ;(e.currentTarget as HTMLInputElement).style.borderColor = '#e5e7eb'
-                ;(e.currentTarget as HTMLInputElement).style.boxShadow = 'none'
-                ;(e.currentTarget as HTMLInputElement).style.background = isThinking ? '#f3f4f6' : '#f9fafb'
-              }}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
             />
             <button
               type="submit"
               aria-label="Send"
               disabled={isThinking}
               style={{
-                background: isThinking ? '#a5b4fc' : '#6366f1',
+                background: isThinking ? '#c7cbe8' : '#6366f1',
                 border: 'none',
-                borderRadius: '8px',
-                width: '36px',
-                height: '36px',
+                borderRadius: '999px',
+                width: '32px',
+                height: '32px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -926,8 +943,9 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
             </button>
           </form>
 
-          {/* Footer */}
-          <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'center' }}>
+          {/* Footer: quiet by default, turns destructive-red on hover so the
+              reset reads as deliberate, not decorative. */}
+          <div style={{ padding: '6px 0 0', display: 'flex', justifyContent: 'center' }}>
             <button
               type="button"
               onClick={() => { void handleReset() }}
@@ -936,13 +954,19 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                fontSize: '12px',
+                fontSize: '11px',
                 color: '#9ca3af',
-                textDecoration: 'underline',
+                textDecoration: 'none',
                 padding: '2px 4px',
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#6b7280' }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#9ca3af' }}
+              onMouseEnter={(e) => {
+                ;(e.currentTarget as HTMLButtonElement).style.color = '#b3261e'
+                ;(e.currentTarget as HTMLButtonElement).style.textDecoration = 'underline'
+              }}
+              onMouseLeave={(e) => {
+                ;(e.currentTarget as HTMLButtonElement).style.color = '#9ca3af'
+                ;(e.currentTarget as HTMLButtonElement).style.textDecoration = 'none'
+              }}
             >
               Reset all
             </button>
