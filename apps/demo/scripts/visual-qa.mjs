@@ -54,7 +54,39 @@ const ACCENT_MIN_DELTA_E = 0.03
 const AA_CONTRAST = 4.5
 
 const oklab = converter('oklab')
+const toOklch = converter('oklch')
 const deltaE = differenceEuclidean('oklab')
+
+// OKLCH chroma of a CSS color string (the saturation axis). Used by the
+// chroma-cap recompile scene to prove a tightened cap measurably desaturates an
+// applied accent. Returns 0 for colors culori can't parse (achromatic fallback).
+function chromaOf(color) {
+  const c = toOklch(color)
+  return c && typeof c.c === 'number' ? c.c : 0
+}
+
+// Trim + lowercase so '#1166FF' and ' #1166ff ' compare equal — getComputedStyle
+// can echo a token's case/whitespace verbatim.
+function normHex(value) {
+  return String(value ?? '').trim().toLowerCase()
+}
+
+// ---------------------------------------------------------------------------
+// Dev-config (developer invariant overlay) helpers
+// ---------------------------------------------------------------------------
+
+// PUT the overlay to the SAME server the pages load from, so the SSR layout's
+// readDevConfig() (which feeds the client provider's reconcile config) sees it.
+// Node fetch to BASE_URL is the simplest same-origin write.
+async function putDevConfig(overlay) {
+  const res = await fetch(`${BASE_URL}/api/dev-config`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(overlay),
+  })
+  if (!res.ok) throw new Error(`PUT /api/dev-config failed: ${res.status}`)
+  return res.json()
+}
 
 // Read the role values + the document's font <link> hrefs from a loaded page.
 async function readScene(page) {
@@ -63,10 +95,21 @@ async function readScene(page) {
     const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(
       (l) => l.getAttribute('href') ?? '',
     )
+    // The rendered sidebar: the gauntlet draws HomeScreen→Shell→Sidebar, whose
+    // <aside> is `hidden lg:flex` — visible at the harness's 1280px viewport, so
+    // its measured width proves the demo CONSUMES --inv-sidebar-w (not just that
+    // :root holds the token). null if no aside is on the page.
+    const aside = document.querySelector('aside')
     return {
       accent: cs.getPropertyValue('--inv-accent').trim(),
       textPrimary: cs.getPropertyValue('--inv-text-primary').trim(),
       surface1: cs.getPropertyValue('--inv-surface-1').trim(),
+      // Structural tokens: layout geometry + typography treatment that vary by
+      // the pack's framing/typography fields. These changing across packs is the
+      // Workstream A proof — themes restructure the layout, not just recolor.
+      sidebarW: cs.getPropertyValue('--inv-sidebar-w').trim(),
+      displayTransform: cs.getPropertyValue('--inv-display-transform').trim(),
+      renderedSidebarW: aside ? aside.getBoundingClientRect().width : null,
       links,
     }
   })
@@ -105,64 +148,92 @@ function displayFontParam(pairingId) {
 // Panel-pack scene helpers
 // ---------------------------------------------------------------------------
 
-// localStorage key used by the demo's createLocalStorage backend.
-// Key structure: invariance:${appId}:${userId} (from local-storage.ts).
-// The demo provider sets appId='nebula-demo', userId='demo-user'.
-const THEME_STORAGE_KEY = 'invariance:nebula-demo:demo-user'
+// The demo persists themes SERVER-SIDE via storage="api" (storageUrl=/api/themes
+// → file-backed theme-history-store), NOT localStorage — so the stored-theme
+// check queries the API the provider actually loads from. appId/userId match the
+// provider's (appId='nebula-demo', userId='demo-user').
+const DEMO_APP_ID = 'nebula-demo'
+const DEMO_USER_ID = 'demo-user'
+// Legacy localStorage key (provider would use this only under storage:'localStorage').
+// Cleared defensively before recompile scenes; harmless under api storage.
+const THEME_STORAGE_KEY = `invariance:${DEMO_APP_ID}:${DEMO_USER_ID}`
 
-// Verify a stored v2 theme has a roles map with at least one --inv-* token.
-function isStoredV2ThemeWithRoles(raw) {
-  try {
-    const parsed = JSON.parse(raw)
-    return (
-      parsed !== null &&
-      typeof parsed === 'object' &&
-      parsed.version === 2 &&
-      parsed.theme &&
-      typeof parsed.theme.roles === 'object' &&
-      Object.keys(parsed.theme.roles).length > 0
-    )
-  } catch {
-    return false
-  }
+// Fetch the latest stored theme doc from the demo's server store. 404 → null.
+async function loadStoredTheme() {
+  const res = await fetch(
+    `${BASE_URL}/api/themes?userId=${encodeURIComponent(DEMO_USER_ID)}&appId=${encodeURIComponent(DEMO_APP_ID)}`,
+  )
+  if (!res.ok) return null
+  return res.json()
 }
 
-// Click a pack chip in the customization panel and assert:
-//   (a) --inv-accent on :root changed from the baseAccent before the click
-//   (b) localStorage for the demo key holds a valid v2 theme with roles
-async function clickPackChipAndAssert(page, packId, packName, baseAccent, outputDir) {
-  // Chips are identified by data-inv-pack={packId} (set in customization-overlay.tsx)
+// True when a v2 theme doc has a roles map with at least one token.
+function isStoredV2ThemeWithRoles(parsed) {
+  return (
+    parsed !== null &&
+    typeof parsed === 'object' &&
+    parsed.version === 2 &&
+    parsed.theme &&
+    typeof parsed.theme.roles === 'object' &&
+    Object.keys(parsed.theme.roles).length > 0
+  )
+}
+
+// Open the customization panel and wait for its dialog. Trigger has
+// aria-label="Open customization panel"; dialog is role=dialog with that label.
+async function openPanel(page) {
+  const trigger = page.getByRole('button', { name: 'Open customization panel' })
+  await trigger.click()
+  await page.waitForSelector('[role="dialog"][aria-label="Customization panel"]', { timeout: 5000 })
+}
+
+// Click a pack chip (data-inv-pack={id}) and wait for applyPack to settle (the
+// chip re-enables once isThinking clears). Throws if the chip is absent so a
+// filtered/missing chip surfaces loudly rather than passing vacuously.
+async function clickPackChip(page, packId) {
   const chipSelector = `[data-inv-pack="${packId}"]`
   const chip = await page.$(chipSelector)
   if (!chip) {
     throw new Error(`Panel chip for pack "${packId}" (${chipSelector}) not found — check availablePacks filter or panel markup`)
   }
   await chip.click()
+  // applyPack is async (compile → verify → persist). The chip re-enabling is the
+  // most reliable settle signal.
+  await page
+    .waitForFunction(
+      (sel) => {
+        const btn = document.querySelector(sel)
+        return btn && !btn.disabled
+      },
+      chipSelector,
+      { timeout: 8000 },
+    )
+    .catch(() => {
+      console.warn('[visual-qa] chip re-enable wait timed out for', packId)
+    })
+}
 
-  // applyPack is async (compile → verify → persist); wait up to 8s for the
-  // in-progress state to resolve (chip will re-enable once isThinking goes false).
-  // The most reliable signal is the chip becoming enabled again.
-  await page.waitForFunction(
-    (sel) => {
-      const btn = document.querySelector(sel)
-      return btn && !btn.disabled
-    },
-    chipSelector,
-    { timeout: 8000 },
-  ).catch(() => {
-    // Log so a stuck chip surfaces in CI output; assertions below will fail if
-    // the pack was never actually applied.
-    console.warn('[visual-qa] chip re-enable wait timed out for', packId)
-  })
-
-  // (a) --inv-accent must have changed from the default (applyPack calls applyAnyTheme)
-  const newAccent = await page.evaluate(() =>
+// Open the panel (if needed) and apply a pack via the real applyPack gate. Reads
+// the applied --inv-accent after the click. Used by both the panel-pack scene and
+// the live-recompile scenes to seed a v2 theme + saturated accent into storage.
+async function applyPackViaPanel(page, packId, { panelAlreadyOpen = false } = {}) {
+  if (!panelAlreadyOpen) await openPanel(page)
+  await clickPackChip(page, packId)
+  return page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--inv-accent').trim(),
   )
+}
 
-  // (b) localStorage holds a valid v2 theme with roles
-  const storedRaw = await page.evaluate((k) => localStorage.getItem(k), THEME_STORAGE_KEY)
-  const storedOk = storedRaw !== null && isStoredV2ThemeWithRoles(storedRaw)
+// Click a pack chip in the panel and assert:
+//   (a) --inv-accent on :root changed from the baseAccent before the click
+//   (b) the server store holds a valid v2 theme with roles (api persistence)
+async function clickPackChipAndAssert(page, packId, packName, baseAccent, outputDir) {
+  const newAccent = await applyPackViaPanel(page, packId, { panelAlreadyOpen: true })
+
+  // (b) server-side store holds a valid v2 theme with roles (applyPack persists
+  // via storageBackend.saveTheme → PUT /api/themes).
+  const stored = await loadStoredTheme()
+  const storedOk = isStoredV2ThemeWithRoles(stored)
 
   const accentChanged = newAccent !== '' && newAccent !== baseAccent
 
@@ -194,14 +265,8 @@ async function runPanelPackScene(browser, outputDir, rows) {
     getComputedStyle(document.documentElement).getPropertyValue('--inv-accent').trim(),
   )
 
-  // Open the panel. Trigger button has aria-label="Open customization panel"
-  // (trigger-button.tsx) and also data-inv-trigger="true" — use the aria-label
-  // via getByRole for a robust selector that isn't markup-coupled.
-  const trigger = page.getByRole('button', { name: 'Open customization panel' })
-  await trigger.click()
-
-  // Wait for the panel dialog to appear (role=dialog, aria-label="Customization panel")
-  await page.waitForSelector('[role="dialog"][aria-label="Customization panel"]', { timeout: 5000 })
+  // Open the panel (getByRole on the aria-label — robust, not markup-coupled).
+  await openPanel(page)
 
   // Screenshot panel open state before clicking any chip.
   await page.screenshot({ path: `${outputDir}/panel-open.png`, fullPage: true })
@@ -239,14 +304,220 @@ async function runPanelPackScene(browser, outputDir, rows) {
   await page.close()
 }
 
+// ---------------------------------------------------------------------------
+// Live-invariant recompile scenes (Workstream B proof)
+// ---------------------------------------------------------------------------
+//
+// Prove a DEVELOPER invariant change live-re-themes an already-applied,
+// now-violating theme via the provider's reconcile-keep-vibe path: on the next
+// load the stored theme fails verifyV2 under the tightened config but carries a
+// styleSpec, so it RECOMPILES from that spec under the new constraints (vibe
+// kept, invariant honored).
+//
+// dev-config is a server-wide file. We PUT {} at the start (defensive: a stale
+// lock from a crashed prior run would otherwise skew the gauntlet accents) and
+// the whole block runs inside try/finally that ALWAYS resets it to {} — leaving
+// a lock would corrupt later runs and the live demo.
+
+// Seed a fresh vivid theme through the real panel applyPack gate, returning the
+// applied accent. Resets dev-config to {} first so the seed compiles under the
+// demo's TRUE base config (no lingering lock/cap from a prior sub-scene skewing
+// the saturated seed the recompile then has to violate). Clears legacy
+// localStorage (no-op under api storage) and reloads so the provider starts
+// clean; the vivid pack becomes the latest stored theme the next reconcile loads.
+async function seedVividTheme(page, packId) {
+  await putDevConfig({})
+  await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' })
+  await page.evaluate((k) => localStorage.removeItem(k), THEME_STORAGE_KEY)
+  await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' })
+  return applyPackViaPanel(page, packId)
+}
+
+// Sub-scene A — accent lock (the headline): lock the brand accent to a hex the
+// applied theme doesn't use → reconcile recompiles → applied --inv-accent
+// becomes the lock, vibe (styleSpec) preserved.
+async function runAccentLockScene(browser, outputDir) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 1024 } })
+  const LOCK = '#1166ff'
+  try {
+    const before = await seedVividTheme(page, 'sunset')
+
+    await putDevConfig({ accentLock: LOCK })
+
+    // Reload: provider mount-load reconciles the stored vivid theme against the
+    // now-locked config → recompiles → applied accent becomes the lock.
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' })
+
+    let timedOut = false
+    await page
+      .waitForFunction(
+        (lock) =>
+          getComputedStyle(document.documentElement)
+            .getPropertyValue('--inv-accent')
+            .trim()
+            .toLowerCase() === lock,
+        LOCK,
+        { timeout: 10000 },
+      )
+      .catch(() => {
+        timedOut = true
+        console.warn('[live-lock] poll for locked accent timed out')
+      })
+
+    const after = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--inv-accent').trim(),
+    )
+    await page.screenshot({ path: `${outputDir}/live-accent-lock.png`, fullPage: true })
+
+    // Vibe kept: stored theme still carries a styleSpec and its accent role is the lock.
+    const stored = await loadStoredTheme()
+    const styleSpecKept =
+      stored && stored.theme && stored.theme.styleSpec !== undefined && stored.theme.styleSpec !== null
+    const roleAccent = normHex(stored?.theme?.roles?.['--inv-accent'])
+
+    const accentOk = !timedOut && normHex(after) === normHex(LOCK)
+    const pass = accentOk && styleSpecKept && roleAccent === normHex(LOCK)
+
+    return {
+      scene: 'live:accent-lock',
+      before,
+      after,
+      pass,
+      accentOk,
+      styleSpecKept,
+      roleAccent,
+      lock: LOCK,
+    }
+  } finally {
+    await page.close()
+  }
+}
+
+// Sub-scene B — chroma cap (constraint clamp): lower the chroma cap below the
+// applied accent's saturation → reconcile recompiles under the cap → accent
+// measurably desaturates (chromaAfter < chromaBefore − 0.03).
+async function runChromaCapScene(browser, outputDir) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 1024 } })
+  const CAP = 0.1
+  try {
+    const beforeAccent = await seedVividTheme(page, 'retro-arcade')
+    const chromaBefore = chromaOf(beforeAccent)
+
+    await putDevConfig({ chromaCap: CAP })
+
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' })
+
+    // Poll until the accent CHANGES from the saturated seed (the recompile under
+    // the lower cap desaturates it). Comparing the literal value is robust without
+    // running culori inside the page.
+    let timedOut = false
+    await page
+      .waitForFunction(
+        (prev) =>
+          getComputedStyle(document.documentElement)
+            .getPropertyValue('--inv-accent')
+            .trim()
+            .toLowerCase() !== prev,
+        normHex(beforeAccent),
+        { timeout: 10000 },
+      )
+      .catch(() => {
+        timedOut = true
+        console.warn('[live-chroma] poll for desaturated accent timed out')
+      })
+
+    const afterAccent = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--inv-accent').trim(),
+    )
+    const chromaAfter = chromaOf(afterAccent)
+    await page.screenshot({ path: `${outputDir}/live-chroma-cap.png`, fullPage: true })
+
+    const pass = !timedOut && chromaAfter < chromaBefore - 0.03
+
+    return {
+      scene: 'live:chroma-cap',
+      before: beforeAccent,
+      after: afterAccent,
+      chromaBefore,
+      chromaAfter,
+      cap: CAP,
+      pass,
+    }
+  } finally {
+    await page.close()
+  }
+}
+
+// Run both recompile sub-scenes. ALWAYS resets dev-config to {} afterward (the
+// file is server-wide; a lingering lock would corrupt later runs + the live demo).
+async function runLiveInvariantScenes(browser, outputDir, rows) {
+  let results = []
+  try {
+    results = [
+      await runAccentLockScene(browser, outputDir),
+      await runChromaCapScene(browser, outputDir),
+    ]
+  } finally {
+    try {
+      await putDevConfig({})
+    } catch (e) {
+      console.error('[visual-qa] FAILED to reset dev-config to {} —', e)
+    }
+  }
+
+  for (const r of results) {
+    if (r.scene === 'live:accent-lock') {
+      rows.push({
+        scene: r.scene,
+        accent: r.after,
+        contrast: '—',
+        font: r.pass ? 'lock honored' : '—',
+        pass: r.pass,
+        diag: r,
+      })
+      if (!r.pass) {
+        if (!r.accentOk) console.error(`[live-lock] --inv-accent is ${r.after}, expected ${r.lock}`)
+        if (!r.styleSpecKept) console.error('[live-lock] stored theme lost its styleSpec (vibe not kept)')
+        if (r.roleAccent !== normHex(r.lock))
+          console.error(`[live-lock] stored roles['--inv-accent'] is ${r.roleAccent}, expected ${normHex(r.lock)}`)
+      }
+    } else {
+      rows.push({
+        scene: r.scene,
+        accent: r.after,
+        contrast: `c ${r.chromaAfter.toFixed(3)}`,
+        font: `was ${r.chromaBefore.toFixed(3)}`,
+        pass: r.pass,
+        diag: r,
+      })
+      if (!r.pass) {
+        console.error(
+          `[live-chroma] chromaAfter=${r.chromaAfter.toFixed(3)} not < chromaBefore−0.03 (chromaBefore=${r.chromaBefore.toFixed(3)}, cap=${r.cap})`,
+        )
+      }
+    }
+  }
+}
+
 async function main() {
   await mkdir(OUTPUT_DIR, { recursive: true })
+
+  // Defensive: clear any dev-config lock left by a crashed prior run BEFORE the
+  // gauntlet, so a stale accent-lock/chroma-cap can't skew the pack accents the
+  // distinctness assertion measures.
+  try {
+    await putDevConfig({})
+  } catch (e) {
+    console.warn('[visual-qa] could not reset dev-config at start:', e?.message ?? e)
+  }
 
   const browser = await chromium.launch()
   const page = await browser.newPage({ viewport: { width: 1280, height: 1024 } })
 
   const rows = []
   const accentByPack = {}
+  // Per-pack structural readings for the Workstream-A distinctness assertions.
+  const structuralByPack = {}
 
   // --- non-pack scenes: capture-only (no per-pack assertion, but they must load) ---
   await gotoScene(page, '/gauntlet?pack=default', 'default')
@@ -263,6 +534,11 @@ async function main() {
     await gotoScene(page, `/gauntlet?pack=${id}`, id)
     const scene = await readScene(page)
     accentByPack[id] = scene.accent
+    structuralByPack[id] = {
+      sidebarW: scene.sidebarW,
+      displayTransform: scene.displayTransform,
+      renderedSidebarW: scene.renderedSidebarW,
+    }
 
     // (b) AA contrast of text-primary on surface-1.
     const ratio = wcagContrast(scene.textPrimary, scene.surface1)
@@ -287,12 +563,52 @@ async function main() {
   // --- panel-pack scene: exercises the real applyPack gate (compile→verify→persist) ---
   // This scene navigates /, opens the CustomizationPanel, and clicks 3 pack
   // chips, asserting each application (a) changes --inv-accent on :root and
-  // (b) persists a valid v2 theme to localStorage. The purpose is proving the
-  // applyPack code path runs end-to-end in the panel — not merely that the
-  // compiler produces correct tokens (the gauntlet already covers that).
+  // (b) persists a valid v2 theme to the server store (/api/themes). The purpose
+  // is proving the applyPack code path runs end-to-end in the panel — not merely
+  // that the compiler produces correct tokens (the gauntlet already covers that).
   await runPanelPackScene(browser, OUTPUT_DIR, rows)
 
+  // --- live-invariant recompile scenes (run LAST): prove a developer invariant
+  // change live-re-themes a violating applied theme via recompile-keep-vibe.
+  // Self-contained: resets dev-config to {} in its own finally.
+  await runLiveInvariantScenes(browser, OUTPUT_DIR, rows)
+
   await browser.close()
+
+  // --- structural distinctness (Workstream A): themes change LAYOUT, not just color ---
+  const sidebarWValues = new Set(PACK_IDS.map((id) => structuralByPack[id]?.sidebarW).filter(Boolean))
+  const transformValues = new Set(
+    PACK_IDS.map((id) => structuralByPack[id]?.displayTransform).filter(Boolean),
+  )
+  // Concrete consumption check: terminal-green is compact framing (--inv-sidebar-w
+  // 200px), editorial is spacious (264px); the RENDERED aside width must reflect
+  // that ordering, proving the demo consumes the token — not just :root holding it.
+  const renderedTerminal = structuralByPack['terminal-green']?.renderedSidebarW
+  const renderedEditorial = structuralByPack['editorial']?.renderedSidebarW
+  const renderedOk =
+    typeof renderedTerminal === 'number' &&
+    typeof renderedEditorial === 'number' &&
+    renderedTerminal < renderedEditorial
+
+  const sidebarGeometryOk = sidebarWValues.size >= 2 && renderedOk
+  const typographyOk = transformValues.size >= 2
+
+  const structuralFailures = []
+  if (!sidebarGeometryOk) {
+    if (sidebarWValues.size < 2)
+      structuralFailures.push(
+        `sidebar geometry: only ${sidebarWValues.size} distinct --inv-sidebar-w value(s) across packs (need ≥ 2)`,
+      )
+    if (!renderedOk)
+      structuralFailures.push(
+        `sidebar geometry: rendered aside width terminal-green (${renderedTerminal}) not < editorial (${renderedEditorial})`,
+      )
+  }
+  if (!typographyOk) {
+    structuralFailures.push(
+      `typography: only ${transformValues.size} distinct --inv-display-transform value(s) across packs (need ≥ 2)`,
+    )
+  }
 
   // (a) mutual-distinctness of the ten accents.
   const accentViolations = []
@@ -336,6 +652,15 @@ async function main() {
     for (const v of accentViolations) console.log('  -', v)
   }
 
+  // --- structural-distinctness report (Workstream A) ---
+  console.log(
+    `sidebar geometry differs (${[...sidebarWValues].join('/')}; rendered terminal-green ${renderedTerminal}px < editorial ${renderedEditorial}px): ${sidebarGeometryOk ? 'PASS' : 'FAIL'}`,
+  )
+  console.log(
+    `typography treatment differs (--inv-display-transform: ${[...transformValues].join('/')}): ${typographyOk ? 'PASS' : 'FAIL'}`,
+  )
+  for (const f of structuralFailures) console.log('  -', f)
+
   const rowFailures = rows.filter((r) => !r.pass)
   for (const r of rowFailures) {
     if (r.contrastOk === false) console.log(`  - ${r.scene}: contrast ${r.contrast} < ${AA_CONTRAST}`)
@@ -345,11 +670,25 @@ async function main() {
       console.log(`  - ${r.scene}: --inv-accent did not change after applying pack`)
     }
     if (r.scene.startsWith('panel:') && r.storedOk === false) {
-      console.log(`  - ${r.scene}: localStorage did not contain a valid v2 theme with roles after applying pack`)
+      console.log(`  - ${r.scene}: server store did not contain a valid v2 theme with roles after applying pack`)
+    }
+    // Live-recompile specific failure details
+    if (r.scene === 'live:accent-lock' && r.diag) {
+      const d = r.diag
+      if (!d.accentOk) console.log(`  - ${r.scene}: --inv-accent is ${d.after}, expected ${d.lock}`)
+      if (!d.styleSpecKept) console.log(`  - ${r.scene}: stored theme lost its styleSpec (vibe not kept)`)
+      if (d.roleAccent !== normHex(d.lock))
+        console.log(`  - ${r.scene}: stored roles['--inv-accent'] is ${d.roleAccent}, expected ${normHex(d.lock)}`)
+    }
+    if (r.scene === 'live:chroma-cap' && r.diag) {
+      const d = r.diag
+      console.log(
+        `  - ${r.scene}: chromaAfter ${d.chromaAfter.toFixed(3)} not < chromaBefore−0.03 (chromaBefore ${d.chromaBefore.toFixed(3)}, cap ${d.cap})`,
+      )
     }
   }
 
-  const failures = rowFailures.length + accentViolations.length
+  const failures = rowFailures.length + accentViolations.length + structuralFailures.length
   console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILURE(S)`}\n`)
   process.exit(failures ? 1 : 0)
 }

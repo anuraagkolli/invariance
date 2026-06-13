@@ -7,6 +7,8 @@
 // @invariance/demo build`) since it serves via `next start`.
 
 import { spawn } from 'node:child_process'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -14,6 +16,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const APP_DIR = join(__dirname, '..')
 const PORT = 4321
 const BASE_URL = `http://localhost:${PORT}`
+
+// Pin the file-backed store (theme history + dev-config) to ONE fresh dir for
+// this run. Two reasons: (1) under output:'standalone', `next start`'s SSR
+// layout and the /api/* routes can resolve process.cwd() differently, so an
+// unpinned data dir splits across two files and the page never sees the
+// dev-config the harness PUTs — breaking the live-recompile scenes; pinning an
+// absolute path makes every createJsonFileStore() call hit the same file. (2) a
+// fresh dir means no stale theme/lock from a prior run can skew the gauntlet.
+const DATA_DIR = mkdtempSync(join(tmpdir(), 'inv-visual-qa-'))
 
 function waitForServer(url, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs
@@ -33,10 +44,11 @@ function waitForServer(url, timeoutMs = 30000) {
 }
 
 async function main() {
-  console.log(`[visual-qa:full] starting next on :${PORT}...`)
+  console.log(`[visual-qa:full] starting next on :${PORT}... (data dir: ${DATA_DIR})`)
   const server = spawn('npx', ['next', 'start', '-p', String(PORT)], {
     cwd: APP_DIR,
     stdio: 'inherit',
+    env: { ...process.env, INVARIANCE_DATA_DIR: DATA_DIR },
   })
 
   let exitCode = 1
@@ -55,6 +67,12 @@ async function main() {
     })
   } finally {
     server.kill('SIGTERM')
+    // Drop the throwaway data dir so no run leaves a stored theme/lock behind.
+    try {
+      rmSync(DATA_DIR, { recursive: true, force: true })
+    } catch {
+      // best-effort
+    }
   }
   process.exit(exitCode)
 }
