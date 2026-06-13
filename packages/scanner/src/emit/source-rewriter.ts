@@ -13,6 +13,7 @@ interface SlotEdit {
   file: string
   jsxPath: string
   preserve: boolean
+  level: number
   cssVariables: string[]
   description?: string
   aliases?: string[]
@@ -182,7 +183,7 @@ function wrapSlotNode(node: Node, edit: SlotEdit): void {
   const description = formatDescription(edit.description)
   const aliases = formatAliases(edit.aliases)
   const vars = formatCssVariables(edit.cssVariables)
-  const wrapped = `<m.slot name="${edit.slotName}" level={0}${preserve}${description}${aliases}${vars}>${original}</m.slot>`
+  const wrapped = `<m.slot name="${edit.slotName}" level={${edit.level}}${preserve}${description}${aliases}${vars}>${original}</m.slot>`
   node.replaceWithText(wrapped)
 }
 
@@ -218,6 +219,7 @@ export function applyWrapperEdits(project: Project, plan: MigrationPlan): void {
     file: string
     jsxPath: string
     preserve: boolean
+    level?: number
     description?: string
     aliases?: string[]
   }
@@ -279,6 +281,7 @@ export function applyWrapperEdits(project: Project, plan: MigrationPlan): void {
         file: slot.file,
         jsxPath: slot.jsxPath,
         preserve: slot.preserve,
+        level: slot.level ?? 0,
         cssVariables: vars,
         ...(slot.description ? { description: slot.description } : {}),
         ...(slot.aliases && slot.aliases.length > 0 ? { aliases: slot.aliases } : {}),

@@ -127,3 +127,23 @@ describe('applyWrapperEdits — slot wrapping', () => {
     expect(out).toContain('<m.page name="home">')
   })
 })
+
+describe('wrapSlotNode — level', () => {
+  it('emits the slot location level instead of hardcoded 0', () => {
+    const project = new Project({ useInMemoryFileSystem: true, compilerOptions: { jsx: 4, allowJs: true } })
+    const sf = project.createSourceFile(
+      'page.tsx',
+      'export default function P(){return (<div><aside>x</aside></div>)}',
+    )
+    const plan = {
+      slotCssVariables: { sidebar: [] },
+      __slotLocations: [
+        { name: 'sidebar', file: 'page.tsx', jsxPath: 'div>aside', preserve: true, level: 2 },
+      ],
+      __textLocations: [],
+      __pageLocations: [],
+    } as unknown as Parameters<typeof applyWrapperEdits>[1]
+    applyWrapperEdits(project, plan)
+    expect(sf.getFullText()).toContain('<m.slot name="sidebar" level={2}')
+  })
+})
