@@ -15,6 +15,12 @@ export interface StyleSpec {
   shadow: 'flat' | 'subtle' | 'pronounced' | 'hard-offset'
   density: 'compact' | 'standard' | 'comfortable'
   borderWeight: 'hairline' | 'standard' | 'heavy'
+  // Optional in the interface so existing object literals (theme packs, fixtures)
+  // keep compiling; the zod schema below defaults them on parse so older stored
+  // theme JSON that predates these fields still loads. 'standard' is a valid
+  // member of both enums.
+  typography?: 'standard' | 'display-caps' | 'editorial' | 'technical'
+  framing?: 'compact' | 'standard' | 'spacious'
   rationale: string
 }
 
@@ -31,6 +37,8 @@ export const StyleSpecSchema = z.object({
   shadow: z.enum(['flat', 'subtle', 'pronounced', 'hard-offset']),
   density: z.enum(['compact', 'standard', 'comfortable']),
   borderWeight: z.enum(['hairline', 'standard', 'heavy']),
+  typography: z.enum(['standard', 'display-caps', 'editorial', 'technical']).default('standard'),
+  framing: z.enum(['compact', 'standard', 'spacious']).default('standard'),
   rationale: z.string().min(1),
 })
 
