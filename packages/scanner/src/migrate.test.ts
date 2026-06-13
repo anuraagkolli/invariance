@@ -207,22 +207,34 @@ describe('analyze — chooseLevels callback', () => {
 
     const { analyze } = await import('./migrate')
     const seen: string[] = []
+    const seenNonPreserved: string[] = []
     const result = await analyze({
       appRoot: root,
       apiKey: '',
       dryRun: true,
       chooseLevels: async (slots) => {
-        for (const s of slots) seen.push(s.name)
-        // Set ALL slots to level 1 so at least one wrapped slot has level={1}.
+        for (const s of slots) {
+          seen.push(s.name)
+          if (!s.preserve) seenNonPreserved.push(s.name)
+        }
+        // Raise ONLY the non-preserved slot(s) to level 1. The preserved
+        // structural slots stay at level 0. This is the real acceptance path:
+        // it only yields a wrapped level={1} slot if same-tag sibling sections
+        // actually get wrapped (the nebula card-row <section> is a non-preserved
+        // section[1] sibling that the old re-index-each-wrap loop silently dropped).
         const map = new Map<string, number>()
-        for (const s of slots) map.set(s.name, 1)
+        for (const s of slots) map.set(s.name, s.preserve ? 0 : 1)
         return map
       },
     })
 
     expect(seen.length).toBeGreaterThan(0)
-    // A slot wrapper got level={1} in the diff.
-    expect(result.diff).toMatch(/<m\.slot name="[^"]+" level=\{1\}/)
+    // The fixture has at least one non-preserved slot to exercise this path.
+    expect(seenNonPreserved.length).toBeGreaterThan(0)
+    // A NON-PRESERVED slot wrapper got level={1} in the diff. Non-preserved
+    // slots emit no `preserve={true}` attribute, so the level={1} wrapper must
+    // not be immediately followed by preserve={true}.
+    expect(result.diff).toMatch(/<m\.slot name="[^"]+" level=\{1\}(?! preserve=\{true\})/)
     // Colors unlocked to any.
     expect(result.plan.config.frontend?.design?.colors?.mode).toBe('any')
   })
