@@ -11,6 +11,8 @@ History note: everything before the git tag `v4-final` is the previous iteration
 - **Control plane (our infra):** authoring (prompt → mod via Claude, verifier in the generation loop), verification (static analysis → capability extraction → contract checks → policy engine), registry (per-user mod revisions, CDN publishing, kill-switch flags), analytics. Modular monolith in `apps/control-plane`.
 - **Data plane (customer infra):** client SDK (mod loader, UI override engine, prompt widget) and server SDK (Express/Next middleware, QuickJS-on-WASM sandboxed hook executor with capability enforcement). No production request ever transits our systems.
 
+Two customization planes coexist: `@invariance/design` (UI/theme, client-side) and `@invariance/client`+`@invariance/server`+control-plane (signed-bundle business-logic at the API seam, with invariants). Nebula uses the design plane in-app; its API is governed by the business-logic plane.
+
 Distribution is two-step: short-TTL mutable pointer per user → immutable content-addressed signed bundle on CDN. Any fetch/verify failure fails open to base app behavior.
 
 Core invariants of the system itself:
@@ -40,6 +42,13 @@ packages/schema     # AppManifest, ModBundle, capability manifest, signing, path
 packages/client     # mod loader, UI override engine, prompt widget, telemetry
 packages/cli        # `invariance` bin: init, manifest publish, dev control plane
 apps/demo           # Netflix-style demo app, living integration test (e2e per phase)
+apps/nebula        # Nebula — Next.js 14 + Tailwind showcase demo. Customization
+                   # via the DESIGN plane (@invariance/design: CustomizationPanel,
+                   # m.* slots, /dev menu). Business-logic mods + invariants run on
+                   # the BUSINESS-LOGIC plane (Next API routes wrapped with
+                   # @invariance/server withInvariance; appId "nebula"), demoed via
+                   # the console/Guardrails. apps/demo (Streamline, Vite) is kept as
+                   # the platform integration test.
 apps/control-plane  # authoring, verification, registry + lazy migration, analytics
 packages/server     # Express/Next middleware, QuickJS sandbox, runtime enforcement
 apps/console        # developer dashboard (manifest, mods + kill switches, analytics)

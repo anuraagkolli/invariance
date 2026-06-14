@@ -28,6 +28,9 @@ apps/control-plane  Authoring (Claude w/ verifier in the loop), deterministic
                   verification, registry + lazy migration, analytics
 apps/console      Developer dashboard: manifest, mods w/ kill switches, analytics
 apps/demo         Netflix-style demo app, living integration test for every phase
+apps/nebula       Nebula — Next.js + Tailwind showcase demo; design-plane
+                  customization in-app, its API governed by the platform's
+                  invariants (business-logic plane)
 ```
 
 ## Quick demo
@@ -56,7 +59,15 @@ pnpm -F @invariance/demo dev:web    # http://localhost:4501
 
 # 3. Developer console
 pnpm -F @invariance/console dev     # http://localhost:4600
+
+# Nebula showcase demo (Next.js + Tailwind) — design-plane customization + the
+# /dev menu, with its API governed by the platform's invariants:
+pnpm -F @invariance/nebula seed      # publish the nebula manifest to the control plane
+pnpm -F @invariance/nebula dev       # http://localhost:4321  (needs Ollama for free-form prompts)
 ```
+
+The console (`pnpm -F @invariance/console dev`, :4600) now defaults to appId
+"nebula" and its Guardrails view tests Nebula's invariants live.
 
 Then click **✨ Customize** in the demo and type things like *"make the accent
 color teal"*, *"sort shows by rating"*, or *"always add shows to my list at top
