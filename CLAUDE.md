@@ -69,10 +69,24 @@ viewed + Guardrails-tested; *look* invariants are edited via the control-plane *
 live config. Two enforcement engines remain by design (design compiler for look; verifier +
 sandbox for data). Per-effort design history lives in `docs/superpowers/specs/` + `…/plans/`.
 
-**Pending (planned, not built):** `docs/superpowers/plans/2026-06-14-sp2-theme-history-and-vocab.md`
-— move Nebula `/dev`'s theme history + rollback into the control plane/Console (then delete
-`/dev`), and generalize the look-invariant vocabulary via a manifest `designSurface` (drop the
-console's per-app hardcode).
+**Recently shipped (2026-06-14, on `combined`):** SP2
+(`docs/superpowers/plans/2026-06-14-sp2-theme-history-and-vocab.md`) — theme history + rollback
+moved into the control plane (`theme_versions` store + `GET/PUT /v1/apps/:appId/themes`,
+`…/themes/history`, `…/themes/rollback`) and the Console (`#/themes` view); Nebula reads/writes
+themes there and its `/dev` page is **deleted**. The look-invariant vocabulary is now
+manifest-driven via `AppManifest.designSurface` (the Console's per-app hardcode is gone).
+Verified live end-to-end (qwen-free pack path + manifest-driven controls + edit round-trip).
+
+**Remaining for demo-readiness (not built):** (1) reliable logic-hook authoring on weak models —
+qwen can mis-declare a hook's `writes` capability, which the static verifier passes but the
+runtime discards → silent no-op (the **theme** path is demo-reliable; in-app **logic** prompts
+are not — the demo drives business-logic invariants developer-side via the Console/Guardrails,
+not an in-app logic prompt); candidate fix: dry-run the hook to auto-derive/validate write caps.
+(2) one-command demo mode + scripted runbook. (3) console polish: surface `bundle.design`
+StyleSpec intent (`summarizeStyleSpec` still has zero consumers). (4) Nebula's home reads
+`titles.ts` statically rather than its governed API. (5) clean-checkout/hand-off fragility (cold
+start needs `pnpm -F @invariance/design build`; default model ids ≠ the pulled `qwen2.5:latest`;
+per-process signing keys) — only matters for hand-off; deprioritized (demo runs live on this machine).
 
 Phases (exit criteria in `docs/DESIGN.md`): 1 foundations/schema ✅ · 2 Tier-0
 vertical slice ✅ · 3 authoring+verification v0 ✅ · 4 Tier-1 hooks/sandbox ✅ ·
