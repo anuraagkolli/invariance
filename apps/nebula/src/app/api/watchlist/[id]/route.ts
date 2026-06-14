@@ -2,7 +2,8 @@ import { withInvariance } from '@invariance/server'
 import { invarianceServerConfig } from '../../../../lib/invariance-server'
 import { removeFromWatchlist } from '../../../../lib/catalog'
 
-export const runtime = 'nodejs'
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic" // per-request: withInvariance reads the subject + live pointer
 
 const subjectOf = (req: Request) => req.headers.get('x-demo-user') ?? 'anonymous'
 
