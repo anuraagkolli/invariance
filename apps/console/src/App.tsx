@@ -204,17 +204,18 @@ function Dashboard({ appId, onOpenSubject }: { appId: string; onOpenSubject: (s:
 }
 
 function HelpBanner() {
-  const [open, setOpen] = useState(() => localStorage.getItem(HELP_DISMISSED_KEY) !== "1");
+  // Collapsed by default to keep the dashboard calm; one click expands the explainer.
+  const [open, setOpen] = useState(() => localStorage.getItem(HELP_DISMISSED_KEY) === "open");
   if (!open) {
     return (
       <button
         className="link"
         onClick={() => {
-          localStorage.removeItem(HELP_DISMISSED_KEY);
+          localStorage.setItem(HELP_DISMISSED_KEY, "open");
           setOpen(true);
         }}
       >
-        What am I looking at?
+        How Invariance works
       </button>
     );
   }
