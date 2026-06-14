@@ -82,16 +82,21 @@ Also shipped: a **one-command demo launcher** (`pnpm demo` / `pnpm demo:stop` �
 `@invariance/server` runtime — registry GET fetches now set `cache:'no-store'` so a Next.js Data
 Cache can't serve a **stale per-process signing key** (which silently no-op'd all runtime hooks).
 
-**Remaining for demo-readiness (not built):** (1) reliable logic-hook authoring on weak models —
-qwen can mis-declare a hook's `writes` capability, which the static verifier passes but the
-runtime discards → silent no-op (the **theme** path is demo-reliable; in-app **logic** prompts
-are not — the demo drives business-logic invariants developer-side via the Console/Guardrails,
-not an in-app logic prompt); candidate fix: dry-run the hook to auto-derive/validate write caps.
-(2) console polish: surface `bundle.design` StyleSpec intent (`summarizeStyleSpec` still has zero
-consumers). (3) Nebula's home reads `titles.ts` statically rather than its governed API.
-(4) clean-checkout/hand-off fragility (cold start needs `pnpm -F @invariance/design build`;
-default model ids ≠ the pulled `qwen2.5:latest`; persist `INVARIANCE_SIGNING_*` keys for durable
-stores) — only matters for hand-off; deprioritized (demo runs live on this machine).
+Then three more demo-readiness items (all verified):
+- **Console shows theme design intent** — `summarizeStyleSpec` ported into the Console (kept
+  decoupled from `@invariance/design`) and surfaced on the `#/themes` version cards.
+- **Nebula home consumes its governed API** — `HomeScreen` renders static rows for first paint,
+  then client-fetches the `withInvariance`-wrapped `/api/shows` + `/api/featured` (as `demo-user`)
+  and reconciles, so business-logic mods + invariants flow through to the showcase (fail-open).
+- **Reliable logic-hook authoring on weak models** — the authoring pipeline statically derives a
+  hook's top-level writes (`modules/authoring/derive-writes.ts`) and **auto-repairs** an
+  under-declared `writes` capability before signing, so a correct hook a weak model mis-declared
+  no longer silently no-ops at runtime. (The verifier still rejects writes to immutable fields.)
+
+**Remaining for demo-readiness (not built):** clean-checkout/hand-off fragility (cold start needs
+`pnpm -F @invariance/design build` — handled by `pnpm demo`; default model ids ≠ the pulled
+`qwen2.5:latest` — `pnpm demo` pins it; persist `INVARIANCE_SIGNING_*` keys for durable stores) —
+only matters for hand-off; deprioritized (demo runs live on this machine).
 
 Phases (exit criteria in `docs/DESIGN.md`): 1 foundations/schema ✅ · 2 Tier-0
 vertical slice ✅ · 3 authoring+verification v0 ✅ · 4 Tier-1 hooks/sandbox ✅ ·
