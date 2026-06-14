@@ -1,0 +1,86 @@
+import type { InvarianceConfig } from '@invariance/design'
+
+// Relational constraints only — no palette mode. The compiler guarantees AA at
+// every level, so the config just floors contrast and caps accent chroma.
+// Exported for use by Providers and the gauntlet page.
+export const invarianceConfig: InvarianceConfig = {
+  app: 'nebula-demo',
+  frontend: {
+    design: {
+      constraints: {
+        contrast: '>= 4.5',
+        accent_chroma_max: 0.18,
+        font_registry: 'default',
+        allowed_modes: ['light', 'dark'],
+      },
+    },
+    pages: { '/': { level: 4 }, '/series': { level: 4 } },
+  },
+}
+
+// ---------------------------------------------------------------------------
+// LLM provider selection (env-driven; default = open-source qwen via Ollama,
+// routed through the /api/llm server proxy)
+// ---------------------------------------------------------------------------
+//
+// Three modes, all swappable by env alone:
+//   (default)                                  open-source model through /api/llm;
+//                                              the server forwards to Ollama
+//                                              (LLM_BASE_URL) and pins LLM_MODEL.
+//   NEXT_PUBLIC_LLM_PROVIDER=anthropic         Claude through /api/llm; needs
+//                                              server-side ANTHROPIC_API_KEY.
+//   NEXT_PUBLIC_LLM_PROVIDER=openai-compatible browser-direct to an OpenAI-shaped
+//                                              server (legacy local mode; needs
+//                                              OLLAMA_ORIGINS=* for CORS).
+
+type LlmStructuredMode = 'json_schema' | 'json_object'
+
+export interface LlmProviderProps {
+  apiKey: string
+  apiBaseUrl?: string
+  llmProvider?: 'openai-compatible'
+  oaiStructuredMode?: LlmStructuredMode
+  models?: { gatekeeper: string; designer: string; builder: string; slotEdit: string }
+}
+
+// Built from NEXT_PUBLIC_* env. 'proxy' is a non-empty apiKey sentinel — the
+// panel's prompt input and the client's empty-key check both gate on a truthy
+// key; the proxy routes never read the header.
+export function llmProviderProps(): LlmProviderProps {
+  const provider = process.env.NEXT_PUBLIC_LLM_PROVIDER
+  const anthropicKey = process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY ?? ''
+
+  if (provider === 'anthropic') {
+    return { apiKey: 'proxy', apiBaseUrl: '/api/llm' }
+  }
+
+  if (provider === 'openai-compatible') {
+    const baseUrl = process.env.NEXT_PUBLIC_LLM_BASE_URL ?? 'http://localhost:11434/v1'
+    const model = process.env.NEXT_PUBLIC_LLM_MODEL ?? 'qwen2.5'
+    const mode: LlmStructuredMode =
+      process.env.NEXT_PUBLIC_LLM_STRUCTURED_MODE === 'json_object' ? 'json_object' : 'json_schema'
+    return {
+      // Ollama ignores the key; keep the anthropic key if set (for a hosted OpenAI
+      // proxy) else a dummy so the Bearer header is well-formed.
+      apiKey: anthropicKey || 'ollama',
+      apiBaseUrl: baseUrl,
+      llmProvider: 'openai-compatible',
+      oaiStructuredMode: mode,
+      models: { gatekeeper: model, designer: model, builder: model, slotEdit: model },
+    }
+  }
+
+  // Default: open-source model through the server proxy. The model id here is
+  // what the agents put on the wire; the proxy pins it to server-side
+  // LLM_MODEL regardless, so the two only need to agree for log readability.
+  const model = process.env.NEXT_PUBLIC_LLM_MODEL ?? 'qwen2.5'
+  const mode: LlmStructuredMode =
+    process.env.NEXT_PUBLIC_LLM_STRUCTURED_MODE === 'json_object' ? 'json_object' : 'json_schema'
+  return {
+    apiKey: 'proxy',
+    apiBaseUrl: '/api/llm',
+    llmProvider: 'openai-compatible',
+    oaiStructuredMode: mode,
+    models: { gatekeeper: model, designer: model, builder: model, slotEdit: model },
+  }
+}
