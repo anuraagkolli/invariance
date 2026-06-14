@@ -13,7 +13,7 @@ import { TitleDetailModal } from '../components/title-detail-modal'
 import { SearchProvider } from '../components/search-context'
 import { SearchOverlay } from '../components/search-overlay'
 import type { InvarianceConfig } from '@invariance/design'
-import { llmProviderProps } from '../lib/invariance-config'
+import { llmProviderProps, themeStorageUrl } from '../lib/invariance-config'
 
 // The F4 swap path looks components up here by name; both render a row of
 // title cards (Carousel = scroll-snap strip, Grid = wrapped grid).
@@ -30,7 +30,7 @@ export function Providers({ config, children }: { config: InvarianceConfig; chil
       config={config}
       userId="demo-user"
       storage="api"
-      storageUrl="/api/themes"
+      storageUrl={themeStorageUrl()}
       componentLibrary={componentLibrary}
       {...llm}
     >

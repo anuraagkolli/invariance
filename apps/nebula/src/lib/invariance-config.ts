@@ -19,6 +19,17 @@ export const invarianceConfig: InvarianceConfig = {
 }
 
 // ---------------------------------------------------------------------------
+// Durable theme storage lives in the control plane (registry). Client-side, so
+// it needs a NEXT_PUBLIC_* var; dev defaults to the local control plane on :4400.
+// appId is the registry appId ("nebula"), not invarianceConfig.app.
+export function themeStorageUrl(): string {
+  // Tolerate a trailing slash on the env (a common copy-paste from a dashboard)
+  // so we never emit a double-slashed `//v1` path.
+  const registry = (process.env.NEXT_PUBLIC_INVARIANCE_REGISTRY ?? 'http://localhost:4400').replace(/\/$/, '')
+  return `${registry}/v1/apps/nebula/themes`
+}
+
+// ---------------------------------------------------------------------------
 // LLM provider selection (env-driven; default = open-source qwen via Ollama,
 // routed through the /api/llm server proxy)
 // ---------------------------------------------------------------------------
