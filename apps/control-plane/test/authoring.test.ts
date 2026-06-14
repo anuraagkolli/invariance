@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ModBundleSchema } from "@invariance/schema";
 import { generateSigningKeyPair } from "@invariance/schema/signing";
 import { createControlPlane } from "../src/app";
 import { MockAgent } from "../src/modules/authoring/mock";
@@ -75,6 +76,33 @@ describe("authorMod pipeline", () => {
     writes: [{ endpointId: "list-items", fields: ["items"] }],
     budgets: { cpuMs: 50, memMb: 32 },
   };
+
+  it("auto-derives an under-declared hook's write capability so it can't silently no-op", async () => {
+    const store = new MemoryStore();
+    await publishManifest(store, "app1", manifest);
+    // A correct sort hook, but the model declared NO writes — the weak-model bug
+    // that, untouched, makes the runtime discard the output (a silent no-op).
+    const misdeclared = {
+      hooks: [
+        {
+          id: "hook_sort",
+          trigger: { endpointId: "list-items", phase: "response" },
+          language: "js",
+          source: "(payload) => ({ ...payload, items: [...payload.items].sort() })",
+        },
+      ],
+      capabilities: { reads: [{ endpointId: "list-items" }], writes: [], budgets: { cpuMs: 50, memMb: 32 } },
+    };
+    const result = await authorMod({
+      store, keys, agent: new MockAgent([misdeclared]), appId: "app1", subjectId: "u1", prompt: "sort my items",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // The signed bundle now declares the write the hook actually makes.
+    const bundle = ModBundleSchema.parse(JSON.parse(result.record.envelope.payload));
+    const write = bundle.capabilities.writes.find((w) => w.endpointId === "list-items");
+    expect(write?.fields).toContain("items");
+  });
 
   it("rejects drafts that drop existing ops, then publishes the merged resubmission", async () => {
     const store = new MemoryStore();

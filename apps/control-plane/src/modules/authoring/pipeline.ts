@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { Store, ModRecord } from "../../store";
 import { assembleBundle, publishBundle, RegistryError, type ModDraft } from "../registry";
 import { verifyBundleAgainstManifest } from "../verification";
+import { deriveRepairedWrites } from "./derive-writes";
 import { recompileTheme } from "./design-author";
 import type { AgentInput, AuthoringAgent } from "./agent";
 
@@ -109,6 +110,19 @@ export async function authorMod(params: AuthorModParams): Promise<AuthoringResul
     } catch (err) {
       feedback = [`draft failed schema validation: ${describeError(err)}`];
       continue;
+    }
+
+    // Repair under-declared write capabilities from the hooks' static behavior.
+    // Weak models often author a correct hook but declare too few `writes`, which
+    // the runtime then discards as undeclared — a silent no-op. Deriving the
+    // hooks' top-level writes and covering them keeps legal hooks working; the
+    // verifier below still enforces the immutable-field policy on the result.
+    const repaired = deriveRepairedWrites(bundle);
+    if (repaired.added.length > 0) {
+      bundle = ModBundleSchema.parse({
+        ...bundle,
+        capabilities: { ...bundle.capabilities, writes: repaired.writes },
+      });
     }
 
     const verdict = verifyBundleAgainstManifest(bundle, manifest);
