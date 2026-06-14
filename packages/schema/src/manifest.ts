@@ -159,5 +159,18 @@ export const AppManifestSchema = z
         });
       }
     }
+    // designSurface routes feed Object.fromEntries in the Console; a duplicate
+    // would silently collapse, so reject it here like other id collisions.
+    const surfaceRoutes = new Set<string>();
+    for (const page of manifest.designSurface?.pages ?? []) {
+      if (surfaceRoutes.has(page.route)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["designSurface", "pages"],
+          message: `duplicate designSurface route: ${page.route}`,
+        });
+      }
+      surfaceRoutes.add(page.route);
+    }
   });
 export type AppManifest = z.infer<typeof AppManifestSchema>;

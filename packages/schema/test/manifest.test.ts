@@ -135,5 +135,20 @@ describe("AppManifestSchema", () => {
       expect(manifest.designSurface?.pages).toEqual([]);
       expect(manifest.designSurface?.sections).toEqual([]);
     });
+
+    it("rejects duplicate routes (they would silently collapse downstream)", () => {
+      const input = {
+        ...baseManifest(),
+        designSurface: {
+          pages: [
+            { route: "/", defaultLevel: 4 },
+            { route: "/", defaultLevel: 2 },
+          ],
+        },
+      };
+      const result = AppManifestSchema.safeParse(input);
+      expect(result.success).toBe(false);
+      expect(result.success ? "" : result.error.message).toContain("duplicate designSurface route");
+    });
   });
 });
