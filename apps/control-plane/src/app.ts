@@ -299,6 +299,63 @@ export function createControlPlane(options: ControlPlaneOptions = {}): ControlPl
     return c.json(config);
   });
 
+  /**
+   * Theme version timeline: the design plane's createApiStorage reads/writes
+   * latest here; the Console reads history + triggers rollback. GET /themes
+   * returns the raw theme doc (or null) — no envelope — matching the design
+   * plane's reader contract; /history wraps results in {entries}/{timelines}.
+   */
+  const ThemeSaveSchema = z.object({
+    userId: z.string().min(1),
+    theme: z.record(z.unknown()),
+    meta: z
+      .object({
+        prompt: z.string().optional(),
+        source: z.enum(["pipeline", "pack", "rollback"]).optional(),
+        description: z.string().optional(),
+      })
+      .optional(),
+  });
+
+  const ThemeRollbackSchema = z.object({
+    userId: z.string().min(1),
+    seq: z.number().int().positive(),
+  });
+
+  app.get("/v1/apps/:appId/themes", async (c) => {
+    const userId = c.req.query("userId");
+    if (!userId) return c.json({ error: "userId required" }, 400);
+    return c.json(await store.getLatestTheme(c.req.param("appId"), userId));
+  });
+
+  app.put("/v1/apps/:appId/themes", async (c) => {
+    const { userId, theme, meta } = ThemeSaveSchema.parse(await c.req.json());
+    const entry = await store.appendThemeVersion(c.req.param("appId"), userId, theme, meta);
+    return c.json({ ok: true, seq: entry.seq });
+  });
+
+  app.get("/v1/apps/:appId/themes/history", async (c) => {
+    const appId = c.req.param("appId");
+    const userId = c.req.query("userId");
+    if (userId) {
+      return c.json({ entries: await store.listThemeVersions(appId, userId) });
+    }
+    return c.json({ timelines: await store.listThemeTimelines(appId) });
+  });
+
+  app.post("/v1/apps/:appId/themes/rollback", async (c) => {
+    const appId = c.req.param("appId");
+    const { userId, seq } = ThemeRollbackSchema.parse(await c.req.json());
+    const versions = await store.listThemeVersions(appId, userId);
+    const target = versions.find((v) => v.seq === seq);
+    if (!target) return c.json({ error: `no version v${seq}` }, 404);
+    const entry = await store.appendThemeVersion(appId, userId, target.theme, {
+      source: "rollback",
+      description: `Rollback to v${seq}`,
+    });
+    return c.json({ ok: true, seq: entry.seq });
+  });
+
   /** Mods admin: every record (envelope payloads excluded) with classification. */
   app.get("/v1/apps/:appId/mods", async (c) =>
     c.json({ mods: (await store.allMods(c.req.param("appId"))).map(modAdminView) }),
