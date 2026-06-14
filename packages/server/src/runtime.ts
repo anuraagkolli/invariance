@@ -21,6 +21,18 @@ interface PointerResponse {
   contentHash?: string;
 }
 
+/**
+ * Opt every registry GET out of caching. Hosts like Next.js wrap global fetch
+ * with a Data Cache that replays constant-URL responses (e.g. /signing-key,
+ * /manifest) from disk across process restarts — which, with the control
+ * plane's per-process ephemeral signing key, serves a stale key and makes every
+ * bundle fail signature verification (silent no-op). This runtime does its own
+ * TTL caching (keyCache/manifestCache/pointerCache); the transport must not add
+ * its own. A standard RequestInit field — harmless on Node/undici, load-bearing
+ * under Next.
+ */
+const NO_STORE: RequestInit = { cache: "no-store" };
+
 interface Cached<T> {
   value: T;
   expiresAt: number;
@@ -74,7 +86,7 @@ export class InvarianceRuntime {
       return this.manifestCache.value;
     }
     try {
-      const res = await fetch(this.url(`/v1/apps/${this.config.appId}/manifest`));
+      const res = await fetch(this.url(`/v1/apps/${this.config.appId}/manifest`), NO_STORE);
       const manifest = res.ok ? AppManifestSchema.parse(await res.json()) : null;
       this.manifestCache = { value: manifest, expiresAt: now + this.cacheTtlMs };
       return manifest;
@@ -90,7 +102,7 @@ export class InvarianceRuntime {
     const now = Date.now();
     if (this.keyCache && this.keyCache.expiresAt > now) return this.keyCache.value;
     try {
-      const res = await fetch(this.url(`/v1/apps/${this.config.appId}/signing-key`));
+      const res = await fetch(this.url(`/v1/apps/${this.config.appId}/signing-key`), NO_STORE);
       if (!res.ok) return this.keyCache?.value ?? null;
       const { publicKeyPem } = (await res.json()) as { publicKeyPem: string };
       this.keyCache = { value: publicKeyPem, expiresAt: now + this.cacheTtlMs };
@@ -106,6 +118,7 @@ export class InvarianceRuntime {
     if (cached && cached.expiresAt > now) return cached.value;
     const res = await fetch(
       this.url(`/v1/apps/${this.config.appId}/subjects/${encodeURIComponent(subjectId)}/pointer`),
+      NO_STORE,
     );
     if (!res.ok) throw new Error(`pointer fetch failed: ${res.status}`);
     const pointer = (await res.json()) as PointerResponse;
@@ -127,6 +140,7 @@ export class InvarianceRuntime {
       if (cached) return cached;
       const res = await fetch(
         this.url(`/v1/apps/${this.config.appId}/bundles/${pointer.contentHash}`),
+        NO_STORE,
       );
       if (!res.ok) return null;
       const publicKeyPem = await this.getPublicKey();
