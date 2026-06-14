@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import type { ThemeVersionEntry } from "./api";
 import { COLOR_RE, diffTokenMaps, sectionsChanged, tokenMap } from "./theme-diff";
 import { TokenDiff } from "./token-diff";
+import { styleSpecOf, summarizeStyleSpec } from "./style-summary";
 
 // One entry on the theme timeline: a provenance header, an app-agnostic palette
 // strip (the version's color tokens as swatches — no app coupling), the token
@@ -50,6 +51,13 @@ export function VersionCard({ entry, previous, isLatest, onRollback }: VersionCa
     return colors;
   }, [entry.theme]);
 
+  // The theme's design intent (mode/accent/contrast/…) read from its StyleSpec —
+  // what the user asked for, not the compiled token values.
+  const intent = useMemo(() => {
+    const spec = styleSpecOf(entry.theme);
+    return spec ? summarizeStyleSpec(spec) : null;
+  }, [entry.theme]);
+
   const source = entry.meta?.source;
   // A first entry diffs against nothing — collapse the wall of "added" rows.
   const collapseAsInitial = previous === null && diff.length > 6;
@@ -64,6 +72,11 @@ export function VersionCard({ entry, previous, isLatest, onRollback }: VersionCa
           <p className="mt-0.5 text-xs text-white/50">
             {entry.meta?.description ?? "—"}
           </p>
+          {intent && (
+            <p className="mt-1 truncate text-[11px] text-emerald-300/80" title={intent}>
+              {intent}
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {source ? (
