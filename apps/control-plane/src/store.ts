@@ -27,6 +27,19 @@ export interface AnalyticsEvent {
   at: number;
 }
 
+export interface ThemeVersionMeta {
+  prompt?: string;
+  source?: "pipeline" | "pack" | "rollback";
+  description?: string;
+}
+
+export interface ThemeVersionEntry {
+  seq: number;
+  at: string; // ISO timestamp
+  theme: Record<string, unknown>;
+  meta?: ThemeVersionMeta;
+}
+
 const MAX_EVENTS_PER_APP = 50_000;
 
 /**
@@ -72,6 +85,22 @@ export interface Store {
   /** Tunable look-invariants; defaults to {} when never set. */
   getDesignConfig(appId: string): Promise<DesignConfig>;
   putDesignConfig(appId: string, config: DesignConfig): Promise<void>;
+
+  /** Latest theme doc for a subject's timeline, or null. */
+  getLatestTheme(appId: string, userId: string): Promise<Record<string, unknown> | null>;
+  /** Append a new immutable version (monotonic seq, ISO at, cap ~50). */
+  appendThemeVersion(
+    appId: string,
+    userId: string,
+    theme: Record<string, unknown>,
+    meta?: ThemeVersionMeta,
+  ): Promise<ThemeVersionEntry>;
+  /** A subject's versions, newest first. */
+  listThemeVersions(appId: string, userId: string): Promise<ThemeVersionEntry[]>;
+  /** Per-user timeline summaries for this app. */
+  listThemeTimelines(
+    appId: string,
+  ): Promise<Array<{ userId: string; count: number; latestAt: string }>>;
 }
 
 interface AppState {
@@ -82,6 +111,8 @@ interface AppState {
   bundlesByHash: Map<string, SignedEnvelope>;
   events: AnalyticsEvent[];
   designConfig: DesignConfig;
+  /** userId -> theme timeline (entries oldest-first). */
+  themeTimelines: Map<string, { nextSeq: number; entries: ThemeVersionEntry[] }>;
 }
 
 /** In-memory Store: dev and test backend; PgStore is the durable one. */
@@ -98,6 +129,7 @@ export class MemoryStore implements Store {
         bundlesByHash: new Map(),
         events: [],
         designConfig: {},
+        themeTimelines: new Map(),
       };
       this.apps.set(appId, state);
     }
@@ -207,5 +239,64 @@ export class MemoryStore implements Store {
 
   async putDesignConfig(appId: string, config: DesignConfig): Promise<void> {
     this.app(appId).designConfig = config;
+  }
+
+  async appendThemeVersion(
+    appId: string,
+    userId: string,
+    theme: Record<string, unknown>,
+    meta?: ThemeVersionMeta,
+  ): Promise<ThemeVersionEntry> {
+    const state = this.app(appId);
+    let timeline = state.themeTimelines.get(userId);
+    if (!timeline) {
+      timeline = { nextSeq: 1, entries: [] };
+      state.themeTimelines.set(userId, timeline);
+    }
+    const entry: ThemeVersionEntry = {
+      seq: timeline.nextSeq,
+      at: new Date().toISOString(),
+      theme,
+      ...(meta !== undefined ? { meta } : {}),
+    };
+    timeline.entries.push(entry);
+    // Prune to the most-recent 50 (oldest first, so slice from the end)
+    if (timeline.entries.length > 50) {
+      timeline.entries = timeline.entries.slice(-50);
+    }
+    timeline.nextSeq++;
+    return entry;
+  }
+
+  async getLatestTheme(
+    appId: string,
+    userId: string,
+  ): Promise<Record<string, unknown> | null> {
+    const timeline = this.app(appId).themeTimelines.get(userId);
+    if (!timeline || timeline.entries.length === 0) return null;
+    return timeline.entries[timeline.entries.length - 1]!.theme;
+  }
+
+  async listThemeVersions(appId: string, userId: string): Promise<ThemeVersionEntry[]> {
+    const timeline = this.app(appId).themeTimelines.get(userId);
+    if (!timeline) return [];
+    return [...timeline.entries].reverse();
+  }
+
+  async listThemeTimelines(
+    appId: string,
+  ): Promise<Array<{ userId: string; count: number; latestAt: string }>> {
+    const state = this.app(appId);
+    const result: Array<{ userId: string; count: number; latestAt: string }> = [];
+    for (const [userId, timeline] of state.themeTimelines) {
+      if (timeline.entries.length > 0) {
+        result.push({
+          userId,
+          count: timeline.entries.length,
+          latestAt: timeline.entries[timeline.entries.length - 1]!.at,
+        });
+      }
+    }
+    return result;
   }
 }

@@ -58,4 +58,14 @@ CREATE TABLE IF NOT EXISTS design_config (
   app_id text PRIMARY KEY,
   config jsonb NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS theme_versions (
+  app_id text NOT NULL,
+  user_id text NOT NULL,
+  seq bigint NOT NULL,
+  at text NOT NULL,
+  theme jsonb NOT NULL,
+  meta jsonb,
+  PRIMARY KEY (app_id, user_id, seq)
+);
 `;

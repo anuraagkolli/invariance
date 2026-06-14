@@ -1,5 +1,12 @@
 import type { AppManifest, SignedEnvelope, DesignConfig } from "@invariance/schema";
-import type { AnalyticsEvent, ModRecord, ModRecordStatus, Store } from "../store";
+import type {
+  AnalyticsEvent,
+  ModRecord,
+  ModRecordStatus,
+  Store,
+  ThemeVersionEntry,
+  ThemeVersionMeta,
+} from "../store";
 import { SCHEMA_SQL } from "./schema.sql";
 
 /**
@@ -256,6 +263,118 @@ export class PgStore implements Store {
       `INSERT INTO design_config (app_id, config) VALUES ($1, $2::jsonb)
        ON CONFLICT (app_id) DO UPDATE SET config = excluded.config`,
       [appId, JSON.stringify(config)],
+    );
+  }
+
+  private toThemeEntry(row: {
+    seq: unknown;
+    at: string;
+    theme: Record<string, unknown>;
+    meta: Record<string, unknown> | null;
+  }): ThemeVersionEntry {
+    return {
+      seq: Number(row.seq),
+      at: row.at,
+      theme: row.theme,
+      ...(row.meta !== null ? { meta: row.meta as ThemeVersionMeta } : {}),
+    };
+  }
+
+  async appendThemeVersion(
+    appId: string,
+    userId: string,
+    theme: Record<string, unknown>,
+    meta?: ThemeVersionMeta,
+  ): Promise<ThemeVersionEntry> {
+    const at = new Date().toISOString();
+
+    // Atomically allocate the next seq and insert in one shot.
+    // An aggregate SELECT with no GROUP BY always returns exactly one row —
+    // even when zero rows match the WHERE (MAX is NULL → COALESCE yields 0+1=1),
+    // so the very first append for a timeline correctly inserts seq=1.
+    const { rows: insertRows } = await this.db.query(
+      `INSERT INTO theme_versions (app_id, user_id, seq, at, theme, meta)
+       SELECT $1, $2, COALESCE(MAX(seq), 0) + 1, $3, $4::jsonb, $5::jsonb
+       FROM theme_versions
+       WHERE app_id = $1 AND user_id = $2
+       RETURNING seq`,
+      [
+        appId,
+        userId,
+        at,
+        JSON.stringify(theme),
+        meta === undefined ? null : JSON.stringify(meta),
+      ],
+    );
+    const seq = Number((insertRows[0] as { seq: unknown }).seq);
+
+    // Prune to most-recent 50 (separate statement — pruning is not subject to the race).
+    await this.db.query(
+      `DELETE FROM theme_versions
+       WHERE app_id = $1 AND user_id = $2
+         AND seq NOT IN (
+           SELECT seq FROM theme_versions
+           WHERE app_id = $1 AND user_id = $2
+           ORDER BY seq DESC LIMIT 50
+         )`,
+      [appId, userId],
+    );
+
+    return {
+      seq,
+      at,
+      theme,
+      ...(meta !== undefined ? { meta } : {}),
+    };
+  }
+
+  async getLatestTheme(
+    appId: string,
+    userId: string,
+  ): Promise<Record<string, unknown> | null> {
+    const { rows } = await this.db.query(
+      `SELECT theme FROM theme_versions
+       WHERE app_id = $1 AND user_id = $2
+       ORDER BY seq DESC LIMIT 1`,
+      [appId, userId],
+    );
+    const row = rows[0] as { theme: Record<string, unknown> } | undefined;
+    return row?.theme ?? null;
+  }
+
+  async listThemeVersions(appId: string, userId: string): Promise<ThemeVersionEntry[]> {
+    const { rows } = await this.db.query(
+      `SELECT seq, at, theme, meta FROM theme_versions
+       WHERE app_id = $1 AND user_id = $2
+       ORDER BY seq DESC`,
+      [appId, userId],
+    );
+    return (
+      rows as Array<{
+        seq: unknown;
+        at: string;
+        theme: Record<string, unknown>;
+        meta: Record<string, unknown> | null;
+      }>
+    ).map((row) => this.toThemeEntry(row));
+  }
+
+  async listThemeTimelines(
+    appId: string,
+  ): Promise<Array<{ userId: string; count: number; latestAt: string }>> {
+    const { rows } = await this.db.query(
+      `SELECT user_id, COUNT(*)::int AS count, MAX(at) AS latest_at
+       FROM theme_versions
+       WHERE app_id = $1
+       GROUP BY user_id`,
+      [appId],
+    );
+    return (rows as Array<{ user_id: string; count: unknown; latest_at: string }>).map(
+      (row) => ({
+        userId: row.user_id,
+        count: Number(row.count),
+        latestAt: row.latest_at,
+      }),
     );
   }
 }
