@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { z } from "zod";
 import {
   CapabilityManifestSchema,
+  DesignConfigSchema,
   HookModuleSchema,
   UiOpSchema,
 } from "@invariance/schema";
@@ -282,6 +283,20 @@ export function createControlPlane(options: ControlPlaneOptions = {}): ControlPl
     const limit = Math.min(Number(c.req.query("limit")) || 50, 200);
     const events = await store.listEvents(c.req.param("appId"), { limit });
     return c.json({ events: events.reverse() });
+  });
+
+  /**
+   * Tunable look-invariants (the design-config). The console edits these; the
+   * design plane reads them per request. PUT validates via zod — the onError
+   * handler maps a ZodError to a 400.
+   */
+  app.get("/v1/apps/:appId/design-config", async (c) =>
+    c.json(await store.getDesignConfig(c.req.param("appId"))),
+  );
+  app.put("/v1/apps/:appId/design-config", async (c) => {
+    const config = DesignConfigSchema.parse(await c.req.json());
+    await store.putDesignConfig(c.req.param("appId"), config);
+    return c.json(config);
   });
 
   /** Mods admin: every record (envelope payloads excluded) with classification. */

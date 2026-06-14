@@ -1,4 +1,4 @@
-import type { AppManifest, SignedEnvelope } from "@invariance/schema";
+import type { AppManifest, SignedEnvelope, DesignConfig } from "@invariance/schema";
 
 export type ModRecordStatus = "active" | "stale" | "degraded" | "disabled" | "superseded";
 
@@ -68,6 +68,10 @@ export interface Store {
     appId: string,
     opts?: { subjectId?: string; limit?: number },
   ): Promise<AnalyticsEvent[]>;
+
+  /** Tunable look-invariants; defaults to {} when never set. */
+  getDesignConfig(appId: string): Promise<DesignConfig>;
+  putDesignConfig(appId: string, config: DesignConfig): Promise<void>;
 }
 
 interface AppState {
@@ -77,6 +81,7 @@ interface AppState {
   modsBySubject: Map<string, ModRecord[]>;
   bundlesByHash: Map<string, SignedEnvelope>;
   events: AnalyticsEvent[];
+  designConfig: DesignConfig;
 }
 
 /** In-memory Store: dev and test backend; PgStore is the durable one. */
@@ -92,6 +97,7 @@ export class MemoryStore implements Store {
         modsBySubject: new Map(),
         bundlesByHash: new Map(),
         events: [],
+        designConfig: {},
       };
       this.apps.set(appId, state);
     }
@@ -193,5 +199,13 @@ export class MemoryStore implements Store {
     }
     if (opts.limit !== undefined) events = events.slice(-opts.limit);
     return [...events];
+  }
+
+  async getDesignConfig(appId: string): Promise<DesignConfig> {
+    return this.app(appId).designConfig;
+  }
+
+  async putDesignConfig(appId: string, config: DesignConfig): Promise<void> {
+    this.app(appId).designConfig = config;
   }
 }

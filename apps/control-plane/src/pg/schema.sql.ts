@@ -53,4 +53,9 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS events_by_app ON events (app_id, id);
 CREATE INDEX IF NOT EXISTS events_by_subject ON events (app_id, subject_id, id);
+
+CREATE TABLE IF NOT EXISTS design_config (
+  app_id text PRIMARY KEY,
+  config jsonb NOT NULL
+);
 `;

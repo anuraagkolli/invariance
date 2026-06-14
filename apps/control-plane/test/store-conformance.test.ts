@@ -143,6 +143,13 @@ function conformance(name: string, makeStore: () => Promise<Store>) {
       expect(await store.listEvents("app2")).toEqual([]);
       expect(await store.findMod("app2", "m1")).toBeNull();
     });
+
+    it("round-trips design-config (defaults to {})", async () => {
+      const store = await makeStore();
+      expect(await store.getDesignConfig("app1")).toEqual({});
+      await store.putDesignConfig("app1", { contrastFloor: 7 });
+      expect(await store.getDesignConfig("app1")).toEqual({ contrastFloor: 7 });
+    });
   });
 }
 

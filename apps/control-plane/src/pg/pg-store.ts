@@ -1,4 +1,4 @@
-import type { AppManifest, SignedEnvelope } from "@invariance/schema";
+import type { AppManifest, SignedEnvelope, DesignConfig } from "@invariance/schema";
 import type { AnalyticsEvent, ModRecord, ModRecordStatus, Store } from "../store";
 import { SCHEMA_SQL } from "./schema.sql";
 
@@ -240,5 +240,22 @@ export class PgStore implements Store {
     }
     const { rows } = await this.db.query(sql, params);
     return (rows as EventRow[]).map(toEvent);
+  }
+
+  async getDesignConfig(appId: string): Promise<DesignConfig> {
+    const { rows } = await this.db.query(
+      "SELECT config FROM design_config WHERE app_id = $1",
+      [appId],
+    );
+    const row = rows[0] as { config: DesignConfig } | undefined;
+    return row?.config ?? {};
+  }
+
+  async putDesignConfig(appId: string, config: DesignConfig): Promise<void> {
+    await this.db.query(
+      `INSERT INTO design_config (app_id, config) VALUES ($1, $2::jsonb)
+       ON CONFLICT (app_id) DO UPDATE SET config = excluded.config`,
+      [appId, JSON.stringify(config)],
+    );
   }
 }
