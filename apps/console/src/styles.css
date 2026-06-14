@@ -462,3 +462,107 @@ code {
   margin-right: 6px;
   vertical-align: -1px;
 }
+
+/* Guardrails view */
+.nav-link {
+  margin-right: 16px;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+.nav-link:hover {
+  text-decoration: underline;
+}
+
+.feed {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.feed li {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border-left: 3px solid transparent;
+  font-size: 14px;
+}
+.feed-block {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-left-color: var(--danger);
+}
+.feed-warn {
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border-left-color: var(--warn);
+}
+.feed-muted {
+  background: color-mix(in srgb, var(--muted) 8%, transparent);
+}
+.feed-icon {
+  font-size: 15px;
+}
+.feed-time {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.guardrails {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+.guardrail-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+.guardrail-title {
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.guardrail-title .held {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.guardrail-test {
+  margin: 8px 0;
+}
+.guardrail-test button {
+  margin-right: 8px;
+}
+.tag {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.tag-authoring {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+.tag-runtime {
+  background: color-mix(in srgb, #ba82ff 18%, transparent);
+  color: #ba82ff;
+}
+.verdict-held {
+  color: var(--ok);
+  font-size: 13px;
+  margin-top: 6px;
+}
+.verdict-fail {
+  color: var(--danger);
+  font-size: 13px;
+  margin-top: 6px;
+  font-weight: 600;
+}
