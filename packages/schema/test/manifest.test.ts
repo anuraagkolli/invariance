@@ -84,4 +84,56 @@ describe("AppManifestSchema", () => {
       expect(policy.phases).toEqual(["request", "response"]);
     }
   });
+
+  describe("designSurface", () => {
+    it("is optional — manifest without it still parses", () => {
+      const manifest = AppManifestSchema.parse(baseManifest());
+      expect(manifest.designSurface).toBeUndefined();
+    });
+
+    it("parses and round-trips a valid designSurface", () => {
+      const input = {
+        ...baseManifest(),
+        designSurface: {
+          pages: [{ route: "/", defaultLevel: 4 }],
+          sections: ["hero"],
+        },
+      };
+      const manifest = AppManifestSchema.parse(input);
+      expect(manifest.designSurface?.pages[0]?.defaultLevel).toBe(4);
+      expect(manifest.designSurface?.pages[0]?.route).toBe("/");
+      expect(manifest.designSurface?.sections).toEqual(["hero"]);
+    });
+
+    it("rejects defaultLevel out of range (> 4)", () => {
+      const input = {
+        ...baseManifest(),
+        designSurface: {
+          pages: [{ route: "/", defaultLevel: 5 }],
+          sections: [],
+        },
+      };
+      const result = AppManifestSchema.safeParse(input);
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects defaultLevel out of range (< 0)", () => {
+      const input = {
+        ...baseManifest(),
+        designSurface: {
+          pages: [{ route: "/", defaultLevel: -1 }],
+          sections: [],
+        },
+      };
+      const result = AppManifestSchema.safeParse(input);
+      expect(result.success).toBe(false);
+    });
+
+    it("applies .default([]) when pages/sections are omitted", () => {
+      const input = { ...baseManifest(), designSurface: {} };
+      const manifest = AppManifestSchema.parse(input);
+      expect(manifest.designSurface?.pages).toEqual([]);
+      expect(manifest.designSurface?.sections).toEqual([]);
+    });
+  });
 });

@@ -88,6 +88,29 @@ export const PolicyRuleSchema = z.discriminatedUnion("type", [
 ]);
 export type PolicyRule = z.infer<typeof PolicyRuleSchema>;
 
+export const DesignSurfacePageSchema = z.object({
+  route: z.string().min(1),
+  /**
+   * The unlocked default customization level for this route, on the design
+   * plane's 0–4 ladder: 0 = locked, 1 = theme/style, 2 = + content,
+   * 3 = + layout, 4 = + components. Developers tighten it via look-invariants.
+   */
+  defaultLevel: z.number().int().min(0).max(4),
+});
+export type DesignSurfacePage = z.infer<typeof DesignSurfacePageSchema>;
+
+/**
+ * An app's customizable design surface: the routes the design plane may theme
+ * (with their default customization levels) and the named UI sections a
+ * developer can lock. Lets the Console render look-invariant controls for any
+ * app instead of hardcoding them.
+ */
+export const DesignSurfaceSchema = z.object({
+  pages: z.array(DesignSurfacePageSchema).default([]),
+  sections: z.array(z.string().min(1)).default([]),
+});
+export type DesignSurface = z.infer<typeof DesignSurfaceSchema>;
+
 /**
  * The App Manifest is published by the developer's build (via CLI) and is the
  * contract every mod is authored and verified against: what exists (tokens,
@@ -102,6 +125,7 @@ export const AppManifestSchema = z
     endpoints: z.array(EndpointSchema).default([]),
     policies: z.array(PolicyRuleSchema).default([]),
     createdAt: z.string().datetime(),
+    designSurface: DesignSurfaceSchema.optional(),
   })
   .superRefine((manifest, ctx) => {
     const endpointIds = new Set<string>();
