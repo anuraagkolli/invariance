@@ -182,19 +182,6 @@ export default function App() {
 /* look-invariants (the design-config the design plane merges)          */
 /* ------------------------------------------------------------------ */
 
-// App-specific design structure; modeling routes/sections per-app in the
-// manifest is a follow-up. These feed the editable look-invariants for the
-// Nebula showcase (the AppManifest doesn't model design routes/sections).
-const NEBULA_ROUTES: Record<string, number> = { "/": 4, "/series": 4 };
-const NEBULA_SECTIONS = [
-  "hero",
-  "row-trending",
-  "row-continue",
-  "row-originals",
-  "row-new",
-  "row-acclaimed",
-];
-
 function InvariantsView({ appId }: { appId: string }) {
   const [manifest, setManifest] = useState<AppManifest | null>(null);
   const [designConfig, setDesignConfig] = useState<DesignConfig | null>(null);
@@ -219,6 +206,10 @@ function InvariantsView({ appId }: { appId: string }) {
   }, [refresh]);
 
   const policies = manifest?.policies ?? [];
+  const baseLevels: Record<string, number> = Object.fromEntries(
+    (manifest?.designSurface?.pages ?? []).map((p) => [p.route, p.defaultLevel])
+  );
+  const sections = manifest?.designSurface?.sections ?? [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -257,9 +248,9 @@ function InvariantsView({ appId }: { appId: string }) {
           {designConfig ? (
             <LockControls
               overlay={designConfig}
-              baseLevels={NEBULA_ROUTES}
+              baseLevels={baseLevels}
               currentAccent={null}
-              sections={NEBULA_SECTIONS}
+              sections={sections}
               onSave={(c) => api.putDesignConfig(appId, c).then(() => refresh())}
             />
           ) : (
