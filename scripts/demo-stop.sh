@@ -23,8 +23,10 @@ for port in "${PORTS[@]}"; do
   [[ -n "$pids" ]] && echo "$pids" | xargs -r kill -9 2>/dev/null || true
 done
 
-# 3) Catch dev servers by command pattern (next dev / vite / tsx main).
-pkill -9 -f "apps/control-plane.*src/main.ts" 2>/dev/null || true
+# 3) Catch dev servers by command pattern (control-plane tsx / next dev).
+#    The control plane runs via `tsx src/main.ts` (CWD = apps/control-plane, so
+#    argv shows the relative path); match on the tsx loader + src/main.ts.
+pkill -9 -f "tsx.*src/main.ts" 2>/dev/null || true
 pkill -9 -f "next dev -p 4321" 2>/dev/null || true
 pkill -9 -f "next-server" 2>/dev/null || true
 

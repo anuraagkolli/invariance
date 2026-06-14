@@ -34,7 +34,7 @@ Core invariants of the system itself:
 | Testing | vitest |
 | Sandbox | QuickJS compiled to WASM (externalize the `quickjs-emscripten` chain in Next hosts — see `apps/nebula/next.config.js`) |
 | LLM (authoring) | qwen2.5 via Ollama (OpenAI-compatible) by default; Anthropic opt-in. NOT a hard dependency — see [[no-anthropic-models-for-now]] |
-| UI (console + Nebula) | Tailwind; console adopts Nebula `/dev`'s fixed-neutral dark design language |
+| UI (console + Nebula) | Tailwind; console + Nebula share a fixed-neutral dark design language |
 
 ## Layout & Phase Status
 
@@ -45,7 +45,7 @@ packages/cli        # `invariance` bin: init, manifest publish, dev control plan
 apps/demo           # Netflix-style demo app, living integration test (e2e per phase)
 apps/nebula        # Nebula — Next.js 14 + Tailwind showcase demo. Customization
                    # via the DESIGN plane (@invariance/design: CustomizationPanel,
-                   # m.* slots, /dev menu). Business-logic mods + invariants run on
+                   # m.* slots). Business-logic mods + invariants run on
                    # the BUSINESS-LOGIC plane (Next API routes wrapped with
                    # @invariance/server withInvariance; appId "nebula"), demoed via
                    # the console/Guardrails. apps/demo (Streamline, Vite) is kept as
@@ -54,9 +54,10 @@ apps/control-plane  # authoring, verification, registry + lazy migration, analyt
 packages/server     # Express/Next middleware, QuickJS sandbox, runtime enforcement
 apps/console        # developer dashboard + the SINGLE invariants surface: manifest,
                    # mods + kill switches, analytics, Guardrails (test enforcement live),
-                   # and the Invariants view (#/invariants): read-only data-invariants
-                   # (manifest policies) + editable look-invariants (design-config).
-                   # Tailwind, /dev-style UI.
+                   # the Invariants view (#/invariants): read-only data-invariants
+                   # (manifest policies) + editable look-invariants (design-config),
+                   # and the Themes view (#/themes): theme version history + rollback.
+                   # Tailwind, fixed-neutral dark UI.
 ```
 
 ## Current state (2026-06-14)
@@ -76,17 +77,21 @@ moved into the control plane (`theme_versions` store + `GET/PUT /v1/apps/:appId/
 themes there and its `/dev` page is **deleted**. The look-invariant vocabulary is now
 manifest-driven via `AppManifest.designSurface` (the Console's per-app hardcode is gone).
 Verified live end-to-end (qwen-free pack path + manifest-driven controls + edit round-trip).
+Also shipped: a **one-command demo launcher** (`pnpm demo` / `pnpm demo:stop` → `scripts/demo.sh`,
+`docs/DEMO-RUNBOOK.md`) that starts the stack in order with health-gating; and a fix in
+`@invariance/server` runtime — registry GET fetches now set `cache:'no-store'` so a Next.js Data
+Cache can't serve a **stale per-process signing key** (which silently no-op'd all runtime hooks).
 
 **Remaining for demo-readiness (not built):** (1) reliable logic-hook authoring on weak models —
 qwen can mis-declare a hook's `writes` capability, which the static verifier passes but the
 runtime discards → silent no-op (the **theme** path is demo-reliable; in-app **logic** prompts
 are not — the demo drives business-logic invariants developer-side via the Console/Guardrails,
 not an in-app logic prompt); candidate fix: dry-run the hook to auto-derive/validate write caps.
-(2) one-command demo mode + scripted runbook. (3) console polish: surface `bundle.design`
-StyleSpec intent (`summarizeStyleSpec` still has zero consumers). (4) Nebula's home reads
-`titles.ts` statically rather than its governed API. (5) clean-checkout/hand-off fragility (cold
-start needs `pnpm -F @invariance/design build`; default model ids ≠ the pulled `qwen2.5:latest`;
-per-process signing keys) — only matters for hand-off; deprioritized (demo runs live on this machine).
+(2) console polish: surface `bundle.design` StyleSpec intent (`summarizeStyleSpec` still has zero
+consumers). (3) Nebula's home reads `titles.ts` statically rather than its governed API.
+(4) clean-checkout/hand-off fragility (cold start needs `pnpm -F @invariance/design build`;
+default model ids ≠ the pulled `qwen2.5:latest`; persist `INVARIANCE_SIGNING_*` keys for durable
+stores) — only matters for hand-off; deprioritized (demo runs live on this machine).
 
 Phases (exit criteria in `docs/DESIGN.md`): 1 foundations/schema ✅ · 2 Tier-0
 vertical slice ✅ · 3 authoring+verification v0 ✅ · 4 Tier-1 hooks/sandbox ✅ ·

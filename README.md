@@ -24,8 +24,9 @@ packages/client   Client SDK: mod loader, UI override engine, prompt widget, tel
 packages/server   Server SDK: Express/Next middleware, QuickJS-on-WASM sandbox,
                   runtime capability + policy enforcement
 packages/cli      `invariance` bin: init, manifest publish, local dev control plane
-apps/control-plane  Authoring (Claude w/ verifier in the loop), deterministic
-                  verification, registry + lazy migration, analytics
+apps/control-plane  Authoring (qwen2.5 via Ollama by default, Anthropic opt-in;
+                  verifier in the loop), deterministic verification, registry +
+                  lazy migration, analytics
 apps/console      Developer dashboard: manifest, mods w/ kill switches, analytics
 apps/demo         Netflix-style demo app, living integration test for every phase
 apps/nebula       Nebula — Next.js + Tailwind showcase demo; design-plane
@@ -34,6 +35,12 @@ apps/nebula       Nebula — Next.js + Tailwind showcase demo; design-plane
 ```
 
 ## Quick demo
+
+**Fastest path (Nebula showcase stack):** `pnpm demo` brings the whole stack up in
+the right order (control plane :4400 → seed → Nebula :4321 → Console :4600) and
+prints the URLs; `pnpm demo:stop` tears it down. See
+[docs/DEMO-RUNBOOK.md](docs/DEMO-RUNBOOK.md) for the scripted walkthrough. The rest
+of this section is the manual equivalent.
 
 ```sh
 pnpm install
@@ -61,14 +68,16 @@ pnpm -F @invariance/demo dev:web    # http://localhost:4501
 # 3. Developer console
 pnpm -F @invariance/console dev     # http://localhost:4600
 
-# Nebula showcase demo (Next.js + Tailwind) — design-plane customization + the
-# /dev menu, with its API governed by the platform's invariants:
+# Nebula showcase demo (Next.js + Tailwind) — design-plane customization, with
+# its API governed by the platform's invariants:
 pnpm -F @invariance/nebula seed      # publish the nebula manifest to the control plane
 pnpm -F @invariance/nebula dev       # http://localhost:4321  (needs Ollama for free-form prompts)
 ```
 
 The console (`pnpm -F @invariance/console dev`, :4600) now defaults to appId
-"nebula" and its Guardrails view tests Nebula's invariants live.
+"nebula": its Guardrails view tests Nebula's invariants live, the Themes view
+(`#/themes`) shows each user's theme version history with one-click rollback, and
+the Invariants view (`#/invariants`) edits the look-invariants from the manifest.
 
 Then click **✨ Customize** in the demo and type things like *"make the accent
 color teal"*, *"sort shows by rating"*, or *"always add shows to my list at top
