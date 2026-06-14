@@ -1,0 +1,444 @@
+{
+  "appId": "nebula",
+  "version": "1.0.0",
+  "designTokens": [
+    {
+      "name": "--inv-bg",
+      "kind": "color",
+      "value": "#0b0b0f",
+      "description": "Page background"
+    },
+    {
+      "name": "--inv-surface",
+      "kind": "color",
+      "value": "#16161d",
+      "description": "Cards and panels"
+    },
+    {
+      "name": "--inv-nav-bg",
+      "kind": "color",
+      "value": "#0b0b0fd9",
+      "description": "Top navigation background"
+    },
+    {
+      "name": "--inv-accent",
+      "kind": "color",
+      "value": "#e50914",
+      "description": "Primary accent (buttons, highlights)"
+    },
+    {
+      "name": "--inv-accent-2",
+      "kind": "color",
+      "value": "#8a5cff",
+      "description": "Secondary accent (progress, badges)"
+    },
+    {
+      "name": "--inv-text",
+      "kind": "color",
+      "value": "#f5f5f7",
+      "description": "Primary text"
+    },
+    {
+      "name": "--inv-text-muted",
+      "kind": "color",
+      "value": "#8c8c98",
+      "description": "Secondary text"
+    },
+    {
+      "name": "--inv-radius",
+      "kind": "radius",
+      "value": "8px",
+      "description": "Corner rounding"
+    },
+    {
+      "name": "--inv-row-gap",
+      "kind": "spacing",
+      "value": "44px",
+      "description": "Vertical gap between rows"
+    },
+    {
+      "name": "--inv-card-width",
+      "kind": "spacing",
+      "value": "200px",
+      "description": "Show card width"
+    },
+    {
+      "name": "--inv-surface-0",
+      "kind": "color",
+      "value": "#0b0b0d",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-surface-1",
+      "kind": "color",
+      "value": "#212125",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-surface-2",
+      "kind": "color",
+      "value": "#3c3d43",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-text-primary",
+      "kind": "color",
+      "value": "#f7f8ff",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-text-secondary",
+      "kind": "color",
+      "value": "#9597a5",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-text-disabled",
+      "kind": "color",
+      "value": "#757683",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-accent-hover",
+      "kind": "color",
+      "value": "#ff8289",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-accent-contrast",
+      "kind": "color",
+      "value": "#1f212b",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-accent-subtle",
+      "kind": "color",
+      "value": "#562d2e",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-border",
+      "kind": "color",
+      "value": "#757683",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-border-strong",
+      "kind": "color",
+      "value": "#b4b6c4",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-ring",
+      "kind": "color",
+      "value": "#cc2644",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-font-display",
+      "kind": "typography",
+      "value": "'Space Grotesk', system-ui, sans-serif",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-font-body",
+      "kind": "typography",
+      "value": "'Inter', system-ui, sans-serif",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-font-mono",
+      "kind": "typography",
+      "value": "'JetBrains Mono', ui-monospace, 'SF Mono', monospace",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-radius-base",
+      "kind": "radius",
+      "value": "4px",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-radius-lg",
+      "kind": "radius",
+      "value": "8px",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-shadow-1",
+      "kind": "shadow",
+      "value": "0 2px 8px rgb(0 0 0 / 0.24)",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-shadow-2",
+      "kind": "shadow",
+      "value": "0 12px 32px rgb(0 0 0 / 0.35)",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-density-unit",
+      "kind": "spacing",
+      "value": "4px",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-border-width",
+      "kind": "color",
+      "value": "2px",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-display-transform",
+      "kind": "other",
+      "value": "none",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-display-tracking",
+      "kind": "other",
+      "value": "0",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-display-weight",
+      "kind": "other",
+      "value": "600",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-space-2xs",
+      "kind": "spacing",
+      "value": "3px",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-space-xs",
+      "kind": "spacing",
+      "value": "6px",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-space-sm",
+      "kind": "spacing",
+      "value": "12px",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-space-md",
+      "kind": "spacing",
+      "value": "18px",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-space-lg",
+      "kind": "spacing",
+      "value": "28px",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-space-xl",
+      "kind": "spacing",
+      "value": "44px",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-space-2xl",
+      "kind": "spacing",
+      "value": "64px",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-sidebar-w",
+      "kind": "spacing",
+      "value": "230px",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-card-w",
+      "kind": "spacing",
+      "value": "168px",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-card-w-wide",
+      "kind": "spacing",
+      "value": "320px",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-card-aspect",
+      "kind": "spacing",
+      "value": "2 / 3",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-hero-min-h",
+      "kind": "spacing",
+      "value": "420px",
+      "description": "invariance role token (compiler-managed)"
+    },
+    {
+      "name": "--inv-section-gap",
+      "kind": "spacing",
+      "value": "44px",
+      "description": "invariance role token (compiler-managed)"
+    }
+  ],
+  "components": [
+    {
+      "id": "nav",
+      "name": "Top navigation",
+      "slots": [
+        {
+          "name": "extra",
+          "overridable": true,
+          "description": "Free area right of the nav links"
+        }
+      ]
+    },
+    {
+      "id": "billboard",
+      "name": "Featured billboard",
+      "slots": [
+        {
+          "name": "tagline",
+          "overridable": true,
+          "description": "Promo line above the title"
+        },
+        {
+          "name": "meta",
+          "overridable": false,
+          "description": "Year / maturity / duration line (locked)"
+        }
+      ]
+    },
+    {
+      "id": "row",
+      "name": "Carousel row",
+      "slots": [
+        {
+          "name": "heading-extra",
+          "overridable": true,
+          "description": "Inline area right of a row heading"
+        }
+      ]
+    },
+    {
+      "id": "show-card",
+      "name": "Show card",
+      "slots": [
+        {
+          "name": "badge",
+          "overridable": true,
+          "description": "Badge area on the poster"
+        }
+      ]
+    },
+    {
+      "id": "footer",
+      "name": "Footer",
+      "slots": [
+        {
+          "name": "message",
+          "overridable": true,
+          "description": "Footer message line"
+        }
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "list-shows",
+      "method": "GET",
+      "path": "/api/shows",
+      "description": "Full catalog; the client groups rows by genre"
+    },
+    {
+      "id": "featured",
+      "method": "GET",
+      "path": "/api/featured",
+      "description": "Billboard show"
+    },
+    {
+      "id": "continue-watching",
+      "method": "GET",
+      "path": "/api/continue",
+      "description": "In-progress shows with percent watched"
+    },
+    {
+      "id": "list-watchlist",
+      "method": "GET",
+      "path": "/api/watchlist",
+      "description": "The user's list"
+    },
+    {
+      "id": "add-watchlist",
+      "method": "POST",
+      "path": "/api/watchlist",
+      "description": "Add a show to the list"
+    },
+    {
+      "id": "remove-watchlist",
+      "method": "DELETE",
+      "path": "/api/watchlist/:id",
+      "description": "Remove from the list"
+    }
+  ],
+  "policies": [
+    {
+      "type": "endpoint-deny",
+      "id": "no-hooking-deletes",
+      "description": "Mods may never intercept list deletion",
+      "endpointId": "remove-watchlist"
+    },
+    {
+      "type": "field-constraint",
+      "id": "titles-immutable",
+      "description": "Show titles are canonical and may not be rewritten",
+      "endpointId": "list-shows",
+      "fieldPath": "shows.*.title",
+      "constraint": {
+        "immutable": true
+      }
+    },
+    {
+      "type": "field-constraint",
+      "id": "maturity-immutable",
+      "description": "Maturity ratings are a compliance surface: no mod may alter or hide them",
+      "endpointId": "list-shows",
+      "fieldPath": "shows.*.maturity",
+      "constraint": {
+        "immutable": true
+      }
+    },
+    {
+      "type": "field-constraint",
+      "id": "featured-title-immutable",
+      "description": "The billboard show's title is canonical",
+      "endpointId": "featured",
+      "fieldPath": "show.title",
+      "constraint": {
+        "immutable": true
+      }
+    },
+    {
+      "type": "field-constraint",
+      "id": "priority-range",
+      "description": "Watchlist priority stays within 1-5",
+      "endpointId": "add-watchlist",
+      "fieldPath": "priority",
+      "constraint": {
+        "min": 1,
+        "max": 5
+      }
+    },
+    {
+      "type": "budget-limit",
+      "id": "hook-budgets",
+      "maxCpuMsPerHook": 100,
+      "maxMemMbPerHook": 64
+    }
+  ],
+  "createdAt": "2026-06-10T00:00:00.000Z"
+}
