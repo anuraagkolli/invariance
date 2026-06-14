@@ -13,6 +13,26 @@ import { eventToHuman, GUARDRAIL_TESTS, type GuardrailTest } from "./guardrails"
 const DEFAULT_APP = "nebula";
 const HELP_DISMISSED_KEY = "invariance-console:help-dismissed";
 
+/* ------------------------------------------------------------------ */
+/* Shared style tokens (the /dev design language)                       */
+/* ------------------------------------------------------------------ */
+
+const CARD = "rounded-xl bg-white/[0.04] p-5 ring-1 ring-white/10";
+const BTN_PRIMARY =
+  "rounded-md bg-emerald-500/90 px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-emerald-400 disabled:opacity-40";
+const BTN_SECONDARY =
+  "rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white";
+const BTN_DANGER =
+  "rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300 transition-colors hover:bg-red-500/20";
+const BTN_LINK =
+  "text-xs font-medium text-emerald-300 underline-offset-2 transition-colors hover:text-emerald-200 hover:underline";
+const INPUT = "rounded-md border border-white/15 bg-surface px-2 py-1 text-xs text-white placeholder:text-white/30 focus:border-emerald-400/50 focus:outline-none";
+const H2 = "text-sm font-semibold text-white";
+const SUBHEAD = "text-xs font-medium uppercase tracking-wide text-white/40";
+const HINT = "text-sm text-white/60";
+const CODE = "rounded bg-white/10 px-1.5 py-0.5 font-mono text-[12px] text-white/90";
+const ERROR = "rounded-xl bg-red-500/10 p-4 text-sm text-red-300 ring-1 ring-red-500/30";
+
 const STATUS_HELP: Record<string, string> = {
   active: "Live: this user sees the customization right now.",
   stale: "Your app shipped an update; this mod is re-checked on the user's next visit.",
@@ -26,9 +46,22 @@ function statusLabel(status: string): string {
   return status === "degraded" ? "paused" : status === "disabled" ? "killed" : status;
 }
 
+const STATUS_TINT: Record<string, string> = {
+  active: "text-emerald-300 ring-emerald-500/30 bg-emerald-500/10",
+  stale: "text-amber-300 ring-amber-500/30 bg-amber-500/10",
+  degraded: "text-red-300 ring-red-500/30 bg-red-500/10",
+  disabled: "text-white/40 ring-white/10 bg-white/[0.03]",
+  superseded: "text-white/40 ring-white/10 bg-white/[0.03]",
+  none: "text-white/40 ring-white/10 bg-white/[0.03]",
+};
+
 function StatusChip({ status }: { status: string }) {
+  const tint = STATUS_TINT[status] ?? "text-white/50 ring-white/10 bg-white/[0.03]";
   return (
-    <span className={`status status-${status}`} title={STATUS_HELP[status]}>
+    <span
+      className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs ring-1 ${tint}`}
+      title={STATUS_HELP[status]}
+    >
       {statusLabel(status)}
     </span>
   );
@@ -65,40 +98,64 @@ export default function App() {
     window.location.hash = "";
   };
 
-  return (
-    <div className="console">
-      <header>
-        <h1>
-          <span className="logo">◆</span>{" "}
-          <button className="title-link" onClick={closeSubject}>
-            Invariance Console
-          </button>
-          {subject && (
-            <span className="crumb">
-              {" "}
-              / <span className="muted">user</span> {subject}
-            </span>
-          )}
-          {guardrails && <span className="crumb"> / Guardrails</span>}
-        </h1>
-        <div className="header-right">
-          <a className="nav-link" href="#/guardrails">
-            Guardrails
-          </a>
-          <label>
-            App{" "}
-            <input value={appId} onChange={(e) => setAppId(e.target.value)} spellCheck={false} />
-          </label>
-        </div>
-      </header>
+  const onDashboard = !subject && !guardrails;
 
-      {guardrails ? (
-        <GuardrailsView appId={appId} />
-      ) : subject ? (
-        <SubjectView appId={appId} subjectId={subject} onBack={closeSubject} />
-      ) : (
-        <Dashboard appId={appId} onOpenSubject={openSubject} />
-      )}
+  return (
+    <div className="min-h-screen bg-ink px-6 py-10 text-white sm:px-10">
+      <div className="mx-auto flex max-w-6xl flex-col gap-8">
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="font-mono text-xs uppercase tracking-[0.34em] text-white/50">
+              Invariance · Console
+            </p>
+            <h1 className="mt-2 font-display text-2xl font-bold tracking-tight sm:text-3xl">
+              <button
+                className="transition-colors hover:text-white/80"
+                onClick={closeSubject}
+              >
+                Invariance Console
+              </button>
+            </h1>
+            {subject && (
+              <p className="mt-1 font-mono text-xs text-white/50">
+                user · <span className="text-white/70">{subject}</span>
+              </p>
+            )}
+            {guardrails && <p className="mt-1 font-mono text-xs text-white/50">guardrails</p>}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              className={`${BTN_SECONDARY} ${onDashboard ? "text-white" : ""}`}
+              href="#"
+            >
+              Dashboard
+            </a>
+            <a
+              className={`${BTN_SECONDARY} ${guardrails ? "text-white" : ""}`}
+              href="#/guardrails"
+            >
+              Guardrails
+            </a>
+            <label className="flex items-center gap-2 text-xs text-white/50">
+              App
+              <input
+                className={INPUT}
+                value={appId}
+                onChange={(e) => setAppId(e.target.value)}
+                spellCheck={false}
+              />
+            </label>
+          </div>
+        </header>
+
+        {guardrails ? (
+          <GuardrailsView appId={appId} />
+        ) : subject ? (
+          <SubjectView appId={appId} subjectId={subject} onBack={closeSubject} />
+        ) : (
+          <Dashboard appId={appId} onOpenSubject={openSubject} />
+        )}
+      </div>
     </div>
   );
 }
@@ -140,32 +197,34 @@ function Dashboard({ appId, onOpenSubject }: { appId: string; onOpenSubject: (s:
   };
 
   return (
-    <>
-      <div className="toolbar">
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <HelpBanner />
-        <span>
-          <button onClick={() => void refresh()}>Refresh</button>{" "}
-          {loadedAt && <span className="muted">updated {loadedAt}</span>}
+        <span className="flex items-center gap-3">
+          <button className={BTN_SECONDARY} onClick={() => void refresh()}>
+            Refresh
+          </button>
+          {loadedAt && <span className="text-xs text-white/40">updated {loadedAt}</span>}
         </span>
       </div>
 
-      {error && <div className="error">{error}</div>}
+      {error && <div className={ERROR}>{error}</div>}
 
-      <main>
-        <section className="panel">
-          <h2>At a glance</h2>
+      <div className="grid items-start gap-6 lg:grid-cols-[360px_1fr]">
+        <section className={`${CARD} lg:row-span-2`}>
+          <h2 className={H2}>At a glance</h2>
           {summary ? (
             <SummaryPanel summary={summary} onFilter={setModsQuery} />
           ) : (
-            <p className="muted">No data yet.</p>
+            <p className={`mt-3 ${HINT}`}>No data yet.</p>
           )}
         </section>
 
-        <section className="panel wide">
-          <h2>
-            Your users&rsquo; customizations <span className="muted">({mods.length})</span>
+        <section className={CARD}>
+          <h2 className={H2}>
+            Your users&rsquo; customizations <span className="text-white/40">({mods.length})</span>
           </h2>
-          <p className="hint">
+          <p className={`mt-1 ${HINT}`}>
             Every change a user has made, newest first. Click a user for the full story, or kill
             anything that shouldn&rsquo;t be live — it takes effect within seconds.
           </p>
@@ -178,28 +237,28 @@ function Dashboard({ appId, onOpenSubject }: { appId: string; onOpenSubject: (s:
           />
         </section>
 
-        <section className="panel wide">
-          <h2>
+        <section className={CARD}>
+          <h2 className={H2}>
             What users are allowed to touch{" "}
             {manifest && (
-              <span className="muted">
+              <span className="text-white/40">
                 (manifest v{manifest.version} · {manifest.appId})
               </span>
             )}
           </h2>
-          <p className="hint">
-            Published from your codebase with <code>invariance manifest publish</code>. Users can
-            only customize what is declared here — anything else is rejected before it is ever
-            signed.
+          <p className={`mt-1 ${HINT}`}>
+            Published from your codebase with <code className={CODE}>invariance manifest publish</code>.
+            Users can only customize what is declared here — anything else is rejected before it is
+            ever signed.
           </p>
           {manifest ? (
             <ManifestPanel manifest={manifest} />
           ) : (
-            <p className="muted">No manifest published for this app yet.</p>
+            <p className={`mt-3 ${HINT}`}>No manifest published for this app yet.</p>
           )}
         </section>
-      </main>
-    </>
+      </div>
+    </div>
   );
 }
 
@@ -209,7 +268,7 @@ function HelpBanner() {
   if (!open) {
     return (
       <button
-        className="link"
+        className={BTN_LINK}
         onClick={() => {
           localStorage.setItem(HELP_DISMISSED_KEY, "open");
           setOpen(true);
@@ -220,11 +279,11 @@ function HelpBanner() {
     );
   }
   return (
-    <div className="help">
-      <div className="help-head">
-        <strong>How Invariance works</strong>
+    <div className={`max-w-3xl ${CARD}`}>
+      <div className="flex items-center justify-between">
+        <strong className="text-sm font-semibold text-white">How Invariance works</strong>
         <button
-          className="link"
+          className={BTN_LINK}
           onClick={() => {
             localStorage.setItem(HELP_DISMISSED_KEY, "1");
             setOpen(false);
@@ -233,25 +292,28 @@ function HelpBanner() {
           Dismiss
         </button>
       </div>
-      <p>
+      <p className={`mt-3 ${HINT}`}>
         Your users describe changes to your app in plain language — &ldquo;make the accent color
-        teal&rdquo;, &ldquo;sort shows by rating&rdquo;. Each request becomes a <strong>mod</strong>:
-        a small, signed package of changes that only applies for that user.
+        teal&rdquo;, &ldquo;sort shows by rating&rdquo;. Each request becomes a{" "}
+        <strong className="font-semibold text-white/80">mod</strong>: a small, signed package of
+        changes that only applies for that user.
       </p>
-      <ol>
+      <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-white/60">
         <li>
-          <strong>You stay in control.</strong> Mods can only touch what you declare below — your
-          chosen style properties, UI areas, and API endpoints — and must pass your{" "}
-          <strong>guardrails</strong> (e.g. &ldquo;prices can never be rewritten&rdquo;) before they
-          are signed. There is no way around the check: unsigned mods never run.
+          <strong className="font-semibold text-white/80">You stay in control.</strong> Mods can only
+          touch what you declare below — your chosen style properties, UI areas, and API endpoints —
+          and must pass your <strong className="font-semibold text-white/80">guardrails</strong> (e.g.
+          &ldquo;prices can never be rewritten&rdquo;) before they are signed. There is no way around
+          the check: unsigned mods never run.
         </li>
         <li>
-          <strong>Nothing breaks.</strong> Mods run sandboxed with strict budgets, and any failure
-          falls back to your base app. When you ship an update, incompatible mods pause themselves.
+          <strong className="font-semibold text-white/80">Nothing breaks.</strong> Mods run sandboxed
+          with strict budgets, and any failure falls back to your base app. When you ship an update,
+          incompatible mods pause themselves.
         </li>
         <li>
-          <strong>You see everything.</strong> This console shows what users are changing, and every
-          mod has a kill switch.
+          <strong className="font-semibold text-white/80">You see everything.</strong> This console
+          shows what users are changing, and every mod has a kill switch.
         </li>
       </ol>
     </div>
@@ -266,8 +328,8 @@ function SummaryPanel({
   onFilter: (query: string) => void;
 }) {
   return (
-    <div className="summary">
-      <div className="stat-row">
+    <div className="mt-4 flex flex-col gap-5">
+      <div className="grid grid-cols-2 gap-3">
         <Stat label="customizations" value={summary.mods.total} />
         <Stat label="live now" value={summary.mods.byStatus["active"] ?? 0} />
         <Stat
@@ -279,40 +341,65 @@ function SummaryPanel({
         <Stat label="events" value={summary.events.total} />
       </div>
 
-      <h3 title="Telemetry from the SDKs: applications, rejections, enforcement actions.">
-        Activity
-      </h3>
-      <Ranked rows={Object.entries(summary.events.byType).map(([name, count]) => ({ name, count }))} />
+      <div className="flex flex-col gap-2">
+        <h3
+          className={SUBHEAD}
+          title="Telemetry from the SDKs: applications, rejections, enforcement actions."
+        >
+          Activity
+        </h3>
+        <Ranked rows={Object.entries(summary.events.byType).map(([name, count]) => ({ name, count }))} />
+      </div>
 
-      <h3 title="Design tokens: the named style properties (colors, spacing, type) users may restyle. Click to filter the mods table.">
-        Most-restyled properties
-      </h3>
-      <Ranked rows={summary.topTokens} empty="No restyles yet." onSelect={onFilter} />
+      <div className="flex flex-col gap-2">
+        <h3
+          className={SUBHEAD}
+          title="Design tokens: the named style properties (colors, spacing, type) users may restyle. Click to filter the mods table."
+        >
+          Most-restyled properties
+        </h3>
+        <Ranked rows={summary.topTokens} empty="No restyles yet." onSelect={onFilter} />
+      </div>
 
-      <h3 title="API endpoints users have attached behavior-changing hooks to. Click to filter the mods table.">
-        Most-rewired endpoints
-      </h3>
-      <Ranked rows={summary.topEndpoints} empty="No behavior changes yet." onSelect={onFilter} />
+      <div className="flex flex-col gap-2">
+        <h3
+          className={SUBHEAD}
+          title="API endpoints users have attached behavior-changing hooks to. Click to filter the mods table."
+        >
+          Most-rewired endpoints
+        </h3>
+        <Ranked rows={summary.topEndpoints} empty="No behavior changes yet." onSelect={onFilter} />
+      </div>
 
-      <h3 title="UI slots users have replaced with their own content. Click to filter the mods table.">
-        Most-edited UI areas
-      </h3>
-      <Ranked rows={summary.topComponents} empty="No UI edits yet." onSelect={onFilter} />
+      <div className="flex flex-col gap-2">
+        <h3
+          className={SUBHEAD}
+          title="UI slots users have replaced with their own content. Click to filter the mods table."
+        >
+          Most-edited UI areas
+        </h3>
+        <Ranked rows={summary.topComponents} empty="No UI edits yet." onSelect={onFilter} />
+      </div>
 
-      <h3 title="The most recent plain-language requests, straight from your users.">
-        What users are asking for
-      </h3>
-      {summary.recentPrompts.length === 0 ? (
-        <p className="muted">None yet.</p>
-      ) : (
-        <ul className="prompts">
-          {summary.recentPrompts.slice(0, 8).map((p, i) => (
-            <li key={i}>
-              <span className="muted">{p.subjectId}:</span> “{p.prompt}”
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="flex flex-col gap-2">
+        <h3
+          className={SUBHEAD}
+          title="The most recent plain-language requests, straight from your users."
+        >
+          What users are asking for
+        </h3>
+        {summary.recentPrompts.length === 0 ? (
+          <p className="text-sm text-white/50">None yet.</p>
+        ) : (
+          <ul className="flex flex-col gap-1.5 text-sm text-white/70">
+            {summary.recentPrompts.slice(0, 8).map((p, i) => (
+              <li key={i}>
+                <span className="text-white/40">{p.subjectId}:</span> “{p.prompt}”
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
@@ -329,9 +416,18 @@ function Stat({
   help?: string;
 }) {
   return (
-    <div className={`stat${accent ? " accent" : ""}`} title={help}>
-      <div className="stat-value">{value}</div>
-      <div className="stat-label">{label}</div>
+    <div
+      className={`rounded-lg p-3 ring-1 ${
+        accent
+          ? "bg-amber-500/10 ring-amber-500/30"
+          : "bg-white/[0.04] ring-white/10"
+      }`}
+      title={help}
+    >
+      <div className={`text-2xl font-semibold tracking-tight ${accent ? "text-amber-200" : "text-white"}`}>
+        {value}
+      </div>
+      <div className="mt-0.5 text-xs text-white/50">{label}</div>
     </div>
   );
 }
@@ -345,23 +441,32 @@ function Ranked({
   empty?: string;
   onSelect?: (name: string) => void;
 }) {
-  if (rows.length === 0) return <p className="muted">{empty}</p>;
+  if (rows.length === 0) return <p className="text-sm text-white/50">{empty}</p>;
   const max = Math.max(...rows.map((r) => r.count));
   return (
-    <table className="ranked">
+    <table className="w-full border-collapse">
       <tbody>
         {rows.slice(0, 6).map((row) => (
           <tr
             key={row.name}
-            className={onSelect ? "clickable" : ""}
+            className={onSelect ? "group cursor-pointer" : ""}
             title={onSelect ? `Show mods touching ${row.name}` : undefined}
             onClick={onSelect ? () => onSelect(row.name) : undefined}
           >
-            <td className="ranked-name">{row.name}</td>
-            <td className="ranked-bar">
-              <div className="bar" style={{ width: `${(row.count / max) * 100}%` }} />
+            <td
+              className={`max-w-[150px] truncate whitespace-nowrap py-1 pr-2 font-mono text-xs ${
+                onSelect ? "text-white/70 group-hover:text-emerald-300" : "text-white/70"
+              }`}
+            >
+              {row.name}
             </td>
-            <td className="ranked-count">{row.count}</td>
+            <td className="w-full py-1">
+              <div
+                className="h-1.5 min-w-[2px] rounded bg-emerald-500/40"
+                style={{ width: `${(row.count / max) * 100}%` }}
+              />
+            </td>
+            <td className="py-1 pl-2 text-right text-xs text-white/40">{row.count}</td>
           </tr>
         ))}
       </tbody>
@@ -409,7 +514,7 @@ function ModsTable({
 
   if (mods.length === 0) {
     return (
-      <p className="muted">
+      <p className={`mt-4 ${HINT}`}>
         No customizations yet. They will appear here the moment a user submits one.
       </p>
     );
@@ -418,10 +523,10 @@ function ModsTable({
   const visible = showAll ? filtered : filtered.slice(0, MODS_PAGE);
 
   return (
-    <>
-      <div className="table-tools">
+    <div className="mt-4 flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-4">
         <input
-          className="search"
+          className={`w-full max-w-sm ${INPUT}`}
           placeholder="Search by user, request, status, or what it touches…"
           value={query}
           onChange={(e) => {
@@ -429,85 +534,120 @@ function ModsTable({
             setShowAll(false);
           }}
         />
-        <label className="muted checkbox">
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-white/50">
           <input
             type="checkbox"
+            className="accent-emerald-400"
             checked={showHistory}
             onChange={(e) => setShowHistory(e.target.checked)}
-          />{" "}
+          />
           include replaced revisions
         </label>
       </div>
-      <table className="mods">
-        <thead>
-          <tr>
-            <th>user</th>
-            <th title="Each new request replaces the previous revision of that user's mod.">rev</th>
-            <th>status</th>
-            <th title="Which surfaces this mod touches: style properties, CSS rules, UI areas, API hooks.">
-              what it changes
-            </th>
-            <th title="The app version this mod was verified against.">app version</th>
-            <th>user&rsquo;s request</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {visible.map((mod) => (
-            <tr key={mod.modId} className={mod.status === "superseded" ? "dim" : ""}>
-              <td>
-                <button
-                  className="link"
-                  title="Open this user's full history"
-                  onClick={() => onOpenSubject(mod.subjectId)}
-                >
-                  {mod.subjectId}
-                </button>
-              </td>
-              <td>{mod.revision}</td>
-              <td>
-                <StatusChip status={mod.status} />
-                {mod.status === "degraded" && mod.reasons.length > 0 && (
-                  <div className="reasons">{mod.reasons.join("; ")}</div>
-                )}
-              </td>
-              <td>{mod.classification ? surfacesLabel(mod.classification.surfaces) : "—"}</td>
-              <td>v{mod.boundManifestVersion}</td>
-              <td className="prompt-cell">
-                {mod.prompts.at(-1) ?? <span className="muted">published by a developer</span>}
-              </td>
-              <td>
-                {(mod.status === "active" || mod.status === "stale" || mod.status === "degraded") && (
-                  <button
-                    className="danger"
-                    title="Disable this mod. The user falls back to the base app within seconds."
-                    onClick={() => void onAct("kill", mod.modId)}
-                  >
-                    Kill
-                  </button>
-                )}
-                {mod.status === "disabled" && (
-                  <button onClick={() => void onAct("restore", mod.modId)}>Restore</button>
-                )}
-              </td>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr>
+              <th className="border-b border-white/10 px-3 py-2 text-left text-[11px] uppercase tracking-wide text-white/40">
+                user
+              </th>
+              <th
+                className="border-b border-white/10 px-3 py-2 text-left text-[11px] uppercase tracking-wide text-white/40"
+                title="Each new request replaces the previous revision of that user's mod."
+              >
+                rev
+              </th>
+              <th className="border-b border-white/10 px-3 py-2 text-left text-[11px] uppercase tracking-wide text-white/40">
+                status
+              </th>
+              <th
+                className="border-b border-white/10 px-3 py-2 text-left text-[11px] uppercase tracking-wide text-white/40"
+                title="Which surfaces this mod touches: style properties, CSS rules, UI areas, API hooks."
+              >
+                what it changes
+              </th>
+              <th
+                className="border-b border-white/10 px-3 py-2 text-left text-[11px] uppercase tracking-wide text-white/40"
+                title="The app version this mod was verified against."
+              >
+                app version
+              </th>
+              <th className="border-b border-white/10 px-3 py-2 text-left text-[11px] uppercase tracking-wide text-white/40">
+                user&rsquo;s request
+              </th>
+              <th className="border-b border-white/10 px-3 py-2" />
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {visible.map((mod) => (
+              <tr
+                key={mod.modId}
+                className={`transition-colors hover:bg-white/[0.02] ${
+                  mod.status === "superseded" ? "opacity-45" : ""
+                }`}
+              >
+                <td className="border-b border-white/5 px-3 py-3 align-top">
+                  <button
+                    className={BTN_LINK}
+                    title="Open this user's full history"
+                    onClick={() => onOpenSubject(mod.subjectId)}
+                  >
+                    {mod.subjectId}
+                  </button>
+                </td>
+                <td className="border-b border-white/5 px-3 py-3 align-top text-sm text-white/70">
+                  {mod.revision}
+                </td>
+                <td className="border-b border-white/5 px-3 py-3 align-top">
+                  <StatusChip status={mod.status} />
+                  {mod.status === "degraded" && mod.reasons.length > 0 && (
+                    <div className="mt-1 text-xs text-red-300">{mod.reasons.join("; ")}</div>
+                  )}
+                </td>
+                <td className="border-b border-white/5 px-3 py-3 align-top text-sm text-white/70">
+                  {mod.classification ? surfacesLabel(mod.classification.surfaces) : "—"}
+                </td>
+                <td className="border-b border-white/5 px-3 py-3 align-top text-sm text-white/70">
+                  v{mod.boundManifestVersion}
+                </td>
+                <td className="max-w-[260px] border-b border-white/5 px-3 py-3 align-top text-sm text-white/70">
+                  {mod.prompts.at(-1) ?? <span className="text-white/40">published by a developer</span>}
+                </td>
+                <td className="border-b border-white/5 px-3 py-3 align-top">
+                  {(mod.status === "active" || mod.status === "stale" || mod.status === "degraded") && (
+                    <button
+                      className={BTN_DANGER}
+                      title="Disable this mod. The user falls back to the base app within seconds."
+                      onClick={() => void onAct("kill", mod.modId)}
+                    >
+                      Kill
+                    </button>
+                  )}
+                  {mod.status === "disabled" && (
+                    <button className={BTN_SECONDARY} onClick={() => void onAct("restore", mod.modId)}>
+                      Restore
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {filtered.length > visible.length && (
-        <button className="link" onClick={() => setShowAll(true)}>
+        <button className={BTN_LINK} onClick={() => setShowAll(true)}>
           Show all {filtered.length}
         </button>
       )}
       {filtered.length === 0 && (
-        <p className="muted">
+        <p className="text-sm text-white/50">
           No mods match “{query}”.{" "}
-          <button className="link" onClick={() => onQuery("")}>
+          <button className={BTN_LINK} onClick={() => onQuery("")}>
             Clear
           </button>
         </p>
       )}
-    </>
+    </div>
   );
 }
 
@@ -556,99 +696,113 @@ function SubjectView({
     await refresh();
   };
 
-  if (error) return <div className="error">{error}</div>;
-  if (!overview) return <p className="muted">Loading…</p>;
+  if (error) return <div className={ERROR}>{error}</div>;
+  if (!overview) return <p className="text-sm text-white/50">Loading…</p>;
 
   const current = overview.mods.find((m) => m.status !== "superseded");
 
   return (
-    <>
-      <div className="toolbar">
-        <button className="link" onClick={onBack}>
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between gap-4">
+        <button className={BTN_SECONDARY} onClick={onBack}>
           ← All users
         </button>
-        <span>
-          <StatusChip status={overview.pointer.status} />
-        </span>
+        <StatusChip status={overview.pointer.status} />
       </div>
 
-      <main>
-        <section className="panel wide">
-          <h2>Current customization</h2>
+      <div className="grid items-start gap-6 lg:grid-cols-[1fr_360px]">
+        <section className={CARD}>
+          <h2 className={H2}>Current customization</h2>
           {current ? (
             <>
-              <p className="hint">
+              <p className={`mt-1 ${HINT}`}>
                 Revision {current.revision}, verified against app v{current.boundManifestVersion}.
                 {current.status === "degraded" && current.reasons.length > 0 && (
-                  <span className="reasons"> Paused: {current.reasons.join("; ")}</span>
+                  <span className="text-red-300"> Paused: {current.reasons.join("; ")}</span>
                 )}
               </p>
               {current.contents ? (
                 <ModContentsView contents={current.contents} />
               ) : (
-                <p className="muted">Contents unavailable.</p>
+                <p className={`mt-3 ${HINT}`}>Contents unavailable.</p>
               )}
-              <div className="actions">
+              <div className="mt-4">
                 {(current.status === "active" ||
                   current.status === "stale" ||
                   current.status === "degraded") && (
-                  <button className="danger" onClick={() => void act("kill", current.modId)}>
+                  <button className={BTN_DANGER} onClick={() => void act("kill", current.modId)}>
                     Kill this user&rsquo;s customization
                   </button>
                 )}
                 {current.status === "disabled" && (
-                  <button onClick={() => void act("restore", current.modId)}>Restore</button>
+                  <button className={BTN_SECONDARY} onClick={() => void act("restore", current.modId)}>
+                    Restore
+                  </button>
                 )}
               </div>
             </>
           ) : (
-            <p className="muted">This user has no customizations.</p>
+            <p className={`mt-3 ${HINT}`}>This user has no customizations.</p>
           )}
         </section>
 
-        <section className="panel">
-          <h2>History</h2>
-          <p className="hint">Each request replaces the previous revision.</p>
+        <section className={CARD}>
+          <h2 className={H2}>History</h2>
+          <p className={`mt-1 ${HINT}`}>Each request replaces the previous revision.</p>
           {overview.mods.length === 0 ? (
-            <p className="muted">Nothing yet.</p>
+            <p className={`mt-3 ${HINT}`}>Nothing yet.</p>
           ) : (
-            <ol className="timeline">
-              {overview.mods.map((mod) => (
-                <li key={mod.modId} className={mod.status === "superseded" ? "dim" : ""}>
-                  <div>
-                    <strong>rev {mod.revision}</strong> <StatusChip status={mod.status} />{" "}
-                    <span className="muted">{new Date(mod.createdAt).toLocaleString()}</span>
+            <ol className="mt-3 flex flex-col gap-3">
+              {overview.mods.map((mod, i) => (
+                <li
+                  key={mod.modId}
+                  className={`border-l-2 pl-3 ${
+                    i === 0 ? "border-emerald-500/60" : "border-white/10"
+                  } ${mod.status === "superseded" ? "opacity-45" : ""}`}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <strong className="text-sm font-semibold text-white">rev {mod.revision}</strong>
+                    <StatusChip status={mod.status} />
+                    <span className="text-xs text-white/40">
+                      {new Date(mod.createdAt).toLocaleString()}
+                    </span>
                   </div>
-                  <div className="timeline-prompt">
+                  <div className="mt-1 text-sm text-white/70">
                     {mod.prompts.at(-1) ? `“${mod.prompts.at(-1)}”` : "published by a developer"}
                   </div>
                   {mod.classification && (
-                    <div className="muted">{surfacesLabel(mod.classification.surfaces)}</div>
+                    <div className="mt-0.5 text-xs text-white/40">
+                      {surfacesLabel(mod.classification.surfaces)}
+                    </div>
                   )}
                 </li>
               ))}
             </ol>
           )}
 
-          <h2 className="spaced">Recent activity</h2>
+          <h2 className={`mt-6 ${H2}`}>Recent activity</h2>
           {overview.events.length === 0 ? (
-            <p className="muted">No telemetry from this user yet.</p>
+            <p className={`mt-3 ${HINT}`}>No telemetry from this user yet.</p>
           ) : (
-            <ul className="events">
+            <ul className="mt-3 flex flex-col gap-1.5">
               {overview.events.slice(0, 12).map((e, i) => (
-                <li key={i}>
-                  <code>{e.type}</code>{" "}
-                  <span className="muted">{new Date(e.at).toLocaleTimeString()}</span>
+                <li key={i} className="text-sm text-white/70">
+                  <code className={CODE}>{e.type}</code>{" "}
+                  <span className="text-xs text-white/40">
+                    {new Date(e.at).toLocaleTimeString()}
+                  </span>
                   {Array.isArray(e.detail?.violations) && (
-                    <div className="reasons">{(e.detail.violations as string[]).join("; ")}</div>
+                    <div className="mt-1 text-xs text-red-300">
+                      {(e.detail.violations as string[]).join("; ")}
+                    </div>
                   )}
                 </li>
               ))}
             </ul>
           )}
         </section>
-      </main>
-    </>
+      </div>
+    </div>
   );
 }
 
@@ -658,27 +812,31 @@ function ModContentsView({ contents }: { contents: ModContents }) {
   const slots = contents.uiOps.filter((op): op is Extract<UiOp, { type: "slot-override" }> => op.type === "slot-override");
 
   return (
-    <div className="contents">
+    <div className="mt-4 grid gap-6 sm:grid-cols-2">
       {tokens.length > 0 && (
-        <div>
-          <h3>Restyled properties</h3>
-          <ul>
+        <div className="flex flex-col gap-2">
+          <h3 className={SUBHEAD}>Restyled properties</h3>
+          <ul className="flex flex-col gap-1.5 text-sm text-white/70">
             {tokens.map((op) => (
-              <li key={op.token}>
-                <code>{op.token}</code> → <span className="swatch" style={{ background: op.value }} />
-                <code>{op.value}</code>
+              <li key={op.token} className="flex items-center gap-1.5">
+                <code className={CODE}>{op.token}</code> →
+                <span
+                  className="inline-block h-3 w-3 rounded-sm ring-1 ring-white/15"
+                  style={{ background: op.value }}
+                />
+                <code className={CODE}>{op.value}</code>
               </li>
             ))}
           </ul>
         </div>
       )}
       {styles.length > 0 && (
-        <div>
-          <h3>Custom CSS rules</h3>
-          <ul>
+        <div className="flex flex-col gap-2">
+          <h3 className={SUBHEAD}>Custom CSS rules</h3>
+          <ul className="flex flex-col gap-1.5 text-sm text-white/70">
             {styles.map((op, i) => (
               <li key={i}>
-                <code>
+                <code className={CODE}>
                   {op.selector} {"{ "}
                   {Object.entries(op.declarations)
                     .map(([k, v]) => `${k}: ${v}`)
@@ -691,24 +849,24 @@ function ModContentsView({ contents }: { contents: ModContents }) {
         </div>
       )}
       {slots.length > 0 && (
-        <div>
-          <h3>Replaced UI areas</h3>
-          <ul>
+        <div className="flex flex-col gap-2">
+          <h3 className={SUBHEAD}>Replaced UI areas</h3>
+          <ul className="flex flex-col gap-1.5 text-sm text-white/70">
             {slots.map((op, i) => (
               <li key={i}>
-                <code>
+                <code className={CODE}>
                   {op.componentId}.{op.slot}
                 </code>{" "}
-                <span className="muted">{op.content}</span>
+                <span className="text-white/40">{op.content}</span>
               </li>
             ))}
           </ul>
         </div>
       )}
       {contents.hooks.length > 0 && (
-        <div>
-          <h3>API hooks</h3>
-          <p className="hint">
+        <div className="flex flex-col gap-2 sm:col-span-2">
+          <h3 className={SUBHEAD}>API hooks</h3>
+          <p className={HINT}>
             Runs in a sandbox ({contents.capabilities.budgets.cpuMs}ms CPU,{" "}
             {contents.capabilities.budgets.memMb}MB), may only write{" "}
             {contents.capabilities.writes
@@ -716,15 +874,17 @@ function ModContentsView({ contents }: { contents: ModContents }) {
               .join("; ") || "nothing"}
             .
           </p>
-          <ul>
+          <ul className="flex flex-col gap-2 text-sm text-white/70">
             {contents.hooks.map((hook) => (
               <li key={hook.id}>
-                <details>
-                  <summary>
-                    <code>{hook.trigger.endpointId}</code>{" "}
-                    <span className="muted">({hook.trigger.phase} phase)</span>
+                <details className="group">
+                  <summary className="cursor-pointer">
+                    <code className={CODE}>{hook.trigger.endpointId}</code>{" "}
+                    <span className="text-white/40">({hook.trigger.phase} phase)</span>
                   </summary>
-                  <pre>{hook.source}</pre>
+                  <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-lg bg-ink p-3 font-mono text-[12px] text-white/80 ring-1 ring-white/10">
+                    {hook.source}
+                  </pre>
                 </details>
               </li>
             ))}
@@ -732,7 +892,7 @@ function ModContentsView({ contents }: { contents: ModContents }) {
         </div>
       )}
       {contents.uiOps.length === 0 && contents.hooks.length === 0 && (
-        <p className="muted">This mod is empty.</p>
+        <p className="text-sm text-white/50">This mod is empty.</p>
       )}
     </div>
   );
@@ -770,14 +930,14 @@ function ManifestSection<T>({
   const visible = showAll ? filtered : filtered.slice(0, CAP);
 
   return (
-    <div>
-      <h3>
-        {title} <span className="muted">({items.length})</span>
+    <div className="flex flex-col gap-2">
+      <h3 className={SUBHEAD}>
+        {title} <span className="text-white/30">({items.length})</span>
       </h3>
-      <p className="hint">{hint}</p>
+      <p className="text-xs text-white/50">{hint}</p>
       {items.length > CAP && (
         <input
-          className="search"
+          className={`w-full ${INPUT}`}
           placeholder={`Search ${items.length}…`}
           value={query}
           onChange={(e) => {
@@ -787,17 +947,21 @@ function ManifestSection<T>({
         />
       )}
       {items.length === 0 ? (
-        <p className="muted">None declared.</p>
+        <p className="text-sm text-white/50">None declared.</p>
       ) : (
-        <ul>{visible.map((item) => <li key={keyOf(item)}>{render(item)}</li>)}</ul>
+        <ul className="flex flex-col gap-1.5 text-sm text-white/70">
+          {visible.map((item) => (
+            <li key={keyOf(item)}>{render(item)}</li>
+          ))}
+        </ul>
       )}
       {filtered.length > visible.length && (
-        <button className="link" onClick={() => setShowAll(true)}>
+        <button className={BTN_LINK} onClick={() => setShowAll(true)}>
           Show all {filtered.length}
         </button>
       )}
       {q && filtered.length === 0 && items.length > 0 && (
-        <p className="muted">No matches for “{query}”.</p>
+        <p className="text-sm text-white/50">No matches for “{query}”.</p>
       )}
     </div>
   );
@@ -805,7 +969,7 @@ function ManifestSection<T>({
 
 function ManifestPanel({ manifest }: { manifest: AppManifest }) {
   return (
-    <div className="manifest">
+    <div className="mt-4 grid gap-6 sm:grid-cols-2">
       <ManifestSection
         title="Style properties"
         hint="Colors, spacing, and type users may restyle (your design tokens)."
@@ -813,11 +977,16 @@ function ManifestPanel({ manifest }: { manifest: AppManifest }) {
         keyOf={(t) => t.name}
         searchText={(t) => `${t.name} ${t.value} ${t.description ?? ""}`}
         render={(t) => (
-          <>
-            {t.kind === "color" && <span className="swatch" style={{ background: t.value }} />}
-            <code>{t.name}</code>{" "}
-            <span className="muted">{t.description ?? t.value}</span>
-          </>
+          <span className="inline-flex items-center gap-1.5">
+            {t.kind === "color" && (
+              <span
+                className="inline-block h-3 w-3 rounded-sm ring-1 ring-white/15"
+                style={{ background: t.value }}
+              />
+            )}
+            <code className={CODE}>{t.name}</code>{" "}
+            <span className="text-white/40">{t.description ?? t.value}</span>
+          </span>
         )}
       />
       <ManifestSection
@@ -827,12 +996,12 @@ function ManifestPanel({ manifest }: { manifest: AppManifest }) {
         keyOf={(c) => c.id}
         searchText={(c) => `${c.name} ${c.id} ${c.slots.map((s) => s.name).join(" ")}`}
         render={(c) => (
-          <>
-            <code>{c.name}</code>{" "}
-            <span className="muted">
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            <code className={CODE}>{c.name}</code>{" "}
+            <span className="text-white/40">
               {c.slots.map((s) => s.name + (s.overridable ? "" : " 🔒")).join(", ") || "no slots"}
             </span>
-          </>
+          </span>
         )}
       />
       <ManifestSection
@@ -842,12 +1011,12 @@ function ManifestPanel({ manifest }: { manifest: AppManifest }) {
         keyOf={(e) => e.id}
         searchText={(e) => `${e.method} ${e.path} ${e.id} ${e.description ?? ""}`}
         render={(e) => (
-          <>
-            <code>
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            <code className={CODE}>
               {e.method} {e.path}
             </code>{" "}
-            <span className="muted">{e.description ?? e.id}</span>
-          </>
+            <span className="text-white/40">{e.description ?? e.id}</span>
+          </span>
         )}
       />
       <ManifestSection
@@ -857,9 +1026,10 @@ function ManifestPanel({ manifest }: { manifest: AppManifest }) {
         keyOf={(p) => p.id}
         searchText={(p) => `${p.id} ${p.description ?? ""} ${describePolicy(p)}`}
         render={(p) => (
-          <>
-            <code>{p.id}</code> <span className="muted">{p.description ?? describePolicy(p)}</span>
-          </>
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            <code className={CODE}>{p.id}</code>{" "}
+            <span className="text-white/40">{p.description ?? describePolicy(p)}</span>
+          </span>
         )}
       />
     </div>
@@ -978,25 +1148,36 @@ function GuardrailsView({ appId }: { appId: string }) {
   const platformTests = GUARDRAIL_TESTS.filter((t) => t.policyId === "platform-safety");
 
   return (
-    <main>
-      <section className="panel wide">
-        <h2>Live enforcement</h2>
-        <p className="hint">
+    <div className="flex flex-col gap-6">
+      <section className={CARD}>
+        <h2 className={H2}>Live enforcement</h2>
+        <p className={`mt-1 ${HINT}`}>
           Every applied customization, rejection, and runtime block — newest first, updating live.
           Trigger any guardrail below and watch it land here.
         </p>
-        {error && <div className="error">{error}</div>}
+        {error && <div className={`mt-4 ${ERROR}`}>{error}</div>}
         {events.length === 0 ? (
-          <p className="muted">No activity yet. Run a guardrail test below.</p>
+          <p className={`mt-3 ${HINT}`}>No activity yet. Run a guardrail test below.</p>
         ) : (
-          <ul className="feed">
+          <ul className="mt-4 flex flex-col gap-1.5">
             {events.map((e, i) => {
               const h = eventToHuman(e);
+              const tone =
+                h.tone === "block"
+                  ? "bg-red-500/10 ring-1 ring-red-500/20"
+                  : h.tone === "warn"
+                    ? "bg-amber-500/10 ring-1 ring-amber-500/20"
+                    : "bg-white/[0.03] ring-1 ring-white/10";
               return (
-                <li key={i} className={`feed-${h.tone}`}>
-                  <span className="feed-icon">{h.icon}</span>
-                  <span className="feed-text">{h.text}</span>
-                  <span className="muted feed-time">{new Date(e.at).toLocaleTimeString()}</span>
+                <li
+                  key={i}
+                  className={`grid grid-cols-[24px_1fr_auto] items-baseline gap-2 rounded-lg px-3 py-2 text-sm ${tone}`}
+                >
+                  <span className="text-base">{h.icon}</span>
+                  <span className="text-white/80">{h.text}</span>
+                  <span className="whitespace-nowrap text-xs text-white/40">
+                    {new Date(e.at).toLocaleTimeString()}
+                  </span>
                 </li>
               );
             })}
@@ -1004,13 +1185,13 @@ function GuardrailsView({ appId }: { appId: string }) {
         )}
       </section>
 
-      <section className="panel wide">
-        <h2>Your invariants</h2>
-        <p className="hint">
+      <section className={CARD}>
+        <h2 className={H2}>Your invariants</h2>
+        <p className={`mt-1 ${HINT}`}>
           Declared in your manifest. Click “Test it” to fire a real violation attempt and prove the
           guardrail holds — either rejected before signing, or neutralized at runtime.
         </p>
-        <div className="guardrails">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {policies.map((p) => (
             <GuardrailCard
               key={p.id}
@@ -1032,7 +1213,7 @@ function GuardrailsView({ appId }: { appId: string }) {
           )}
         </div>
       </section>
-    </main>
+    </div>
   );
 }
 
@@ -1051,27 +1232,42 @@ function GuardrailCard({
 }) {
   if (tests.length === 0) {
     return (
-      <div className="guardrail-card">
-        <div className="guardrail-title">{title}</div>
-        <p className="muted">No test available for this invariant yet.</p>
+      <div className="rounded-lg bg-white/[0.03] p-4 ring-1 ring-white/10">
+        <div className="text-sm font-semibold text-white">{title}</div>
+        <p className="mt-2 text-sm text-white/50">No test available for this invariant yet.</p>
       </div>
     );
   }
   return (
-    <div className="guardrail-card">
-      <div className="guardrail-title">
-        {title} {held > 0 && <span className="held">held ✓ {held}</span>}
+    <div className="flex flex-col gap-3 rounded-lg bg-white/[0.03] p-4 ring-1 ring-white/10">
+      <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-white">
+        {title}
+        {held > 0 && (
+          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-300">
+            held ✓ {held}
+          </span>
+        )}
       </div>
       {tests.map((t) => {
         const res = results[t.id];
         return (
-          <div key={t.id} className="guardrail-test">
-            <button onClick={() => onRun(t)} disabled={res === "running"}>
-              {res === "running" ? "Testing…" : `Test: ${t.label}`}
-            </button>
-            <span className={`tag tag-${t.layer}`}>{t.layer}</span>
+          <div key={t.id} className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <button className={BTN_PRIMARY} onClick={() => onRun(t)} disabled={res === "running"}>
+                {res === "running" ? "Testing…" : `Test: ${t.label}`}
+              </button>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] uppercase tracking-wide ${
+                  t.layer === "authoring"
+                    ? "bg-sky-500/15 text-sky-300"
+                    : "bg-violet-500/15 text-violet-300"
+                }`}
+              >
+                {t.layer}
+              </span>
+            </div>
             {res && res !== "running" && (
-              <div className={res.held ? "verdict-held" : "verdict-fail"}>
+              <div className={`text-sm ${res.held ? "text-emerald-300" : "font-semibold text-red-300"}`}>
                 {res.held ? "🛡️ " : "❌ "}
                 {res.text}
               </div>
