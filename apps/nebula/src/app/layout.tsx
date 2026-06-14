@@ -7,7 +7,7 @@ import './globals.css'
 import { Providers } from './providers'
 import { invarianceConfig } from '../lib/invariance-config'
 import { mergeInvarianceConfig } from '../lib/dev-config'
-import { readDevConfig } from '../lib/server/dev-config-store'
+import type { DevConfigOverlay } from '../lib/dev-config'
 
 // metadataBase makes the OG image URL absolute on whatever host the demo is
 // deployed to; set NEXT_PUBLIC_SITE_URL in production env.
@@ -44,7 +44,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // adds no new rendering-mode constraint. The same merged config feeds the
   // SSR helpers and the client provider, keeping the verify-on-load gate
   // consistent between first paint and hydration.
-  const overlay = await readDevConfig()
+  const registry = process.env.INVARIANCE_REGISTRY ?? 'http://localhost:4400'
+  let overlay: DevConfigOverlay = {}
+  try {
+    const res = await fetch(`${registry}/v1/apps/nebula/design-config`, { cache: 'no-store' })
+    if (res.ok) overlay = (await res.json()) as DevConfigOverlay
+  } catch {
+    // fail open to base config if the control plane is unreachable
+  }
   const config = mergeInvarianceConfig(invarianceConfig, overlay)
   const cookieHeader = headers().get('cookie')
   const ssrTheme = themeFromCookieHeader(cookieHeader, config)

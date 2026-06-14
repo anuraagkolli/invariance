@@ -1,13 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { applyAnyTheme, mirrorThemeCookie, useInvariance } from '@invariance/design'
 
-import type { DevConfigOverlay } from '../../lib/dev-config'
 import type { ThemeVersionEntry } from '../../lib/server/theme-history-store'
-import { tokenMap } from '../../lib/theme-diff'
-import { LockControls } from '../../components/dev/lock-controls'
 import { VersionTimeline } from '../../components/dev/version-timeline'
 import { invarianceConfig } from '../../lib/invariance-config'
 
@@ -25,10 +22,6 @@ interface TimelineSummary {
 
 const APP_ID = invarianceConfig.app
 
-const baseLevels: Record<string, number> = Object.fromEntries(
-  Object.entries(invarianceConfig.frontend?.pages ?? {}).map(([route, page]) => [route, page.level]),
-)
-
 export default function DevPage() {
   const router = useRouter()
   const { themeStore, config, userId: sessionUserId } = useInvariance()
@@ -36,21 +29,18 @@ export default function DevPage() {
   const [timelines, setTimelines] = useState<TimelineSummary[]>([])
   const [selectedUser, setSelectedUser] = useState(sessionUserId || 'demo-user')
   const [entries, setEntries] = useState<ThemeVersionEntry[]>([])
-  const [overlay, setOverlay] = useState<DevConfigOverlay>({})
   const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(async (user: string) => {
     try {
-      const [historyRes, timelinesRes, overlayRes] = await Promise.all([
+      const [historyRes, timelinesRes] = await Promise.all([
         fetch(`/api/themes/history?appId=${encodeURIComponent(APP_ID)}&userId=${encodeURIComponent(user)}`),
         fetch(`/api/themes/history?appId=${encodeURIComponent(APP_ID)}`),
-        fetch('/api/dev-config'),
       ])
       const history = (await historyRes.json()) as { entries?: ThemeVersionEntry[] }
       const tl = (await timelinesRes.json()) as { timelines?: TimelineSummary[] }
       setEntries(history.entries ?? [])
       setTimelines(tl.timelines ?? [])
-      setOverlay((await overlayRes.json()) as DevConfigOverlay)
       setError(null)
     } catch {
       setError('Could not load the dashboard data. Is the dev server running?')
@@ -60,23 +50,6 @@ export default function DevPage() {
   useEffect(() => {
     void refresh(selectedUser)
   }, [refresh, selectedUser])
-
-  const currentAccent = useMemo(() => {
-    const latest = entries[0]
-    return latest ? tokenMap(latest.theme)['--inv-accent'] ?? null : null
-  }, [entries])
-
-  async function handleSaveOverlay(next: DevConfigOverlay) {
-    await fetch('/api/dev-config', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(next),
-    })
-    // Re-run the dynamic root layout so the merged config flows into the live
-    // provider — the very next prompt obeys the new locks.
-    router.refresh()
-    await refresh(selectedUser)
-  }
 
   async function handleRollback(entry: ThemeVersionEntry) {
     // Append-only: a rollback is a NEW version whose provenance says so.
@@ -133,12 +106,19 @@ export default function DevPage() {
         ) : null}
 
         <div className="grid items-start gap-6 lg:grid-cols-[320px_1fr]">
-          <LockControls
-            overlay={overlay}
-            baseLevels={baseLevels}
-            currentAccent={currentAccent}
-            onSave={handleSaveOverlay}
-          />
+          <aside className="flex flex-col gap-3 rounded-xl bg-white/[0.04] p-5 ring-1 ring-white/10">
+            <h2 className="text-sm font-semibold text-white">Invariants</h2>
+            <p className="text-sm text-white/60">
+              Lock what users may not touch — accent, page levels, protected
+              sections, contrast floors — from the Console.
+            </p>
+            <a
+              href="http://localhost:4600/#/invariants"
+              className="text-sm font-medium text-emerald-300 hover:text-emerald-200"
+            >
+              Manage invariants in the Console →
+            </a>
+          </aside>
 
           <section className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
