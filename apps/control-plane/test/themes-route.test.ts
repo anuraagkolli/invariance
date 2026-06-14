@@ -84,12 +84,12 @@ describe("themes routes", () => {
 
     const res = await cp.app.fetch(new Request(`${BASE}/history?userId=u1`));
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as { entries: Array<{ seq: number }> };
     expect(body).toHaveProperty("entries");
     expect(body.entries).toHaveLength(2);
     // newest-first: seq 2 then seq 1
-    expect(body.entries[0].seq).toBe(2);
-    expect(body.entries[1].seq).toBe(1);
+    expect(body.entries[0]!.seq).toBe(2);
+    expect(body.entries[1]!.seq).toBe(1);
   });
 
   it("GET /themes/history (no userId) returns timelines", async () => {
@@ -112,12 +112,14 @@ describe("themes routes", () => {
 
     const res = await cp.app.fetch(new Request(`${BASE}/history`));
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as {
+      timelines: Array<{ userId: string; count: number; latestAt: string }>;
+    };
     expect(body).toHaveProperty("timelines");
     expect(body.timelines).toHaveLength(1);
-    expect(body.timelines[0].userId).toBe("u1");
-    expect(body.timelines[0].count).toBe(2);
-    expect(typeof body.timelines[0].latestAt).toBe("string");
+    expect(body.timelines[0]!.userId).toBe("u1");
+    expect(body.timelines[0]!.count).toBe(2);
+    expect(typeof body.timelines[0]!.latestAt).toBe("string");
   });
 
   // ── Rollback ─────────────────────────────────────────────────────────────────
@@ -159,10 +161,12 @@ describe("themes routes", () => {
 
     // History newest entry has rollback meta
     const history = await cp.app.fetch(new Request(`${BASE}/history?userId=u1`));
-    const { entries } = await history.json();
-    expect(entries[0].seq).toBe(3);
-    expect(entries[0].meta?.source).toBe("rollback");
-    expect(entries[0].meta?.description).toBe("Rollback to v1");
+    const { entries } = (await history.json()) as {
+      entries: Array<{ seq: number; meta?: { source?: string; description?: string } }>;
+    };
+    expect(entries[0]!.seq).toBe(3);
+    expect(entries[0]!.meta?.source).toBe("rollback");
+    expect(entries[0]!.meta?.description).toBe("Rollback to v1");
   });
 
   // ── Edge cases ───────────────────────────────────────────────────────────────
@@ -184,7 +188,7 @@ describe("themes routes", () => {
       }),
     );
     expect(res.status).toBe(404);
-    const body = await res.json();
+    const body = (await res.json()) as { error: string };
     expect(body.error).toMatch(/99/);
   });
 

@@ -87,7 +87,10 @@ function cachingFetch(state: { keys: SigningKeyPair; bundles: Map<string, Signed
     }
     return { ok: false, body: { error: "nf" } };
   };
-  const fn = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+  const fn = async (
+    input: string | URL | Request,
+    init?: RequestInit & { cache?: string },
+  ): Promise<Response> => {
     const url = typeof input === "string" ? input : input.toString();
     const path = new URL(url).pathname;
     const method = (init?.method ?? "GET").toUpperCase();

@@ -28,10 +28,11 @@ interface PointerResponse {
  * plane's per-process ephemeral signing key, serves a stale key and makes every
  * bundle fail signature verification (silent no-op). This runtime does its own
  * TTL caching (keyCache/manifestCache/pointerCache); the transport must not add
- * its own. A standard RequestInit field — harmless on Node/undici, load-bearing
- * under Next.
+ * its own. `cache` is a standard fetch option, but this package's Node lib types
+ * omit it from RequestInit — hence the cast. It's a no-op on Node/undici and
+ * load-bearing under Next.
  */
-const NO_STORE: RequestInit = { cache: "no-store" };
+const NO_STORE = { cache: "no-store" } as RequestInit;
 
 interface Cached<T> {
   value: T;
