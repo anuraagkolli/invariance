@@ -1,3 +1,13 @@
-export default function Page() {
-  return <main style={{ padding: 24 }}>Nebula scaffold OK</main>
+'use client'
+
+import { HomeScreen } from '../components/home-screen'
+import { DemoTour } from '../components/demo-tour'
+
+export default function HomePage() {
+  return (
+    <>
+      <HomeScreen />
+      <DemoTour />
+    </>
+  )
 }
