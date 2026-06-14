@@ -46,11 +46,11 @@ the console restyle (parked on `feat/console-widget-restyle`, out of scope here)
 
 ## Verified facts (de-risking)
 
-- **Import parity:** Nebula imports **21 symbols** from `'invariance'`; all resolve in
-  `@invariance/design` **except 2 type-only**: `ThemeJsonV2` and `ThemePack` (used only by the
-  peripheral `gauntlet` + `showcase` pages). `ThemePack` is `export interface ThemePack` in
-  `packages/design/src/registries/theme-packs.ts` but not re-exported from the entry. **Fix:
-  add 2 type re-exports to `packages/design/src/index.ts` + rebuild dist.**
+- **Import parity: FULL.** Nebula imports **21 symbols** from `'invariance'`; **all 21 are
+  already exported by `@invariance/design`** (verified — `index.ts` already re-exports
+  `ThemePack` (line 86) and `ThemeJsonV2`/`ThemeSectionV2`/`AnyThemeJson` (line 90)). So the
+  port needs **no changes to the design package** — only the import specifier rename
+  `'invariance' → '@invariance/design'`. (Rebuild dist once so Next consumes fresh output.)
 - **Next adapter already exists:** `@invariance/server` exports `withInvariance(config, handler)`
   (`fetch.ts`) — docstring literally targets `export const GET = withInvariance(config, handler)`
   for Next route handlers. No adapter to build.
