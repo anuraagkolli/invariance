@@ -3,12 +3,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   api,
   type AnalyticsSummary,
+  type DesignConfig,
   type ModContents,
   type ModRow,
   type RecentEvent,
   type SubjectOverview,
 } from "./api";
 import { eventToHuman, GUARDRAIL_TESTS, type GuardrailTest } from "./guardrails";
+import { LockControls } from "./lock-controls";
 
 const DEFAULT_APP = "nebula";
 const HELP_DISMISSED_KEY = "invariance-console:help-dismissed";
@@ -67,7 +69,7 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-/** Hash routing: "" = dashboard, "#/guardrails" = guardrails, "#/u/<id>" = drill-down. */
+/** Hash routing: "" = dashboard, "#/invariants", "#/guardrails", "#/u/<id>" = drill-down. */
 function subjectFromHash(): string | null {
   const match = /^#\/u\/(.+)$/.exec(window.location.hash);
   return match ? decodeURIComponent(match[1]!) : null;
@@ -77,15 +79,21 @@ function isGuardrailsHash(): boolean {
   return window.location.hash === "#/guardrails";
 }
 
+function isInvariantsHash(): boolean {
+  return window.location.hash === "#/invariants";
+}
+
 export default function App() {
   const [appId, setAppId] = useState(DEFAULT_APP);
   const [subject, setSubject] = useState<string | null>(() => subjectFromHash());
   const [guardrails, setGuardrails] = useState<boolean>(() => isGuardrailsHash());
+  const [invariants, setInvariants] = useState<boolean>(() => isInvariantsHash());
 
   useEffect(() => {
     const onHash = () => {
       setSubject(subjectFromHash());
       setGuardrails(isGuardrailsHash());
+      setInvariants(isInvariantsHash());
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
@@ -98,7 +106,7 @@ export default function App() {
     window.location.hash = "";
   };
 
-  const onDashboard = !subject && !guardrails;
+  const onDashboard = !subject && !guardrails && !invariants;
 
   return (
     <div className="min-h-screen bg-ink px-6 py-10 text-white sm:px-10">
@@ -121,6 +129,7 @@ export default function App() {
                 user · <span className="text-white/70">{subject}</span>
               </p>
             )}
+            {invariants && <p className="mt-1 font-mono text-xs text-white/50">invariants</p>}
             {guardrails && <p className="mt-1 font-mono text-xs text-white/50">guardrails</p>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -129,6 +138,12 @@ export default function App() {
               href="#"
             >
               Dashboard
+            </a>
+            <a
+              className={`${BTN_SECONDARY} ${invariants ? "text-white" : ""}`}
+              href="#/invariants"
+            >
+              Invariants
             </a>
             <a
               className={`${BTN_SECONDARY} ${guardrails ? "text-white" : ""}`}
@@ -148,13 +163,111 @@ export default function App() {
           </div>
         </header>
 
-        {guardrails ? (
+        {invariants ? (
+          <InvariantsView appId={appId} />
+        ) : guardrails ? (
           <GuardrailsView appId={appId} />
         ) : subject ? (
           <SubjectView appId={appId} subjectId={subject} onBack={closeSubject} />
         ) : (
           <Dashboard appId={appId} onOpenSubject={openSubject} />
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Invariants — code-defined data contracts (read-only) + editable     */
+/* look-invariants (the design-config the design plane merges)          */
+/* ------------------------------------------------------------------ */
+
+// App-specific design structure; modeling routes/sections per-app in the
+// manifest is a follow-up. These feed the editable look-invariants for the
+// Nebula showcase (the AppManifest doesn't model design routes/sections).
+const NEBULA_ROUTES: Record<string, number> = { "/": 4, "/series": 4 };
+const NEBULA_SECTIONS = [
+  "hero",
+  "row-trending",
+  "row-continue",
+  "row-originals",
+  "row-new",
+  "row-acclaimed",
+];
+
+function InvariantsView({ appId }: { appId: string }) {
+  const [manifest, setManifest] = useState<AppManifest | null>(null);
+  const [designConfig, setDesignConfig] = useState<DesignConfig | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      const [m, dc] = await Promise.all([
+        api.manifest(appId).catch(() => null),
+        api.designConfig(appId),
+      ]);
+      setManifest(m);
+      setDesignConfig(dc);
+      setError(null);
+    } catch (err) {
+      setError(`Cannot reach the control plane (${(err as Error).message})`);
+    }
+  }, [appId]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const policies = manifest?.policies ?? [];
+
+  return (
+    <div className="flex flex-col gap-6">
+      {error && <div className={ERROR}>{error}</div>}
+
+      <div className="grid items-start gap-6 lg:grid-cols-[1fr_400px]">
+        <section className={CARD}>
+          <h2 className={H2}>Code-defined contracts</h2>
+          <p className={`mt-1 ${HINT}`}>
+            Declared in your codebase and enforced by the verifier and runtime —{" "}
+            <span className="text-white/80">not editable here</span>. Want to prove they hold?{" "}
+            <a className={BTN_LINK} href="#/guardrails">
+              Test that these hold →
+            </a>
+          </p>
+          {manifest ? (
+            policies.length === 0 ? (
+              <p className={`mt-3 ${HINT}`}>No policies declared in the manifest.</p>
+            ) : (
+              <ul className="mt-4 flex flex-col gap-2 text-sm text-white/70">
+                {policies.map((p) => (
+                  <li key={p.id} className="flex flex-col gap-0.5">
+                    <code className={CODE}>{p.id}</code>
+                    <span className="text-white/60">{p.description ?? describePolicy(p)}</span>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : (
+            <p className={`mt-3 ${HINT}`}>No manifest published for this app yet.</p>
+          )}
+        </section>
+
+        <div className="flex flex-col gap-3">
+          <p className={SUBHEAD}>Editable look-invariants</p>
+          {designConfig ? (
+            <LockControls
+              overlay={designConfig}
+              baseLevels={NEBULA_ROUTES}
+              currentAccent={null}
+              sections={NEBULA_SECTIONS}
+              onSave={(c) => api.putDesignConfig(appId, c).then(() => refresh())}
+            />
+          ) : (
+            <div className={CARD}>
+              <p className={HINT}>Loading look-invariants…</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

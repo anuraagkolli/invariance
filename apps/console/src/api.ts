@@ -75,6 +75,15 @@ export interface BundlePostResult {
   reasons: string[];
 }
 
+/** Tunable look-invariants for an app (mirrors the control-plane DesignConfig). */
+export interface DesignConfig {
+  pageLevels?: Record<string, number>;
+  accentLock?: string | null;
+  lockedSections?: string[];
+  chromaCap?: number;
+  contrastFloor?: number;
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(path);
   if (!res.ok) throw new Error(`${path}: ${res.status}`);
@@ -93,6 +102,16 @@ export const api = {
     fetch(`/v1/apps/${appId}/mods/${modId}/restore`, { method: "POST" }),
   events: async (appId: string, limit = 30) =>
     (await get<{ events: RecentEvent[] }>(`/v1/apps/${appId}/events?limit=${limit}`)).events,
+  designConfig: (appId: string) => get<DesignConfig>(`/v1/apps/${appId}/design-config`),
+  putDesignConfig: async (appId: string, config: DesignConfig): Promise<DesignConfig> => {
+    const res = await fetch(`/v1/apps/${appId}/design-config`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) throw new Error(`design-config PUT ${res.status}`);
+    return (await res.json()) as DesignConfig;
+  },
   /** POST a hand-crafted draft to the verifier route; never throws on 422. */
   postBundle: async (
     appId: string,
