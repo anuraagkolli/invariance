@@ -8,9 +8,12 @@ import {
   type ModRow,
   type RecentEvent,
   type SubjectOverview,
+  type ThemeTimeline,
+  type ThemeVersionEntry,
 } from "./api";
 import { eventToHuman, GUARDRAIL_TESTS, type GuardrailTest } from "./guardrails";
 import { LockControls } from "./lock-controls";
+import { VersionTimeline } from "./version-timeline";
 
 const DEFAULT_APP = "nebula";
 const HELP_DISMISSED_KEY = "invariance-console:help-dismissed";
@@ -83,17 +86,23 @@ function isInvariantsHash(): boolean {
   return window.location.hash === "#/invariants";
 }
 
+function isThemesHash(): boolean {
+  return window.location.hash === "#/themes";
+}
+
 export default function App() {
   const [appId, setAppId] = useState(DEFAULT_APP);
   const [subject, setSubject] = useState<string | null>(() => subjectFromHash());
   const [guardrails, setGuardrails] = useState<boolean>(() => isGuardrailsHash());
   const [invariants, setInvariants] = useState<boolean>(() => isInvariantsHash());
+  const [themes, setThemes] = useState<boolean>(() => isThemesHash());
 
   useEffect(() => {
     const onHash = () => {
       setSubject(subjectFromHash());
       setGuardrails(isGuardrailsHash());
       setInvariants(isInvariantsHash());
+      setThemes(isThemesHash());
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
@@ -106,7 +115,7 @@ export default function App() {
     window.location.hash = "";
   };
 
-  const onDashboard = !subject && !guardrails && !invariants;
+  const onDashboard = !subject && !guardrails && !invariants && !themes;
 
   return (
     <div className="min-h-screen bg-ink px-6 py-10 text-white sm:px-10">
@@ -131,6 +140,7 @@ export default function App() {
             )}
             {invariants && <p className="mt-1 font-mono text-xs text-white/50">invariants</p>}
             {guardrails && <p className="mt-1 font-mono text-xs text-white/50">guardrails</p>}
+            {themes && <p className="mt-1 font-mono text-xs text-white/50">themes</p>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <a
@@ -144,6 +154,12 @@ export default function App() {
               href="#/invariants"
             >
               Invariants
+            </a>
+            <a
+              className={`${BTN_SECONDARY} ${themes ? "text-white" : ""}`}
+              href="#/themes"
+            >
+              Themes
             </a>
             <a
               className={`${BTN_SECONDARY} ${guardrails ? "text-white" : ""}`}
@@ -165,6 +181,8 @@ export default function App() {
 
         {invariants ? (
           <InvariantsView appId={appId} />
+        ) : themes ? (
+          <ThemesView appId={appId} />
         ) : guardrails ? (
           <GuardrailsView appId={appId} />
         ) : subject ? (
@@ -260,6 +278,121 @@ function InvariantsView({ appId }: { appId: string }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Themes — per-user theme version history + append-only rollback       */
+/* (ported from Nebula's /dev, app-agnostic: no design-plane runtime)   */
+/* ------------------------------------------------------------------ */
+
+function ThemesView({ appId }: { appId: string }) {
+  const [timelines, setTimelines] = useState<ThemeTimeline[]>([]);
+  const [selectedUser, setSelectedUser] = useState("");
+  const [entries, setEntries] = useState<ThemeVersionEntry[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const [nonce, setNonce] = useState(0);
+
+  // Timelines + the user selector. The chosen user self-heals: keep it if it's
+  // still a valid timeline (survives a nonce-bump refresh), else default to the
+  // first (covers initial load and an appId switch to a different app's users).
+  useEffect(() => {
+    let active = true;
+    api
+      .themeTimelines(appId)
+      .then((tls) => {
+        if (!active) return;
+        setTimelines(tls);
+        setSelectedUser((prev) => (tls.some((t) => t.userId === prev) ? prev : tls[0]?.userId ?? ""));
+        setError(null);
+      })
+      .catch((err) => {
+        if (active) setError(`Cannot reach the control plane (${(err as Error).message})`);
+      });
+    return () => {
+      active = false;
+    };
+  }, [appId, nonce]);
+
+  // Entries for the selected user. Empty selection → no fetch, just clear.
+  useEffect(() => {
+    if (!selectedUser) {
+      setEntries([]);
+      return;
+    }
+    let active = true;
+    api
+      .themeHistory(appId, selectedUser)
+      .then((ents) => {
+        if (active) setEntries(ents);
+      })
+      .catch((err) => {
+        if (active) setError(`Cannot reach the control plane (${(err as Error).message})`);
+      });
+    return () => {
+      active = false;
+    };
+  }, [appId, selectedUser, nonce]);
+
+  // Append-only: a rollback writes a NEW version. The Console does not apply the
+  // theme live (no design-plane runtime here) — Nebula picks it up on its next
+  // load. We record it, then bump the nonce to refetch timelines + entries.
+  const handleRollback = async (entry: ThemeVersionEntry) => {
+    try {
+      await api.rollbackTheme(appId, selectedUser, entry.seq);
+      setNonce((n) => n + 1);
+      setError(null);
+    } catch (err) {
+      setError(`Rollback failed (${(err as Error).message})`);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-6">
+      {error && <div className={ERROR}>{error}</div>}
+
+      <section className={CARD}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className={H2}>Theme history</h2>
+            <p className={`mt-1 ${HINT}`}>
+              Every theme your users apply, versioned with the prompt that produced it.
+              Roll back to restore a prior version on their next load.
+            </p>
+          </div>
+          {timelines.length > 0 && (
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-xs text-white/50">
+                User
+                <select
+                  className={INPUT}
+                  value={selectedUser}
+                  onChange={(e) => setSelectedUser(e.target.value)}
+                >
+                  {timelines.map((t) => (
+                    <option key={t.userId} value={t.userId}>
+                      {t.userId} ({t.count}) · {new Date(t.latestAt).toLocaleDateString()}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className={BTN_SECONDARY} onClick={() => setNonce((n) => n + 1)}>
+                Refresh
+              </button>
+            </div>
+          )}
+        </div>
+
+        {timelines.length === 0 ? (
+          <p className={`mt-4 ${HINT}`}>No themed users yet for this app.</p>
+        ) : (
+          <div className="mt-4">
+            <VersionTimeline entries={entries} onRollback={handleRollback} />
+          </div>
+        )}
+      </section>
     </div>
   );
 }

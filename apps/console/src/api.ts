@@ -84,6 +84,26 @@ export interface DesignConfig {
   contrastFloor?: number;
 }
 
+/** Provenance for one theme version (mirrors the control-plane history store). */
+export interface ThemeVersionMeta {
+  prompt?: string;
+  source?: "pipeline" | "pack" | "rollback";
+  description?: string;
+}
+
+export interface ThemeVersionEntry {
+  seq: number;
+  at: string;
+  theme: Record<string, unknown>;
+  meta?: ThemeVersionMeta;
+}
+
+export interface ThemeTimeline {
+  userId: string;
+  count: number;
+  latestAt: string;
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(path);
   if (!res.ok) throw new Error(`${path}: ${res.status}`);
@@ -111,6 +131,20 @@ export const api = {
     });
     if (!res.ok) throw new Error(`design-config PUT ${res.status}`);
     return (await res.json()) as DesignConfig;
+  },
+  themeHistory: async (appId: string, userId: string): Promise<ThemeVersionEntry[]> =>
+    (await get<{ entries: ThemeVersionEntry[] }>(
+      `/v1/apps/${appId}/themes/history?userId=${encodeURIComponent(userId)}`,
+    )).entries,
+  themeTimelines: async (appId: string): Promise<ThemeTimeline[]> =>
+    (await get<{ timelines: ThemeTimeline[] }>(`/v1/apps/${appId}/themes/history`)).timelines,
+  rollbackTheme: async (appId: string, userId: string, seq: number): Promise<void> => {
+    const res = await fetch(`/v1/apps/${appId}/themes/rollback`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId, seq }),
+    });
+    if (!res.ok) throw new Error(`rollback POST ${res.status}`);
   },
   /** POST a hand-crafted draft to the verifier route; never throws on 422. */
   postBundle: async (
