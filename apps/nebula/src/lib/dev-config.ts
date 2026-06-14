@@ -1,9 +1,10 @@
 import type { InvarianceConfig } from '@invariance/design'
 
 // The developer's runtime lock/unlock state, layered over the static base
-// config. Pure and isomorphic (client + server): the /dev dashboard edits it,
-// /api/dev-config persists it, and layout.tsx merges it into the config the
-// whole app (gatekeeper, compiler, verify suite) reads per request.
+// config. Pure and isomorphic (client + server): the Console edits it via the
+// control-plane design-config, layout.tsx fetches it from there and merges it
+// into the config the whole app (gatekeeper, compiler, verify suite) reads per
+// request.
 
 export interface DevConfigOverlay {
   // route → 0..4; only routes already in the base config are honored

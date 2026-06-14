@@ -13,7 +13,7 @@ const DISMISS_KEY = 'nebula:demo-tour:dismissed'
 const STEPS = [
   { n: '1', text: 'Open the ✨ panel and type a vibe — try “make it retro”.' },
   { n: '2', text: 'The whole app re-themes. Harmony and AA contrast are compiled in, never asked of the model.' },
-  { n: '3', text: 'Open the developer view: every edit versioned with its prompt, invariants you control.' },
+  { n: '3', text: 'Behind every vibe: developer-set invariants the model can never cross — locked colors, AA contrast, protected sections.' },
 ]
 
 function openPanel(): void {
@@ -88,13 +88,6 @@ export function DemoTour() {
         >
           ✨ Try a vibe
         </button>
-        <Link
-          href="/dev"
-          className="rounded-base border px-3 py-1.5 text-xs font-medium text-textPrimary transition-colors hover:bg-surface2"
-          style={{ borderColor: 'var(--inv-border)' }}
-        >
-          Developer view
-        </Link>
         <Link
           href="/showcase"
           className="px-1 text-xs text-textSecondary underline-offset-2 hover:text-textPrimary hover:underline"

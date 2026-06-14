@@ -1,7 +1,6 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { usePathname } from 'next/navigation'
 import {
   InvarianceProvider,
   CustomizationPanel,
@@ -20,10 +19,8 @@ import { llmProviderProps, themeStorageUrl } from '../lib/invariance-config'
 const componentLibrary = { CarouselRow, GridRow }
 
 // config arrives from the server layout: the static base merged with the
-// developer's lock/unlock overlay (see /dev), serialized across the boundary.
+// developer's lock/unlock overlay from the control-plane design-config, serialized across the boundary.
 export function Providers({ config, children }: { config: InvarianceConfig; children: ReactNode }) {
-  const pathname = usePathname()
-  const isDevPage = pathname === '/dev'
   const llm = llmProviderProps()
   return (
     <InvarianceProvider
@@ -44,7 +41,7 @@ export function Providers({ config, children }: { config: InvarianceConfig; chil
           <SearchOverlay />
         </TitleModalProvider>
       </SearchProvider>
-      {!isDevPage && <CustomizationPanel />}
+      <CustomizationPanel />
     </InvarianceProvider>
   )
 }
