@@ -272,6 +272,18 @@ export function createControlPlane(options: ControlPlaneOptions = {}): ControlPl
     c.json(await summarizeApp(store, c.req.param("appId"))),
   );
 
+  /**
+   * Recent activity feed across all subjects of an app, newest-first — the
+   * data source for the console's live Guardrails enforcement feed.
+   * `store.listEvents` is chronological (oldest-first of the last N); reverse
+   * for newest-first display.
+   */
+  app.get("/v1/apps/:appId/events", async (c) => {
+    const limit = Math.min(Number(c.req.query("limit")) || 50, 200);
+    const events = await store.listEvents(c.req.param("appId"), { limit });
+    return c.json({ events: events.reverse() });
+  });
+
   /** Mods admin: every record (envelope payloads excluded) with classification. */
   app.get("/v1/apps/:appId/mods", async (c) =>
     c.json({ mods: (await store.allMods(c.req.param("appId"))).map(modAdminView) }),
