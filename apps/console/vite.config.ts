@@ -8,7 +8,7 @@ export default defineConfig({
     proxy: {
       "/v1": process.env.INVARIANCE_REGISTRY ?? "http://localhost:4400",
       "/demo-api": {
-        target: process.env.DEMO_API_URL ?? "http://localhost:4500",
+        target: process.env.DEMO_API_URL ?? "http://localhost:4321",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/demo-api/, ""),
       },

@@ -10,7 +10,7 @@ import {
 } from "./api";
 import { eventToHuman, GUARDRAIL_TESTS, type GuardrailTest } from "./guardrails";
 
-const DEFAULT_APP = "streamline";
+const DEFAULT_APP = "nebula";
 const HELP_DISMISSED_KEY = "invariance-console:help-dismissed";
 
 const STATUS_HELP: Record<string, string> = {
