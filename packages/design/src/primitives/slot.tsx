@@ -3,9 +3,44 @@
 import React, { useEffect, type ReactNode } from 'react'
 
 import type { Level } from '../levels/index'
+import type { SlotRegistration } from '../context/registry'
 import { useInvariance } from '../context/provider'
 import { useCurrentPage } from '../context/use-current-page'
 import { ErrorBoundary } from './error-boundary'
+
+/**
+ * The registry entry for a slot. `pageName` is the current page (the URL
+ * pathname `config.frontend.pages` is keyed by) — the Gatekeeper resolves a
+ * slot's allowed level from `config.frontend.pages[pageName].level`, so this
+ * MUST be the live page, not a placeholder, or every slot reads as level 0.
+ */
+export function buildSlotRegistration(
+  page: string,
+  args: {
+    name: string
+    level: Level
+    // `?:` + `| undefined`: callers pass these straight from optional props
+    // (so the value may be an explicit `undefined`), tests may omit them.
+    preserve?: boolean | undefined
+    cssVariables?: string[] | undefined
+    description?: string | undefined
+    aliases?: string[] | undefined
+    source?: ('page' | 'component') | undefined
+  },
+): SlotRegistration {
+  return {
+    name: args.name,
+    level: args.level,
+    pageName: page,
+    preserve: args.preserve ?? false,
+    alternativesCount: 0,
+    type: 'slot',
+    source: args.source ?? 'page',
+    ...(args.cssVariables && args.cssVariables.length > 0 ? { cssVariables: args.cssVariables } : {}),
+    ...(args.description ? { description: args.description } : {}),
+    ...(args.aliases && args.aliases.length > 0 ? { aliases: args.aliases } : {}),
+  }
+}
 
 interface SlotProps {
   name: string
@@ -45,21 +80,14 @@ export function Slot({
   const page = useCurrentPage()
 
   useEffect(() => {
-    registry.register({
-      name,
-      level,
-      pageName: '',
-      preserve: preserve ?? false,
-      alternativesCount: 0,
-      type: 'slot',
-      source: source ?? 'page',
-      ...(cssVariables && cssVariables.length > 0 ? { cssVariables } : {}),
-      ...(description ? { description } : {}),
-      ...(aliases && aliases.length > 0 ? { aliases } : {}),
-    })
+    registry.register(
+      buildSlotRegistration(page, { name, level, preserve, cssVariables, description, aliases, source }),
+    )
     return () => registry.unregister(name)
+    // Re-register when the resolved page changes: useCurrentPage returns '/' on
+    // the server + first client render, then the real pathname after mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [page])
 
   // F4: check for component swap
   if (level >= 4 && themeJson?.components && componentLibrary) {

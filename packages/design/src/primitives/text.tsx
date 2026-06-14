@@ -24,15 +24,16 @@ export function Text({ name, children, maxLength, required }: TextProps) {
     registry.register({
       name,
       level: 2,
-      pageName: '',
+      pageName: page,
       preserve: false,
       alternativesCount: 0,
       type: 'text',
       ...(Object.keys(textConfig).length > 0 ? { textConfig } : {}),
     })
     return () => registry.unregister(name)
+    // Re-register when the resolved page changes (see use-current-page).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [page])
 
   // F2 is render-driven: the override resolves from theme context here, so React
   // owns the text node. The old DOM applier (data-inv-id query + textContent set)
