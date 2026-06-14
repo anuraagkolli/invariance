@@ -5,8 +5,10 @@ import {
   type AnalyticsSummary,
   type ModContents,
   type ModRow,
+  type RecentEvent,
   type SubjectOverview,
 } from "./api";
+import { eventToHuman, GUARDRAIL_TESTS, type GuardrailTest } from "./guardrails";
 
 const DEFAULT_APP = "streamline";
 const HELP_DISMISSED_KEY = "invariance-console:help-dismissed";
@@ -32,18 +34,26 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-/** Hash routing: "" = dashboard, "#/u/<subjectId>" = per-user drill-down. */
+/** Hash routing: "" = dashboard, "#/guardrails" = guardrails, "#/u/<id>" = drill-down. */
 function subjectFromHash(): string | null {
   const match = /^#\/u\/(.+)$/.exec(window.location.hash);
   return match ? decodeURIComponent(match[1]!) : null;
 }
 
+function isGuardrailsHash(): boolean {
+  return window.location.hash === "#/guardrails";
+}
+
 export default function App() {
   const [appId, setAppId] = useState(DEFAULT_APP);
   const [subject, setSubject] = useState<string | null>(() => subjectFromHash());
+  const [guardrails, setGuardrails] = useState<boolean>(() => isGuardrailsHash());
 
   useEffect(() => {
-    const onHash = () => setSubject(subjectFromHash());
+    const onHash = () => {
+      setSubject(subjectFromHash());
+      setGuardrails(isGuardrailsHash());
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -69,8 +79,12 @@ export default function App() {
               / <span className="muted">user</span> {subject}
             </span>
           )}
+          {guardrails && <span className="crumb"> / Guardrails</span>}
         </h1>
         <div className="header-right">
+          <a className="nav-link" href="#/guardrails">
+            Guardrails
+          </a>
           <label>
             App{" "}
             <input value={appId} onChange={(e) => setAppId(e.target.value)} spellCheck={false} />
@@ -78,7 +92,9 @@ export default function App() {
         </div>
       </header>
 
-      {subject ? (
+      {guardrails ? (
+        <GuardrailsView appId={appId} />
+      ) : subject ? (
         <SubjectView appId={appId} subjectId={subject} onBack={closeSubject} />
       ) : (
         <Dashboard appId={appId} onOpenSubject={openSubject} />
@@ -874,4 +890,194 @@ function describePolicy(policy: AppManifest["policies"][number]): string {
       return `theme quality: ${parts.length ? parts.join(", ") : "compiler defaults"}`;
     }
   }
+}
+
+interface GuardrailResult {
+  held: boolean;
+  text: string;
+}
+
+async function runGuardrailTest(appId: string, t: GuardrailTest): Promise<GuardrailResult> {
+  const sid = `__guardrail_${t.id}_${Date.now()}`;
+  if (t.layer === "authoring") {
+    const r = await api.postBundle(appId, sid, t.draft);
+    return r.status === 422
+      ? { held: true, text: `Rejected at authoring — ${r.reasons.join("; ")}` }
+      : { held: false, text: `Unexpected ${r.status}: it was NOT rejected` };
+  }
+  const reg = await api.postBundle(appId, sid, t.draft);
+  if (reg.status !== 201) {
+    return { held: false, text: `cheat failed to register (${reg.status})` };
+  }
+  try {
+    const json = await api.fetchDemo(
+      t.runtime!.path,
+      sid,
+      t.runtime!.method === "POST" ? { method: "POST", body: t.runtime!.body } : undefined,
+    );
+    return t.runtime!.check(json)
+      ? { held: true, text: "Neutralized at runtime — the app served canonical data" }
+      : { held: false, text: "Runtime did NOT roll back the cheat!" };
+  } catch (err) {
+    return { held: false, text: `demo API unreachable (${(err as Error).message}) — is :4500 up?` };
+  }
+}
+
+function GuardrailsView({ appId }: { appId: string }) {
+  const [manifest, setManifest] = useState<AppManifest | null>(null);
+  const [events, setEvents] = useState<RecentEvent[]>([]);
+  const [results, setResults] = useState<Record<string, GuardrailResult | "running">>({});
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const poll = async () => {
+      try {
+        const ev = await api.events(appId, 30);
+        if (active) {
+          setEvents(ev);
+          setError(null);
+        }
+      } catch (err) {
+        if (active) setError(`Cannot reach the control plane (${(err as Error).message})`);
+      }
+    };
+    void api
+      .manifest(appId)
+      .then((m) => active && setManifest(m))
+      .catch(() => undefined);
+    void poll();
+    const timer = setInterval(() => void poll(), 2000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [appId]);
+
+  const runTest = async (t: GuardrailTest) => {
+    setResults((r) => ({ ...r, [t.id]: "running" }));
+    const result = await runGuardrailTest(appId, t);
+    setResults((r) => ({ ...r, [t.id]: result }));
+  };
+
+  // "held N times" per policy, derived from the live feed.
+  const heldByPolicy = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const e of events) {
+      if (e.type === "hook_policy_violation" || e.type === "hook_capability_violation") {
+        const sid = e.subjectId ?? "";
+        const t = GUARDRAIL_TESTS.find((x) => sid.startsWith(`__guardrail_${x.id}_`));
+        if (t) counts[t.policyId] = (counts[t.policyId] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [events]);
+
+  const policies = manifest?.policies ?? [];
+  const platformTests = GUARDRAIL_TESTS.filter((t) => t.policyId === "platform-safety");
+
+  return (
+    <main>
+      <section className="panel wide">
+        <h2>Live enforcement</h2>
+        <p className="hint">
+          Every applied customization, rejection, and runtime block — newest first, updating live.
+          Trigger any guardrail below and watch it land here.
+        </p>
+        {error && <div className="error">{error}</div>}
+        {events.length === 0 ? (
+          <p className="muted">No activity yet. Run a guardrail test below.</p>
+        ) : (
+          <ul className="feed">
+            {events.map((e, i) => {
+              const h = eventToHuman(e);
+              return (
+                <li key={i} className={`feed-${h.tone}`}>
+                  <span className="feed-icon">{h.icon}</span>
+                  <span className="feed-text">{h.text}</span>
+                  <span className="muted feed-time">{new Date(e.at).toLocaleTimeString()}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section className="panel wide">
+        <h2>Your invariants</h2>
+        <p className="hint">
+          Declared in your manifest. Click “Test it” to fire a real violation attempt and prove the
+          guardrail holds — either rejected before signing, or neutralized at runtime.
+        </p>
+        <div className="guardrails">
+          {policies.map((p) => (
+            <GuardrailCard
+              key={p.id}
+              title={describePolicy(p)}
+              held={heldByPolicy[p.id] ?? 0}
+              tests={GUARDRAIL_TESTS.filter((t) => t.policyId === p.id)}
+              results={results}
+              onRun={runTest}
+            />
+          ))}
+          {platformTests.length > 0 && (
+            <GuardrailCard
+              title="Platform safety (built-in: XSS, locked slots, unknown tokens)"
+              held={0}
+              tests={platformTests}
+              results={results}
+              onRun={runTest}
+            />
+          )}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function GuardrailCard({
+  title,
+  held,
+  tests,
+  results,
+  onRun,
+}: {
+  title: string;
+  held: number;
+  tests: GuardrailTest[];
+  results: Record<string, GuardrailResult | "running">;
+  onRun: (t: GuardrailTest) => void;
+}) {
+  if (tests.length === 0) {
+    return (
+      <div className="guardrail-card">
+        <div className="guardrail-title">{title}</div>
+        <p className="muted">No test available for this invariant yet.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="guardrail-card">
+      <div className="guardrail-title">
+        {title} {held > 0 && <span className="held">held ✓ {held}</span>}
+      </div>
+      {tests.map((t) => {
+        const res = results[t.id];
+        return (
+          <div key={t.id} className="guardrail-test">
+            <button onClick={() => onRun(t)} disabled={res === "running"}>
+              {res === "running" ? "Testing…" : `Test: ${t.label}`}
+            </button>
+            <span className={`tag tag-${t.layer}`}>{t.layer}</span>
+            {res && res !== "running" && (
+              <div className={res.held ? "verdict-held" : "verdict-fail"}>
+                {res.held ? "🛡️ " : "❌ "}
+                {res.text}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
