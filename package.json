@@ -5,7 +5,9 @@
   "scripts": {
     "build": "turbo run build",
     "test": "turbo run test",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "demo": "bash scripts/demo.sh",
+    "demo:stop": "bash scripts/demo-stop.sh"
   },
   "devDependencies": {
     "turbo": "^2.5.0",

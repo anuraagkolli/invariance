@@ -8,3 +8,6 @@ coverage/
 .DS_Store
 .next/
 .playwright-cli/
+
+# local demo launcher runtime (logs + pids)
+.demo/
