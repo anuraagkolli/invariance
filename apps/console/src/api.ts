@@ -61,6 +61,20 @@ export interface SubjectOverview {
   events: SubjectEvent[];
 }
 
+export interface RecentEvent {
+  type: string;
+  subjectId?: string;
+  modId?: string;
+  detail?: Record<string, unknown>;
+  at: number;
+}
+
+export interface BundlePostResult {
+  status: number;
+  ok: boolean;
+  reasons: string[];
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(path);
   if (!res.ok) throw new Error(`${path}: ${res.status}`);
@@ -77,4 +91,36 @@ export const api = {
     fetch(`/v1/apps/${appId}/mods/${modId}/kill`, { method: "POST" }),
   restore: (appId: string, modId: string) =>
     fetch(`/v1/apps/${appId}/mods/${modId}/restore`, { method: "POST" }),
+  events: async (appId: string, limit = 30) =>
+    (await get<{ events: RecentEvent[] }>(`/v1/apps/${appId}/events?limit=${limit}`)).events,
+  /** POST a hand-crafted draft to the verifier route; never throws on 422. */
+  postBundle: async (
+    appId: string,
+    subjectId: string,
+    draft: unknown,
+  ): Promise<BundlePostResult> => {
+    const res = await fetch(
+      `/v1/apps/${appId}/subjects/${encodeURIComponent(subjectId)}/bundles`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(draft),
+      },
+    );
+    const body = (await res.json().catch(() => ({}))) as { reasons?: string[] };
+    return { status: res.status, ok: res.ok, reasons: body.reasons ?? [] };
+  },
+  /** Hit the real demo API (via the /demo-api vite proxy) as a given subject. */
+  fetchDemo: async (
+    path: string,
+    subjectId: string,
+    init?: { method?: string; body?: unknown },
+  ): Promise<unknown> => {
+    const res = await fetch(`/demo-api${path}`, {
+      method: init?.method ?? "GET",
+      headers: { "content-type": "application/json", "x-demo-user": subjectId },
+      ...(init?.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
+    });
+    return res.json();
+  },
 };
