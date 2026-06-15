@@ -27,6 +27,20 @@ export async function loadCurrentV2(context: PipelineIoContext): Promise<ThemeJs
   return theme
 }
 
+// Preview a candidate WITHOUT committing it: paint the tokens on the live DOM
+// so the author sees the real result, but write nothing to the store, the
+// in-memory themeStore, or the SSR cookie. The committed theme stays the source
+// of truth, so a later Discard can revert by re-applying it (and an approve
+// calls persistAndApply with the same candidate). Same morph as a real apply so
+// the preview reads identically to what gets saved.
+export function applyPreview(
+  context: Pick<PipelineIoContext, 'config'>,
+  candidate: ThemeJsonV2,
+): void {
+  beginSmoothThemeTransition()
+  applyAnyTheme(candidate, context.config)
+}
+
 export async function persistAndApply(
   context: PipelineIoContext,
   candidate: ThemeJsonV2,

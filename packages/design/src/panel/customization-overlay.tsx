@@ -10,9 +10,11 @@ import {
 } from 'react'
 
 import { useInvariance } from '../context/provider'
-import { runPipeline, type PipelineStage, type PipelineResult } from '../agent/pipeline'
+import { runPipeline, type PipelineStage, type PipelineResult, type PendingPreview } from '../agent/pipeline'
 import { applyPack, availablePacks } from '../agent/apply-pack'
+import { loadCurrentV2, persistAndApply } from '../agent/pipeline-io'
 import type { ConvTurn } from '../agent/gatekeeper'
+import type { ThemeJsonV2 } from '../config/types'
 import { applyAnyTheme } from '../runtime/apply'
 import { beginSmoothThemeTransition } from '../runtime/smooth-transition'
 import { upgradeThemeJson } from '../config/upgrade'
@@ -308,6 +310,24 @@ function saveChatHistory(userId: string, appId: string, history: HistoryItem[], 
   } catch { /* quota exceeded — ignore */ }
 }
 
+// Strip every --inv- custom property off :root. Used when reverting a discarded
+// preview down to a base theme that declares fewer tokens than the preview did —
+// re-applying the base alone would leave the preview's extra tokens stranded.
+function clearInvTokens(): void {
+  if (typeof document === 'undefined') return
+  const root = document.documentElement
+  const props = Array.from({ length: root.style.length }, (_, i) => root.style.item(i))
+  for (const prop of props) {
+    if (prop.startsWith('--inv-')) root.style.removeProperty(prop)
+  }
+}
+
+// A preview painted on the live app and awaiting the author's Approve/Discard.
+// Carries the verified candidate + save meta (to commit on approve) plus the
+// user's message + description (deferred conversation/ history bookkeeping, so a
+// discarded turn never tells the model it succeeded).
+type PendingState = (PendingPreview & { userMessage: string; description: string }) | null
+
 export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
   const {
     config,
@@ -335,6 +355,11 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
   const [history, setHistory] = useState<HistoryItem[]>(saved.history)
   const [convHistory, setConvHistory] = useState<ConvTurn[]>(saved.convHistory)
   const [isThinking, setIsThinking] = useState(false)
+  // A generated change painted live and awaiting approval; null when there is
+  // nothing pending. While set, the input area becomes an Approve/Discard bar
+  // and new prompts/packs are blocked until the author decides.
+  const [pendingPreview, setPendingPreview] = useState<PendingState>(null)
+  const [committing, setCommitting] = useState(false)
   const [phase, setPhase] = useState<PanelPhase>('chat')
   const [veilExit, setVeilExit] = useState<VeilExit>(null)
   const [veilStage, setVeilStage] = useState('Thinking...')
@@ -342,6 +367,13 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
 
   const historyRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  // The committed theme captured just before a preview run, so Discard can
+  // revert the live DOM to exactly what was on screen before.
+  const previewBaseRef = useRef<ThemeJsonV2 | null>(null)
+
+  // The store/apply slice the commit + revert helpers need (a structural subset
+  // of the full invariance context).
+  const ioContext = () => ({ config, themeStore, storageBackend, userId, appId })
 
   // Phase-machine timers must die with the component: if the host unmounts the
   // overlay mid-run, a surviving timeout would setState (or onClose) on a dead
@@ -421,6 +453,75 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
     }, 250)
   }
 
+  // Approve: commit the previewed candidate. The tokens are already live, so
+  // persistAndApply just writes them through to the store/cookie. Record the
+  // success in the conversation now (it was deferred so a discard couldn't tell
+  // the model it succeeded), then close — the saved theme stays on screen.
+  async function handleApprovePreview() {
+    const pending = pendingPreview
+    if (!pending || committing) return
+    setCommitting(true)
+    try {
+      await persistAndApply(ioContext(), pending.candidate, pending.meta)
+    } catch (err) {
+      console.error('[invariance]', err)
+      setCommitting(false)
+      setHistory((h) => [
+        ...h,
+        {
+          id: Math.random().toString(36).slice(2),
+          userMessage: '',
+          status: 'system' as const,
+          description: 'Could not save this change. It is still previewed — try Keep again.',
+        },
+      ])
+      return
+    }
+    setConvHistory((prev) => [
+      ...prev,
+      { role: 'user' as const, content: pending.userMessage },
+      { role: 'assistant' as const, content: JSON.stringify({ type: 'success', description: pending.description }) },
+    ])
+    setPendingPreview(null)
+    setCommitting(false)
+    onClose()
+  }
+
+  // Discard: revert the live DOM to the pre-run theme (clear the preview's tokens
+  // first so a sparser base can't leave stragglers) and drop the candidate
+  // unsaved. The conversation records the discard so the next prompt knows the
+  // change did not stick.
+  function handleDiscardPreview() {
+    const pending = pendingPreview
+    if (!pending || committing) return
+    const base = previewBaseRef.current
+    beginSmoothThemeTransition()
+    clearInvTokens()
+    if (base) applyAnyTheme(base, config)
+    setConvHistory((prev) => [
+      ...prev,
+      { role: 'user' as const, content: pending.userMessage },
+      { role: 'assistant' as const, content: JSON.stringify({ type: 'discarded', description: pending.description }) },
+    ])
+    setHistory((h) => [
+      ...h,
+      {
+        id: Math.random().toString(36).slice(2),
+        userMessage: '',
+        status: 'system' as const,
+        description: 'Discarded — your theme is unchanged.',
+      },
+    ])
+    setPendingPreview(null)
+  }
+
+  // Closing the panel with a preview still pending reverts it first — an
+  // unapproved change must never silently survive as the live (but unsaved) look.
+  function requestClose() {
+    if (pendingPreview) handleDiscardPreview()
+    onClose()
+  }
+
   // `override` lets a seeded-prompt chip submit its text directly without
   // round-tripping through the `input` state (a setState + immediate submit
   // would race the not-yet-flushed value). Falls back to the typed input.
@@ -431,7 +532,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
     // already dropped: phase timers (including the scheduled onClose) are
     // still pending, and a run started under them would be torn down mid-
     // flight. CSS pointer-events alone must not be the only guard.
-    if (!message || isThinking || phase !== 'chat') return
+    if (!message || isThinking || phase !== 'chat' || pendingPreview) return
     setInput('')
     setIsThinking(true)
 
@@ -457,6 +558,10 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
     setVeilExit(null)
     setPhase('loading')
 
+    // Snapshot the committed theme so a Discard (or a close) can revert the live
+    // DOM to exactly this. Captured before the run paints the preview on top.
+    previewBaseRef.current = await loadCurrentV2(ioContext())
+
     let result: PipelineResult
     try {
       result = await runPipeline(
@@ -470,6 +575,9 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
           apiKey,
           userId,
           appId,
+          // Paint the result live but hold it for explicit approval instead of
+          // saving immediately — the success result carries `pending`.
+          preview: true,
           componentLibrary: componentLibrary ? Object.keys(componentLibrary) : [],
           ...(apiBaseUrl ? { apiBaseUrl } : {}),
           ...(onUsage ? { onUsage } : {}),
@@ -548,15 +656,26 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
           : item,
       ),
     )
+    setIsThinking(false)
+
+    // Preview path: the candidate is already painted on the live app (applyPreview
+    // ran in the pipeline). Drop the veil so the author can see it and hold the
+    // change for Approve/Discard — the conversation turn is deferred to the
+    // decision so a discarded run never tells the model it stuck.
+    if (result.pending) {
+      setPendingPreview({ ...result.pending, userMessage: message, description: result.description })
+      dismissVeilToChat()
+      return
+    }
+
     setConvHistory((prev) => [
       ...prev,
       { role: 'user' as const, content: message },
       { role: 'assistant' as const, content: JSON.stringify({ type: 'success', description: result.description }) },
     ])
-    setIsThinking(false)
 
-    // Hold the veil briefly with the result, then fade everything away and
-    // close — the user lands directly on the freshly themed app.
+    // Non-preview: hold the veil briefly with the result, then fade everything
+    // away and close — the user lands directly on the freshly themed app.
     setRevealText(result.description)
     setPhase('revealing')
     schedulePhaseStep(() => {
@@ -580,8 +699,9 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
 
   async function handleApplyPack(packId: string, packName: string) {
     // phase !== 'chat': a pack tap during the post-success 'revealing' window
-    // would race the scheduled onClose (see handleSubmit's guard).
-    if (isThinking || phase !== 'chat') return
+    // would race the scheduled onClose (see handleSubmit's guard). pendingPreview:
+    // a pack apply mid-preview would overwrite the unsaved candidate.
+    if (isThinking || phase !== 'chat' || pendingPreview) return
     setIsThinking(true)
 
     const id = Math.random().toString(36).slice(2)
@@ -638,12 +758,12 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
   // setState; the chip text shows up as the history card's userMessage (the input
   // box itself stays empty — handleSubmit clears it).
   function handlePromptChip(prompt: string) {
-    if (isThinking) return
+    if (isThinking || pendingPreview) return
     void handleSubmit(undefined, prompt)
   }
 
   function handleSurpriseMe() {
-    if (isThinking) return
+    if (isThinking || pendingPreview) return
     const pick = EXAMPLE_PROMPTS[Math.floor(Math.random() * EXAMPLE_PROMPTS.length)]
     if (pick) handlePromptChip(pick)
   }
@@ -655,8 +775,10 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
     }
     // The veil is not dismissible: runs are short and closing mid-pipeline
     // would desync the in-flight state machine from what the user sees.
+    // Escape with a preview pending reverts it (via requestClose) rather than
+    // leaving an unapproved change live.
     if (e.key === 'Escape' && phase === 'chat') {
-      onClose()
+      requestClose()
     }
   }
 
@@ -704,7 +826,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
           tear down the component (and the in-flight pipeline) with it. The
           inv-panel-exit class only exists for the reduced-motion fallback. */}
       <div
-        onClick={onClose}
+        onClick={requestClose}
         data-inv-backdrop="true"
         className={phase === 'chat' ? undefined : 'inv-panel-exit'}
         style={{
@@ -777,7 +899,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
           <div style={{ flex: 1 }} />
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             aria-label="Close"
             style={{
               background: 'none',
@@ -862,6 +984,75 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
         <div
           style={{ padding: '12px 18px 14px', borderTop: '1px solid rgba(17,24,39,0.05)', flexShrink: 0 }}
         >
+          {pendingPreview ? (
+          /* Preview decision bar: the change is live on the app behind the panel;
+             the author keeps or reverts it. Replaces the prompt/chip controls so
+             a new request can't race the pending candidate. */
+          <div data-inv-preview-bar="true" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ fontSize: '12.5px', lineHeight: 1.45, color: '#374151', textAlign: 'center' }}>
+              Previewing on your app — keep this change?
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={handleDiscardPreview}
+                disabled={committing}
+                data-inv-discard="true"
+                style={{
+                  flex: 1,
+                  background: '#ffffff',
+                  border: '1px solid #e8eaee',
+                  borderRadius: '999px',
+                  padding: '9px 12px',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: '#4b5563',
+                  cursor: committing ? 'default' : 'pointer',
+                  transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  if (!committing) {
+                    ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#f0c3bf'
+                    ;(e.currentTarget as HTMLButtonElement).style.color = '#b3261e'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#e8eaee'
+                  ;(e.currentTarget as HTMLButtonElement).style.color = '#4b5563'
+                }}
+              >
+                Discard
+              </button>
+              <button
+                type="button"
+                onClick={() => { void handleApprovePreview() }}
+                disabled={committing}
+                data-inv-approve="true"
+                style={{
+                  flex: 1,
+                  background: committing ? '#c7cbe8' : '#6366f1',
+                  border: '1px solid transparent',
+                  borderRadius: '999px',
+                  padding: '9px 12px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#ffffff',
+                  cursor: committing ? 'default' : 'pointer',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  if (!committing) (e.currentTarget as HTMLButtonElement).style.background = '#4f46e5'
+                }}
+                onMouseLeave={(e) => {
+                  if (!committing) (e.currentTarget as HTMLButtonElement).style.background = '#6366f1'
+                }}
+              >
+                {committing ? 'Saving…' : 'Keep change'}
+              </button>
+            </div>
+          </div>
+          ) : (
+          <>
           {/* Seeded example prompts. PERSISTENT (not just the empty state): a
               user who applied a theme can always change their mind from here.
               They run the full LLM pipeline, so they are shown only when an
@@ -1104,6 +1295,8 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
               Reset all
             </button>
           </div>
+          </>
+          )}
         </div>
       </div>
 

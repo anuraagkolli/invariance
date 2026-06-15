@@ -11,16 +11,25 @@ import { ThemeJsonV2Schema } from '../config/schema'
 import { verify } from '../verify/engine'
 import { verifyV2 } from '../verify/compiled-tests'
 import { deriveConstraints } from '../config/derive-constraints'
-import { loadCurrentV2, persistAndApply } from './pipeline-io'
+import { loadCurrentV2, persistAndApply, applyPreview } from './pipeline-io'
 import { applyLayoutPreset } from './layout-profile'
 import type { UsageHandler } from './api'
+import type { SaveThemeMeta } from '../storage/types'
 
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
+// A verified candidate that has been painted on the live DOM as a preview but
+// not yet saved. The panel holds it while the author decides: Approve commits it
+// via persistAndApply; Discard reverts the DOM to the previously committed theme.
+export interface PendingPreview {
+  candidate: ThemeJsonV2
+  meta: SaveThemeMeta
+}
+
 export type PipelineResult =
-  | { type: 'success'; description: string; slotName: string; warnings?: string[] }
+  | { type: 'success'; description: string; slotName: string; warnings?: string[]; pending?: PendingPreview }
   | { type: 'clarification'; message: string }
   | { type: 'error'; message: string }
 
@@ -48,6 +57,35 @@ export interface PipelineContext {
   // When llmProvider === 'openai-compatible', populate ALL FOUR roles: an unset
   // role falls back to its Anthropic model id, which a local server will reject.
   models?: { gatekeeper?: string; designer?: string; builder?: string; slotEdit?: string }
+  // Preview-before-commit: when true, a verified candidate is painted on the
+  // live DOM but NOT persisted; the success result carries `pending` so the
+  // caller can commit (persistAndApply) on approve or revert on discard. When
+  // false/absent the pipeline persists immediately (the original behavior).
+  preview?: boolean
+}
+
+// Terminal step shared by every route: a candidate has cleared the verifier.
+// In preview mode paint it live and hand it back as `pending`; otherwise persist
+// it now. Keeping this in one place means every route gets identical
+// approve/commit semantics.
+async function finalize(
+  context: PipelineContext,
+  candidate: ThemeJsonV2,
+  meta: SaveThemeMeta,
+  result: { description: string; slotName: string; warnings?: string[] },
+): Promise<PipelineResult> {
+  const base = {
+    type: 'success' as const,
+    description: result.description,
+    slotName: result.slotName,
+    ...(result.warnings && result.warnings.length > 0 ? { warnings: result.warnings } : {}),
+  }
+  if (context.preview) {
+    applyPreview(context, candidate)
+    return { ...base, pending: { candidate, meta } }
+  }
+  await persistAndApply(context, candidate, meta)
+  return base
 }
 
 // ---------------------------------------------------------------------------
@@ -245,18 +283,14 @@ export async function runPipeline(
         )
       }
 
-      // Store + apply.
+      // Store + apply (or preview + hold for approval).
       onProgress?.('applying')
-      await persistAndApply(context, candidate, { prompt: userMessage, source: 'pipeline', description: spec.rationale })
-
-      // Only include warnings when non-empty (exactOptionalPropertyTypes: never assign
-      // undefined to an optional field explicitly).
-      return {
-        type: 'success',
-        description: spec.rationale,
-        slotName: 'theme',
-        ...(compiled.warnings.length > 0 ? { warnings: compiled.warnings } : {}),
-      }
+      return finalize(
+        context,
+        candidate,
+        { prompt: userMessage, source: 'pipeline', description: spec.rationale },
+        { description: spec.rationale, slotName: 'theme', warnings: compiled.warnings },
+      )
     }
 
     return { type: 'error', message: lastError }
@@ -287,8 +321,12 @@ export async function runPipeline(
     })
     if (!outcome.ok) return { type: 'error', message: outcome.error }
     onProgress?.('applying')
-    await persistAndApply(context, outcome.candidate, { prompt: userMessage, source: 'pipeline', description: outcome.explanation })
-    return { type: 'success', description: outcome.explanation, slotName: gatekeeperResult.slotName }
+    return finalize(
+      context,
+      outcome.candidate,
+      { prompt: userMessage, source: 'pipeline', description: outcome.explanation },
+      { description: outcome.explanation, slotName: gatekeeperResult.slotName },
+    )
   }
 
   // --- F2 / F3 / F4 route: Builder produces page-keyed sections only ---
@@ -322,8 +360,12 @@ export async function runPipeline(
 
     if (verification.passed) {
       onProgress?.('applying')
-      await persistAndApply(context, candidate, { prompt: userMessage, source: 'pipeline', description: builderResult.explanation })
-      return { type: 'success', description: builderResult.explanation, slotName: intent.slotName }
+      return finalize(
+        context,
+        candidate,
+        { prompt: userMessage, source: 'pipeline', description: builderResult.explanation },
+        { description: builderResult.explanation, slotName: intent.slotName },
+      )
     }
 
     if (attempt < maxRetries) {
