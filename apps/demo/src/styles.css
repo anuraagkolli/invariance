@@ -1,0 +1,265 @@
+:root {
+  /* Invariance role tokens — the vocabulary the design engine themes. These
+     defaults are a dark, red-accent baseline; the client overlay overrides them
+     per user at runtime with the compiler's output (a designed, AA-safe theme). */
+  --inv-surface-0: #0b0b0d;
+  --inv-surface-1: #212125;
+  --inv-surface-2: #3c3d43;
+  --inv-text-primary: #f7f8ff;
+  --inv-text-secondary: #9597a5;
+  --inv-text-disabled: #757683;
+  --inv-accent: #ef4d60;
+  --inv-accent-hover: #ff8289;
+  --inv-accent-contrast: #1f212b;
+  --inv-accent-subtle: #562d2e;
+  --inv-border: #757683;
+  --inv-border-strong: #b4b6c4;
+  --inv-ring: #cc2644;
+  --inv-font-display: 'Space Grotesk', system-ui, sans-serif;
+  --inv-font-body: 'Inter', system-ui, sans-serif;
+  --inv-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  --inv-radius-base: 4px;
+  --inv-radius-lg: 8px;
+  --inv-shadow-1: 0 2px 8px rgb(0 0 0 / 0.24);
+  --inv-shadow-2: 0 12px 32px rgb(0 0 0 / 0.35);
+  --inv-density-unit: 4px;
+  --inv-border-width: 2px;
+  --inv-display-transform: none;
+  --inv-display-tracking: 0;
+  --inv-display-weight: 600;
+  --inv-space-2xs: 3px;
+  --inv-space-xs: 6px;
+  --inv-space-sm: 12px;
+  --inv-space-md: 18px;
+  --inv-space-lg: 28px;
+  --inv-space-xl: 44px;
+  --inv-space-2xl: 64px;
+  --inv-sidebar-w: 230px;
+  --inv-card-w: 168px;
+  --inv-card-w-wide: 320px;
+  --inv-card-aspect: 2 / 3;
+  --inv-hero-min-h: 420px;
+  --inv-section-gap: 44px;
+
+  /* Demo semantic aliases -> role tokens, so a compiled theme restyles the app
+     while component CSS keeps its readable names. The overlay overrides the role
+     tokens; these var() refs resolve through to the new values. */
+  --inv-bg: var(--inv-surface-0);
+  --inv-surface: var(--inv-surface-1);
+  --inv-nav-bg: color-mix(in srgb, var(--inv-surface-0) 85%, transparent);
+  --inv-text: var(--inv-text-primary);
+  --inv-text-muted: var(--inv-text-secondary);
+  --inv-accent-2: var(--inv-accent-hover);
+  --inv-radius: var(--inv-radius-lg);
+  --inv-row-gap: var(--inv-space-xl);
+  --inv-card-width: var(--inv-card-w-wide);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--inv-bg);
+  color: var(--inv-text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* ---------- nav ---------- */
+
+.nav {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 32px;
+  height: 64px;
+  background: var(--inv-nav-bg);
+  backdrop-filter: blur(8px);
+}
+
+.brand {
+  color: var(--inv-accent);
+  font-weight: 800;
+  letter-spacing: 2px;
+  font-size: 20px;
+  margin-right: 12px;
+}
+
+.nav-link {
+  color: var(--inv-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.nav-link.active { color: var(--inv-text); font-weight: 600; }
+.nav-extra { flex: 1; }
+
+.user-chip {
+  background: var(--inv-surface);
+  border: 1px solid #2a2a35;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--inv-text-muted);
+  appearance: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ---------- billboard ---------- */
+
+.billboard {
+  position: relative;
+  min-height: 62vh;
+  display: flex;
+  align-items: flex-end;
+  padding: 96px 48px 48px;
+  background:
+    linear-gradient(to top, var(--inv-bg) 0%, transparent 55%),
+    linear-gradient(100deg, hsl(var(--poster-hue, 230) 50% 12%) 15%, transparent 70%),
+    radial-gradient(110% 120% at 80% 10%, hsl(var(--poster-hue, 230) 75% 32%) 0%, hsl(calc(var(--poster-hue, 230) + 50) 70% 14%) 60%, var(--inv-bg) 100%);
+}
+
+.billboard-content { max-width: 560px; display: flex; flex-direction: column; gap: 12px; }
+
+.billboard-tagline {
+  color: var(--inv-accent-2);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.billboard h1 { margin: 0; font-size: 56px; line-height: 1.05; }
+.billboard-meta { color: var(--inv-text-muted); font-size: 14px; }
+.billboard-synopsis { margin: 0; font-size: 16px; line-height: 1.5; color: var(--inv-text); opacity: 0.9; }
+.billboard-actions { display: flex; gap: 12px; margin-top: 8px; }
+
+.btn-play, .btn-list {
+  border: none;
+  border-radius: var(--inv-radius);
+  padding: 12px 28px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-play { background: var(--inv-text); color: #000; }
+.btn-list { background: #ffffff26; color: var(--inv-text); }
+.btn-list:disabled { opacity: 0.6; cursor: default; }
+
+/* ---------- rows ---------- */
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--inv-row-gap);
+  padding: 24px 48px 64px;
+}
+
+.row-heading {
+  margin: 0 0 12px;
+  font-size: 20px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.row-heading-extra { font-size: 13px; color: var(--inv-text-muted); }
+
+.row-scroller {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 8px;
+}
+
+/* ---------- show cards ---------- */
+
+.show-card {
+  flex: 0 0 var(--inv-card-width);
+  background: var(--inv-surface);
+  border-radius: var(--inv-radius);
+  overflow: hidden;
+  transition: transform 0.15s ease;
+}
+
+.show-card:hover { transform: scale(1.04); }
+
+.poster {
+  position: relative;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(120% 150% at 20% 0%, hsl(var(--poster-hue, 230) 70% 38%) 0%, hsl(calc(var(--poster-hue, 230) + 45) 65% 18%) 70%);
+}
+
+.poster-initials {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  opacity: 0.85;
+}
+
+.card-badge { position: absolute; top: 8px; left: 8px; }
+.card-badge .badge {
+  background: var(--inv-accent-2);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+.maturity {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--inv-text);
+  background: #00000080;
+  border: 1px solid #ffffff40;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background: var(--inv-accent);
+}
+
+.card-body { padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.card-body h3 { margin: 0; font-size: 15px; }
+.card-body .meta { font-size: 12px; color: var(--inv-text-muted); }
+.card-body .rating { color: var(--inv-accent-2); font-weight: 600; }
+
+.card-add {
+  margin-top: 4px;
+  padding: 7px 10px;
+  border: none;
+  border-radius: calc(var(--inv-radius) / 1.5);
+  background: var(--inv-accent);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.card-add:disabled { opacity: 0.55; cursor: default; }
+
+/* ---------- footer ---------- */
+
+.footer {
+  padding: 32px 48px 48px;
+  color: var(--inv-text-muted);
+  font-size: 13px;
+  border-top: 1px solid #1e1e28;
+}
