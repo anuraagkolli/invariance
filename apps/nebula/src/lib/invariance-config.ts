@@ -25,11 +25,12 @@ export const invarianceConfig: InvarianceConfig = {
       },
     },
     pages: { '/': { level: 4 }, '/series': { level: 4 } },
-    // A theme pack restyles AND relayouts: the blocky packs lay the home out as
-    // grids instead of scroll-snap carousels (the renderer swap is already live).
-    pack_layouts: {
-      'retro-arcade': gridHome(),
-      neobrutalist: gridHome(),
+    // A theme restyles AND relayouts: any theme whose StyleSpec reads "compact"
+    // (retro/brutalist/terminal — pack or free-text prompt) resolves to the
+    // 'grid' profile, which lays the home out as grids instead of scroll-snap
+    // carousels (the F4 renderer swap is already live). 'standard' keeps carousels.
+    layout_profiles: {
+      grid: gridHome(),
     },
   },
 }

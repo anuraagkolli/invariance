@@ -47,17 +47,13 @@ describe('applyPack', () => {
     expect(ctx.themeStore.getTheme()?.version).toBe(2)
   })
 
-  it('applies the app-declared layout preset for a pack (relayout, not just restyle)', async () => {
-    const ctx = ioContext({
-      app: 'demo',
-      frontend: {
-        pack_layouts: {
-          'retro-arcade': {
-            components: { pages: { '/': { 'row-trending': { component: 'GridRow' } } } },
-          },
-        },
-      },
-    })
+  // retro-arcade has framing:'compact' → the 'grid' layout profile.
+  const gridProfile = {
+    layout_profiles: { grid: { components: { pages: { '/': { 'row-trending': { component: 'GridRow' } } } } } },
+  }
+
+  it('applies the StyleSpec-derived layout profile for a pack (relayout, not just restyle)', async () => {
+    const ctx = ioContext({ app: 'demo', frontend: gridProfile })
     const result = await applyPack('retro-arcade', ctx)
     expect(result.type).toBe('success')
     const stored = (await ctx.storageBackend.loadTheme('u', 'a')) as {
@@ -66,22 +62,23 @@ describe('applyPack', () => {
     expect(stored.components?.pages?.['/']?.['row-trending']?.component).toBe('GridRow')
   })
 
-  it('does not invent layout/components for a pack with no preset', async () => {
-    const ctx = ioContext({ app: 'demo' }) // no pack_layouts
+  it('does not relayout a non-compact pack (ocean → standard profile, no grid)', async () => {
+    // ocean has framing:'spacious' → 'standard' profile, which the app didn't map.
+    const ctx = ioContext({ app: 'demo', frontend: gridProfile })
+    await applyPack('ocean', ctx)
+    const stored = (await ctx.storageBackend.loadTheme('u', 'a')) as { components?: unknown }
+    expect(stored.components).toBeUndefined()
+  })
+
+  it('does not invent layout/components when the app declares no profiles', async () => {
+    const ctx = ioContext({ app: 'demo' }) // no layout_profiles
     await applyPack('retro-arcade', ctx)
     const stored = (await ctx.storageBackend.loadTheme('u', 'a')) as { components?: unknown }
     expect(stored.components).toBeUndefined()
   })
 
   it('merges the preset by page, preserving the user\'s structure on other pages', async () => {
-    const ctx = ioContext({
-      app: 'demo',
-      frontend: {
-        pack_layouts: {
-          'retro-arcade': { components: { pages: { '/': { 'row-trending': { component: 'GridRow' } } } } },
-        },
-      },
-    })
+    const ctx = ioContext({ app: 'demo', frontend: gridProfile })
     // The user already swapped a component on /series.
     await ctx.storageBackend.saveTheme('u', 'a', {
       version: 2,

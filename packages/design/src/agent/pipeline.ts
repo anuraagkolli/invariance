@@ -12,6 +12,7 @@ import { verify } from '../verify/engine'
 import { verifyV2 } from '../verify/compiled-tests'
 import { deriveConstraints } from '../config/derive-constraints'
 import { loadCurrentV2, persistAndApply } from './pipeline-io'
+import { applyLayoutPreset } from './layout-profile'
 import type { UsageHandler } from './api'
 
 // ---------------------------------------------------------------------------
@@ -217,8 +218,11 @@ export async function runPipeline(
         },
       }
       if (currentV2.content !== undefined) candidate.content = currentV2.content
-      if (currentV2.layout !== undefined) candidate.layout = currentV2.layout
-      if (currentV2.components !== undefined) candidate.components = currentV2.components
+      // A theme also drives layout: derive the structural profile from the spec
+      // (framing 'compact' → grid) and apply the app's matching preset, merged
+      // over the user's current structure. So a free-text "make it retro" can
+      // relayout, not just restyle — same path the one-tap packs take.
+      applyLayoutPreset(candidate, currentV2, spec, context.config)
 
       // Verify — failures are retryable via the Designer (same budget).
       onProgress?.('verifying')
