@@ -1,0 +1,677 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Invariance — Complete System Design</title><style>
+:root{
+  --bg0:#0a0b0d; --bg1:#0e1014; --panel:#14161b; --panel2:#191c22; --bd:#262a31;
+  --ink:#e9eaee; --mute:#9aa0ab; --faint:#6b7280;
+  --look:#56c7f5; --logic:#f2b545; --gate:#46d6a0; --llm:#b79bff; --cdn:#9aa6ff;
+  --apply:#ffd66b; --fail:#fb7185; --browser:#56c7f5; --dev:#46d6a0; --cp:#f2b545; --gov:#c9b27a; --rev:#7fd4b0;
+  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+  radial-gradient(1100px 480px at 50% -160px, rgba(86,150,200,.10), transparent 70%),
+  linear-gradient(var(--bg1),var(--bg0));
+  color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+code{font-family:var(--mono);font-size:.86em;background:#1c2027;border:1px solid var(--bd);
+  border-radius:5px;padding:.5px 5px;color:#cdd3db}
+code.cite{color:var(--look);background:#10222b;border-color:#1c3a47}
+.cite{white-space:nowrap}
+
+/* header / nav */
+header.top{position:sticky;top:0;z-index:50;backdrop-filter:blur(10px);
+  background:rgba(10,11,13,.82);border-bottom:1px solid var(--bd)}
+.top-in{max-width:1240px;margin:0 auto;padding:11px 22px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.brand{font-weight:800;letter-spacing:.5px;font-size:14px;white-space:nowrap}
+.brand .dot{color:var(--logic)}
+nav{display:flex;gap:3px;flex-wrap:wrap;overflow-x:auto}
+nav a{font-size:12px;color:var(--mute);padding:5px 9px;border-radius:7px;white-space:nowrap;border:1px solid transparent}
+nav a:hover{color:var(--ink);background:#181b21}
+nav a.active{color:var(--ink);background:#1d2128;border-color:var(--bd)}
+
+main{max-width:1240px;margin:0 auto;padding:30px 22px 90px}
+.hero{padding:26px 0 8px}
+.hero h1{font-size:34px;margin:.1em 0 .15em;letter-spacing:-.3px;font-weight:850}
+.hero .tagline{color:var(--mute);font-size:15px;max-width:880px}
+.hero .meta{margin-top:12px;color:var(--faint);font-size:12px;font-family:var(--mono)}
+
+section{padding:30px 0;border-top:1px solid var(--bd);scroll-margin-top:64px}
+.sec-kicker{font-family:var(--mono);font-size:12px;color:var(--logic);font-weight:700;letter-spacing:2px}
+section h2{font-size:23px;margin:.15em 0 .5em;font-weight:800}
+section h3{font-size:15px;margin:1.4em 0 .6em;color:var(--ink);font-weight:800}
+.sub-h{color:var(--mute);font-weight:500;font-size:13px}
+.lead{color:var(--mute);max-width:920px;margin:.2em 0 1em}
+.note-line{color:var(--mute);font-size:13.5px;max-width:980px;margin:.6em 0}
+.kicker-note{margin:.2em 0 .6em;color:var(--mute);font-size:13px}
+
+/* grids + cards */
+.grid{display:grid;gap:14px}
+.grid-2{grid-template-columns:repeat(2,1fr)}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:980px){.grid-3{grid-template-columns:1fr}.grid-2{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--bd);border-radius:12px;padding:15px 16px;position:relative;
+  border-left-width:3px}
+.card.c-browser,.card.c-look{border-left-color:var(--look)}
+.card.c-dev{border-left-color:var(--dev)}
+.card.c-cp,.card.c-logic{border-left-color:var(--cp)}
+.card.c-cdn{border-left-color:var(--cdn)}
+.card.c-llmc{border-left-color:var(--llm)}
+.card.c-gate{border-left-color:var(--gate)}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px}
+.card-t{font-weight:800;font-size:14.5px}
+.where{font-size:11px;color:var(--faint);font-family:var(--mono);margin-bottom:8px}
+ul.bul{margin:.3em 0 0;padding-left:1.05em;list-style:none}
+ul.bul li{position:relative;margin:.42em 0;font-size:13px;color:var(--mute);padding-left:.1em}
+ul.bul li::before{content:"▹";position:absolute;left:-1em;color:var(--faint)}
+ul.bul li b{color:var(--ink);font-weight:700}
+ul.big-bul li{font-size:13.5px;margin:.55em 0}
+
+/* badges + tags */
+.b{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:5px;
+  border:1px solid;vertical-align:middle;letter-spacing:.3px}
+.b-det{color:#aeb6c2;border-color:#39414e;background:#1b1f26}
+.b-llm{color:var(--llm);border-color:#3a3160;background:#211b34}
+.b-gate{color:var(--gate);border-color:#1c4536;background:#0f261d}
+.b-apply{color:var(--apply);border-color:#4d3f15;background:#241d09}
+.b-browser{color:var(--browser);border-color:#1c3a47;background:#102029}
+.b-dev{color:var(--dev);border-color:#1c4536;background:#0f261d}
+.b-cp{color:var(--cp);border-color:#4d3f15;background:#241d09}
+.tag{font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;border:1px solid;white-space:nowrap}
+.t-browser,.t-look{color:var(--look);border-color:#1c3a47}.t-dev{color:var(--dev);border-color:#1c4536}
+.t-cp,.t-logic{color:var(--cp);border-color:#4d3f15}.t-cdn{color:var(--cdn);border-color:#34406b}
+.t-llmc{color:var(--llm);border-color:#3a3160}.t-gate{color:var(--gate);border-color:#1c4536}
+
+/* callouts */
+.callout{border:1px solid var(--bd);border-left-width:3px;border-radius:10px;padding:13px 15px;font-size:13.5px;color:var(--mute)}
+.callout b{color:var(--ink)} .callout u{text-decoration-color:var(--llm)}
+.callout.c-llm{border-left-color:var(--llm);background:linear-gradient(90deg,rgba(183,155,255,.06),transparent)}
+.callout.c-cp{border-left-color:var(--cp);background:linear-gradient(90deg,rgba(242,181,69,.06),transparent)}
+.callout.c-dev{border-left-color:var(--dev);background:linear-gradient(90deg,rgba(70,214,160,.06),transparent)}
+.hot{color:var(--apply);font-weight:700}
+
+/* flow chips */
+.flow{display:flex;align-items:stretch;flex-wrap:wrap;gap:7px;margin:.6em 0}
+.step{background:var(--panel2);border:1px solid var(--bd);border-radius:9px;padding:8px 11px;min-width:96px;
+  display:flex;flex-direction:column;justify-content:center;border-top-width:2px}
+.step .st{font-size:12px;font-weight:700;color:var(--ink)}
+.step .ss{font-size:10px;color:var(--mute);margin-top:1px;font-family:var(--mono)}
+.s-in{border-top-color:var(--faint)} .s-det{border-top-color:#9aa6b8}
+.s-llm{border-top-color:var(--llm)} .s-llm .st{color:#d7c9ff}
+.s-gate{border-top-color:var(--gate);background:#0e1a16} .s-gate .st{color:#9befcf}
+.s-apply{border-top-color:var(--apply);background:#1c1808} .s-apply .st{color:var(--apply)}
+.s-cdn{border-top-color:var(--cdn)} .s-cdn .st{color:#c3cbff}
+.s-rev{border-top-color:var(--rev)}
+.chev{align-self:center;color:var(--faint);font-size:18px;font-weight:700}
+.fail{color:var(--fail);font-weight:700}
+
+/* lifecycle */
+.lc-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:980px){.lc-grid{grid-template-columns:1fr}}
+.lc{display:flex;gap:13px;background:var(--panel);border:1px solid var(--bd);border-radius:11px;padding:13px 15px}
+.lc-n{flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:14px;border:2px solid}
+.n-look{color:var(--look);border-color:var(--look)} .n-logic{color:var(--cp);border-color:var(--cp)}
+.n-dev{color:var(--dev);border-color:var(--dev)} .n-cdn{color:var(--cdn);border-color:var(--cdn)}
+.n-gov{color:var(--gov);border-color:var(--gov)}
+.lc-t{font-weight:800;font-size:14px}
+.lc-w{font-family:var(--mono);font-size:10.5px;color:var(--faint);font-weight:600;margin-left:6px}
+.lc-d{font-size:12.5px;color:var(--mute);margin:3px 0 5px}
+.lc-hop code{font-size:11px}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--bd);border-radius:11px}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:560px}
+table th,table td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--bd);vertical-align:top}
+table th{color:var(--faint);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px;background:#101318}
+table tr:last-child td{border-bottom:none}
+table.cmp td:first-child{color:var(--faint);font-weight:600;white-space:nowrap;width:120px}
+th.look,td.look{color:var(--look)} th.logic,td.logic{color:var(--logic)} td.cdn{color:var(--cdn)}
+.yes{color:var(--gate);font-weight:700} .no{color:var(--fail);font-weight:700}
+.m{font-family:var(--mono);font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:5px;border:1px solid}
+.m-get{color:var(--gate);border-color:#1c4536} .m-post{color:var(--apply);border-color:#4d3f15}
+.m-mix{color:var(--cdn);border-color:#34406b}
+.pill{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;border:1px solid}
+.p-ok{color:var(--gate);border-color:#1c4536} .p-warn{color:var(--apply);border-color:#4d3f15}
+.p-bad{color:var(--fail);border-color:#5a2330} .p-muted{color:var(--faint);border-color:var(--bd)}
+
+/* apply cards + edges */
+.apply-card{border:1px solid var(--bd);border-radius:11px;padding:14px 16px;border-top-width:3px}
+.apply-card.c-look{border-top-color:var(--look);background:linear-gradient(180deg,rgba(86,199,245,.06),transparent)}
+.apply-card.c-logic{border-top-color:var(--logic);background:linear-gradient(180deg,rgba(242,181,69,.06),transparent)}
+.ac-h{font-size:12px;font-weight:800;letter-spacing:.4px;color:var(--mute);margin-bottom:8px}
+.c-look .ac-h{color:var(--look)} .c-logic .ac-h{color:var(--logic)}
+code.big{display:block;font-size:15px;color:var(--ink);background:#0e1116;border:1px solid var(--bd);
+  border-radius:8px;padding:10px 12px}
+.ac-f{font-size:11.5px;color:var(--faint);margin-top:8px}
+.edges{display:flex;flex-direction:column;gap:9px}
+.edge{border:1px solid var(--bd);border-left:3px solid var(--fail);border-radius:9px;padding:9px 13px;background:var(--panel)}
+.edge-t{font-weight:800;font-size:13px;color:#ffd0d6}
+.edge-d{font-size:12.5px;color:var(--mute);margin-top:2px}
+
+/* poster */
+details{border:1px solid var(--bd);border-radius:12px;background:var(--panel);overflow:hidden}
+summary{cursor:pointer;padding:12px 16px;font-weight:700;font-size:13px;color:var(--mute);user-select:none}
+summary:hover{color:var(--ink)}
+.poster-scroll{overflow:auto;max-height:80vh;padding:0 12px 12px;background:#0a0b0d}
+.poster-scroll svg{display:block;min-width:1400px;width:100%;height:auto}
+
+footer{max-width:1240px;margin:0 auto;padding:24px 22px 60px;color:var(--faint);font-size:12px;border-top:1px solid var(--bd)}
+footer code{font-size:11px}
+</style></head><body><header class="top"><div class="top-in"><span class="brand">INVARIANCE<span class="dot"> ·</span> system design</span><nav><a href="#overview" data-sec="overview">Overview</a><a href="#zones" data-sec="zones">Trust zones</a><a href="#components" data-sec="components">Components</a><a href="#api" data-sec="api">API</a><a href="#lifecycle" data-sec="lifecycle">Lifecycle</a><a href="#onboarding" data-sec="onboarding">Onboarding</a><a href="#look" data-sec="look">Look plane</a><a href="#logic" data-sec="logic">Logic plane</a><a href="#distribution" data-sec="distribution">Distribution</a><a href="#enforcement" data-sec="enforcement">Enforcement</a><a href="#invariants" data-sec="invariants">Invariants</a><a href="#poster" data-sec="poster">Poster</a></nav></div></header><main><div class="hero"><h1>The complete system design</h1><div class="tagline">End-user customization of a live web app — UI <i>and</i> business logic — under developer-declared invariants. Two planes, three trust zones, deterministic gates, fail-open everywhere.</div><div class="meta">grounded in the repo · sources: docs/INVARIANTS-PIPELINE.md + docs/ONBOARDING-PIPELINE.md + docs/DESIGN.md</div></div><section id="overview"><div class="sec-kicker">01</div><h2>Overview</h2>
+<p class="lead">Invariance lets <b>end users</b> of an existing web app customize it with natural-language prompts —
+both its <b>look</b> (tokens, styles, layout, slots) and its <b>business logic</b> at the API seam — while the app's
+<b>developers stay in control</b> through declared <i>invariants</i>. Two independent planes do this, and they answer
+the question <i>"when is the change actually live?"</i> in two different ways.</p>
+
+<div class="callout c-llm">
+  <b>The one rule that makes it safe:</b> the LLM is <u>in the loop, never in the gate</u>. The model only
+  <i>proposes</i>; everything that is enforced is enforced by deterministic TypeScript + cryptography. Verification
+  contains no LLM. Every failure path falls open to the base app.
+</div>
+
+<h3>The two planes at a glance</h3>
+<div class="tbl-wrap"><table class="cmp">
+<thead><tr><th></th><th class="look">LOOK plane</th><th class="logic">BUSINESS-LOGIC plane</th></tr></thead>
+<tbody>
+<tr><td>Package</td><td><code>@invariance/design</code></td><td><code>control-plane</code> + <code>@invariance/server</code></td></tr>
+<tr><td>Changes</td><td>tokens, colors, fonts, layout profile, slots</td><td>API request/response <i>data</i> (filter / transform shows, featured…)</td></tr>
+<tr><td>Runs where</td><td>the browser (+ SSR cookie mirror)</td><td>the customer's server, inside a QuickJS-WASM sandbox</td></tr>
+<tr><td>Authoring brain</td><td>Gatekeeper + Designer LLM</td><td>qwen2.5 (Ollama) / Anthropic LLM</td></tr>
+<tr><td>The gate</td><td>deterministic level-gate + <code>verifyV2</code> (7 tests)</td><td>deterministic <code>verifyBundleAgainstManifest</code> + Zod <code>superRefine</code></td></tr>
+<tr><td>Signed bundle?</td><td><span class="no">No</span> — theme JSON, stored + cookie-mirrored</td><td><span class="yes">Yes</span> — ed25519 over canonical JSON, content-addressed</td></tr>
+<tr><td><b>Goes live when…</b></td><td><code>root.style.setProperty()</code> runs — <b>immediate paint</b></td><td>runtime sets <code>current = execution.result</code> — <b>per request</b>, after crypto + capability checks</td></tr>
+<tr><td>Failure mode</td><td>drop theme → base CSS wins</td><td>fail-open → original payload returned</td></tr>
+</tbody></table></div>
+</section><section id="zones"><div class="sec-kicker">02</div><h2>Trust zones — who runs what</h2>
+<p class="lead">Three zones across a hard <b>control-plane / data-plane</b> boundary. The control plane (our infra)
+authors, verifies, signs and distributes. The data plane (the developer's own servers + the user's browser) only ever
+loads <i>static, signed</i> artifacts and verifies them locally.</p>
+<div class="grid grid-3"><div class="card c-browser"><div class="card-h"><span class="card-t">END-USER BROWSER</span></div><div class="where">data plane · runs developer-shipped code</div><ul class="bul"><li><span class="b b-browser">client</span> <b>Customer web app</b> — React+Tailwind, developer-shipped; components read <code>var(--inv-*)</code> tokens, regions wrapped in <code>&amp;lt;m.slot&amp;gt;</code>.</li><li><span class="b b-browser">client</span> <b>@invariance/client</b> (Tier-0): ModLoader (fetch→verify→cache bundle), UI overlay engine, prompt widget <code>submitPrompt()</code>, async telemetry.</li><li><span class="b b-browser">client</span> <b>@invariance/design</b> (look plane): CustomizationPanel + m.slots, Gatekeeper + Designer, compiler, <code>verifyV2</code>, apply → <code>:root</code>.</li></ul></div><div class="card c-dev"><div class="card-h"><span class="card-t">DEVELOPER INFRASTRUCTURE</span></div><div class="where">data plane · customer-owned · stores nothing durably</div><ul class="bul"><li><span class="b b-dev">server</span> <b>Frontend host</b> — serves the app + bundled Invariance SDKs; holds no Invariance state.</li><li><span class="b b-dev">server</span> <b>API server · @invariance/server</b> (Tier-1): <code>withInvariance</code>/Express middleware, runtime (fetch pointer + <code>verifyBundle</code>), QuickJS-WASM sandbox, capability + field enforcement.</li><li><span class="b b-dev">server</span> <b>Customer backend / DB</b> — the real data hooks transform on the way out; untouched unless a mod is active.</li></ul></div><div class="card c-cp"><div class="card-h"><span class="card-t">INVARIANCE CONTROL PLANE</span></div><div class="where">control plane · our infra</div><ul class="bul"><li><span class="b b-cp">our cloud</span> <b>control-plane monolith</b> (Hono+Postgres): Authoring (LLM + verifier-in-loop) · Verification (no LLM) · Registry (sign · publish · pointers · kill-switch · lazy-migrate) · Analytics · Design-config + Themes store.</li><li><span class="b b-cp">our cloud</span> <b>Postgres</b> — durable source of truth: manifests, mod revisions, pointers, prompts (PII), themes, events.</li><li><span class="b b-cp">Next.js</span> <b>Console</b> — manifest + Invariants surface, mods + kill switches, Guardrails, Themes/rollback.</li></ul></div></div>
+<div class="grid grid-2" style="margin-top:14px">
+<div class="card c-cdn"><div class="card-h"><span class="card-t">CDN</span></div><div class="where">shared static artifact store</div><ul class="bul"><li>Immutable, content-addressed signed bundles served at <code>/bundles/:hash</code> with <code>cache-control: immutable</code>.</li><li>Static — ours or mirrored into the customer&rsquo;s bucket. Trust comes from the <b>signature</b>, not the host.</li></ul></div><div class="card c-llmc"><div class="card-h"><span class="card-t">LLM</span></div><div class="where">authoring brain</div><ul class="bul"><li><b>qwen2.5 via Ollama</b> (OpenAI-compatible, default, no key) or <b>Anthropic</b> (opt-in).</li><li>Used <b>only</b> in authoring. Never in verification, never on the production request path.</li></ul></div></div>
+<div class="callout c-cp" style="margin-top:14px">
+  <b>No production request ever transits Invariance.</b> The prod path is <span class="hot">Browser ↔ Developer&rsquo;s server ↔ CDN</span>
+  (static fetch + local signature check). Control-plane downtime can never break the customer app — distribution is a
+  short-TTL mutable <b>pointer</b> ("active modset = hash X") in front of <b>immutable</b> signed bundles.
+</div>
+</section><section id="components"><div class="sec-kicker">03</div><h2>Packages &amp; components</h2>
+<p class="lead">Workspace packages export TypeScript source directly (no build step). Schema is the source of truth;
+types come from <code>z.infer</code>.</p>
+<div class="grid grid-3"><div class="card c-look"><div class="card-h"><span class="card-t">@invariance/schema</span><span class="tag t-look">shared</span></div><div class="where">imported everywhere</div><ul class="bul"><li>The keystone: zod schemas + types every component shares.</li><li>AppManifest (tokens, endpoints, invariants/policies), ModBundle (uiOps, hooks, capability manifest), ed25519 signing, path/diff utils.</li><li>Cross-schema integrity in <code>superRefine</code> — the first verification layer.</li></ul></div><div class="card c-browser"><div class="card-h"><span class="card-t">@invariance/client</span><span class="tag t-browser">browser</span></div><div class="where">end-user browser</div><ul class="bul"><li>Tier-0 SDK (React provider + vanilla build).</li><li><code>ModLoader</code> · UI overlay engine · prompt widget (<code>submitPrompt</code>/<code>requestRefix</code>) · <code>verifyEnvelope</code> · telemetry.</li></ul></div><div class="card c-browser"><div class="card-h"><span class="card-t">@invariance/design</span><span class="tag t-browser">browser</span></div><div class="where">browser (+ server export: callDesigner)</div><ul class="bul"><li>The entire LOOK plane: authoring + compile + verify + apply, client-side.</li><li><code>agent/</code> (gatekeeper, designer, pipeline) · <code>compiler/</code> · <code>verify/</code> · <code>runtime/apply.ts</code> · <code>panel/</code> · <code>primitives/</code> (m.slot).</li></ul></div><div class="card c-dev"><div class="card-h"><span class="card-t">@invariance/server</span><span class="tag t-dev">server</span></div><div class="where">developer&rsquo;s API server</div><ul class="bul"><li>Tier-1 SDK — wraps the customer API seam; everything fails open.</li><li><code>withInvariance</code>/<code>createInvarianceMiddleware</code> · <code>InvarianceRuntime</code> · <code>executeHook</code> (QuickJS sandbox) · <code>checkCapabilityWrites</code>/<code>checkFieldConstraints</code>.</li></ul></div><div class="card c-cp"><div class="card-h"><span class="card-t">apps/control-plane</span><span class="tag t-cp">our cloud</span></div><div class="where">control plane</div><ul class="bul"><li>Modular monolith (Hono + Postgres). Modules: authoring · verification · registry · analytics.</li><li>Agents: <code>OpenAiCompatAgent</code> (Ollama/qwen) · <code>AnthropicAgent</code> · design-aware wrap. Stores: mods, manifests, pointers, themes, events.</li></ul></div><div class="card c-cp"><div class="card-h"><span class="card-t">apps/console</span><span class="tag t-cp">Next.js</span></div><div class="where">control plane</div><ul class="bul"><li>Developer dashboard (Next.js) — the single invariants surface.</li><li>Manifest, mods + kill switches, analytics, Guardrails (live enforcement tests), Invariants view (data + look), Themes (history + rollback).</li></ul></div><div class="card c-gate"><div class="card-h"><span class="card-t">packages/cli</span><span class="tag t-gate">build-time</span></div><div class="where">developer&rsquo;s machine / CI</div><ul class="bul"><li>The <code>invariance</code> bin — developer-time.</li><li><code>init</code> (scan repo, wire SDKs, draft manifest as a PR) · <code>manifest publish</code> · <code>dev</code> (local control plane).</li></ul></div></div>
+</section><section id="api"><div class="sec-kicker">04</div><h2>Control-plane API surface</h2>
+<p class="lead">One Hono monolith, versioned under <code>/v1/apps/:appId/…</code>. Authoring, distribution,
+look-config, governance and analytics all live here; the data plane only calls the pointer + bundle endpoints.</p>
+<div class="tbl-wrap"><table class="routes"><thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+<tbody><tr><td><span class="m m-post">POST</span></td><td><code>/v1/apps/:appId/manifest</code></td><td>publish a manifest version (marks affected mods stale → lazy migration)</td></tr><tr><td><span class="m m-get">GET</span></td><td><code>/v1/apps/:appId/manifest</code></td><td>current manifest</td></tr><tr><td><span class="m m-post">POST</span></td><td><code>…/subjects/:subjectId/prompts</code></td><td>author a mod from a prompt (the authoring pipeline)</td></tr><tr><td><span class="m m-post">POST</span></td><td><code>…/subjects/:subjectId/bundles</code></td><td>publish a hand-authored bundle (dev/test)</td></tr><tr><td><span class="m m-get">GET</span></td><td><code>…/subjects/:subjectId/pointer</code></td><td>the per-subject pointer: status + contentHash</td></tr><tr><td><span class="m m-post">POST</span></td><td><code>…/subjects/:subjectId/revalidate</code></td><td>re-check a stale subject against the live manifest</td></tr><tr><td><span class="m m-post">POST</span></td><td><code>…/subjects/:subjectId/refix</code></td><td>AI re-fix a degraded mod</td></tr><tr><td><span class="m m-get">GET</span></td><td><code>/v1/apps/:appId/bundles/:hash</code></td><td>immutable signed bundle (CDN origin, cache-control: immutable)</td></tr><tr><td><span class="m m-mix">GET/PUT</span></td><td><code>/v1/apps/:appId/design-config</code></td><td>look invariants (design plane); Nebula reads per request</td></tr><tr><td><span class="m m-mix">GET/PUT</span></td><td><code>/v1/apps/:appId/themes</code></td><td>current theme; + …/themes/history, …/themes/rollback</td></tr><tr><td><span class="m m-get">GET</span></td><td><code>/v1/apps/:appId/mods</code></td><td>all mods; + …/subjects/:id/overview</td></tr><tr><td><span class="m m-post">POST</span></td><td><code>/v1/apps/:appId/mods/:modId/kill</code></td><td>kill switch → pointer disabled; + …/restore</td></tr><tr><td><span class="m m-post">POST</span></td><td><code>/v1/apps/:appId/events</code></td><td>telemetry ingest; + GET …/analytics/summary, GET …/events</td></tr><tr><td><span class="m m-get">GET</span></td><td><code>/v1/apps/:appId/signing-key</code></td><td>public key for client/server verification</td></tr></tbody></table></div>
+</section><section id="lifecycle"><div class="sec-kicker">05</div><h2>End-to-end lifecycle</h2>
+<p class="lead">Eight flows tie the zones together. Authoring crosses into the control plane; serving never does.</p>
+<div class="lc-grid"><div class="lc"><div class="lc-n n-gov">1</div><div class="lc-b"><div class="lc-t">Onboard <span class="lc-w">dev-time, once</span></div><div class="lc-d">CLI scans + wires the app, drafts the manifest; developer declares invariants in the Console.</div><div class="lc-hop"><code>@invariance/cli → control-plane registry + Console</code></div></div></div><div class="lc"><div class="lc-n n-look">2</div><div class="lc-b"><div class="lc-t">Author a LOOK edit <span class="lc-w">live, in browser</span></div><div class="lc-d">the in-browser design pipeline applies instantly; the theme is persisted to the control-plane design-config / themes store.</div><div class="lc-hop"><code>browser · @invariance/design → control plane (persist)</code></div></div></div><div class="lc"><div class="lc-n n-logic">3</div><div class="lc-b"><div class="lc-t">Author a LOGIC edit <span class="lc-w">browser → our cloud</span></div><div class="lc-d">prompt → control-plane authoring → verifier-in-the-loop → ed25519 sign. The prompt stays in Postgres, never in the bundle.</div><div class="lc-hop"><code>submitPrompt → POST …/prompts → Registry</code></div></div></div><div class="lc"><div class="lc-n n-cdn">4</div><div class="lc-b"><div class="lc-t">Distribute <span class="lc-w">control plane → CDN</span></div><div class="lc-d">Registry writes the immutable bundle to the CDN and sets a short-TTL per-subject pointer (active|stale|disabled).</div><div class="lc-hop"><code>Registry → CDN + pointer</code></div></div></div><div class="lc"><div class="lc-n n-look">5</div><div class="lc-b"><div class="lc-t">Serve LOOK <span class="lc-w">runtime, client</span></div><div class="lc-d">ModLoader fetches the pointer + bundle, verifies the signature in the browser, applies overlay + tokens.</div><div class="lc-hop"><code>CDN → @invariance/client</code></div></div></div><div class="lc"><div class="lc-n n-dev">6</div><div class="lc-b"><div class="lc-t">Serve LOGIC <span class="lc-w">runtime · hot path</span></div><div class="lc-d">user request → developer&rsquo;s API server → fetch pointer (no-store) + bundle → verify → sandbox → response. No control-plane transit.</div><div class="lc-hop"><code>user → @invariance/server ↔ CDN → user</code></div></div></div><div class="lc"><div class="lc-n n-gov">7</div><div class="lc-b"><div class="lc-t">Telemetry <span class="lc-w">off the request path</span></div><div class="lc-d">client + server emit async events → control-plane Analytics → Console.</div><div class="lc-hop"><code>client/server → Analytics → Console</code></div></div></div><div class="lc"><div class="lc-n n-gov">8</div><div class="lc-b"><div class="lc-t">Govern <span class="lc-w">control plane</span></div><div class="lc-d">Console kill-switch flips the pointer to disabled; manifest republish marks mods stale (lazy migration); theme rollback.</div><div class="lc-hop"><code>Console → Registry → pointer</code></div></div></div></div>
+</section><section id="onboarding"><div class="sec-kicker">06</div><h2>Onboarding / scanner pipeline</h2>
+<p class="kicker-note"><span class="b b-gate">developer-time · runs once</span> &nbsp;<i>current design, not finalized · React+Tailwind this round</i></p>
+<p class="lead">The upstream step that turns a raw, un-wired multi-page app into a <b>governable</b> one: everything
+customizable is <i>named once</i> here, so later end-user changes edit a name&rsquo;s value, never the call sites.</p>
+<div class="flow"><div class="step s-det"><span class="st">Discover archetypes</span><span class="ss">router walk → patterns</span></div><span class="chev">&rsaquo;</span><div class="step s-llm"><span class="st">Per-archetype map</span><span class="ss">AST sections + LLM names/levels</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">Reconcile palette</span><span class="ss">clusters → role tokens (barrier)</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">Generate artifacts</span><span class="ss">tailwind.config · manifest · layout</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">Codemod</span><span class="ss">repoint classes · wrap m.slot</span></div><span class="chev">&rsaquo;</span><div class="step s-gate"><span class="st">Verify</span><span class="ss">build · verifyV2 · visual-QA = before</span></div><span class="chev">&rsaquo;</span><div class="step s-rev"><span class="st">Reviewable diff</span><span class="ss">branch/PR → dev edits → merge</span></div></div>
+<p class="note-line">Stages 2 &amp; 5 fan out (per-archetype / per-file); a failed verify feeds a bounded
+<span class="fail">repair loop</span> (re-segment / re-cluster / re-generate).</p>
+<h3>Output — three centralization layers</h3>
+<div class="tbl-wrap"><table class="cmp">
+<thead><tr><th>Layer</th><th>The "name" created</th><th>One change fans out via</th></tr></thead>
+<tbody>
+<tr><td class="look">Token</td><td><code>var(--inv-*)</code> role tokens</td><td>CSS cascade → every page, instantly</td></tr>
+<tr><td class="cdn">Archetype</td><td><code>designSurface</code>: route patterns + sections + levels</td><td>one template component → all its URLs</td></tr>
+<tr><td class="logic">Layout</td><td><code>LayoutSpec</code> grammar per archetype</td><td>archetype key → every page of that type</td></tr>
+</tbody></table></div>
+</section><section id="look"><div class="sec-kicker">07</div><h2>LOOK plane — design pipeline</h2>
+<p class="lead">All client-side and live. Entry: <code>runPipeline</code> (<code class="cite">packages/design/src/agent/pipeline.ts:114</code>),
+driven by the CustomizationPanel widget.</p>
+<div class="flow"><div class="step s-in"><span class="st">prompt + history</span></div><span class="chev">&rsaquo;</span><div class="step s-gate"><span class="st">Gatekeeper</span><span class="ss">level-gate (LLM classifies)</span></div><span class="chev">&rsaquo;</span><div class="step s-llm"><span class="st">Designer LLM</span><span class="ss">StyleSpec, no raw colors</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">Compiler</span><span class="ss">→ 38 role tokens (OKLCH)</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">Layout profile</span><span class="ss">vibe → grid/standard</span></div><span class="chev">&rsaquo;</span><div class="step s-gate"><span class="st">verifyV2</span><span class="ss">7 deterministic tests</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">persistAndApply</span></div><span class="chev">&rsaquo;</span><div class="step s-apply"><span class="st">apply :root</span><span class="ss">→ instant paint</span></div></div>
+<div class="grid grid-2" style="margin-top:14px">
+<div class="card c-gate"><div class="card-h"><span class="card-t">Where invariants are enforced</span></div><ul class="bul"><li><b>Compiler, not the LLM</b>: <code>allowed_modes</code>/<code>font_registry</code>/<code>locked_tokens</code> violations throw; locked tokens are written last and override every computed value (<code class="cite">compiler/compile.ts</code>).</li><li>Contrast solved by OKLCH search; the developer floor can only <i>raise</i> the target.</li><li><b>verifyV2</b> (7 tests): all 38 tokens present · locked byte-identical · contrast floor · chroma cap · fonts in registry · all <code>var(--inv-…)</code> resolve (<code class="cite">verify/compiled-tests.ts:391</code>).</li></ul></div><div class="card c-look"><div class="card-h"><span class="card-t">How it stays correct</span></div><ul class="bul"><li><b>Recompile-on-fail = Designer retry</b> (max 2) — there is no path that relaxes a constraint or applies an unverified spec.</li><li><b>Goes live</b> the instant <code>root.style.setProperty(key,value)</code> runs — pure CSS cascade, zero React re-render (<code class="cite">runtime/apply.ts:34</code>).</li><li><b>Live reconciliation</b>: when the dev tightens an invariant, the applied theme is re-verified and recompiled-or-dropped, no reload (<code class="cite">context/provider.tsx:162</code>).</li></ul></div></div>
+</section><section id="logic"><div class="sec-kicker">08</div><h2>BUSINESS-LOGIC plane — signed bundles</h2>
+<p class="lead">The novel half: authoring builds a verified, signed bundle (control plane); runtime executes it
+sandboxed, per request, on the customer&rsquo;s server (data plane).</p>
+<h3>Authoring &nbsp;<span class="sub-h">prompt → verified, signed bundle</span></h3>
+<p class="note-line">Entry: <code>POST …/subjects/:id/prompts</code> → <code>authorMod</code>
+(<code class="cite">apps/control-plane/src/modules/authoring/pipeline.ts:85</code>).</p>
+<div class="flow"><div class="step s-in"><span class="st">prompt ≤2000</span></div><span class="chev">&rsaquo;</span><div class="step s-llm"><span class="st">LLM draft</span><span class="ss">uiOps + hooks + capabilities</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">deriveRepairedWrites</span><span class="ss">acorn AST widens writes</span></div><span class="chev">&rsaquo;</span><div class="step s-gate"><span class="st">VERIFY GATE</span><span class="ss">deterministic · NO LLM</span></div><span class="chev">&rsaquo;</span><div class="step s-apply"><span class="st">SIGN</span><span class="ss">canonical JSON + ed25519</span></div><span class="chev">&rsaquo;</span><div class="step s-cdn"><span class="st">DISTRIBUTE</span><span class="ss">CDN @hash + pointer</span></div></div>
+<p class="note-line"><b>Verifier-in-the-loop</b> (retry ≤3): failed reasons become feedback. The verifier rejects writes
+to immutable fields, dangerous CSS/HTML, illegal hooks (no <code>eval</code>/<code>Function</code>/<code>globalThis</code>/<code>fetch</code>…),
+and over-budget hooks. The user&rsquo;s prompt is stored in <code>ModRecord</code> — <b>never</b> in the signed bundle (PII).</p>
+
+<h3>Runtime &nbsp;<span class="sub-h">real request → verified, sandboxed execution</span></h3>
+<p class="note-line">A real request — e.g. Nebula&rsquo;s <code>GET /api/shows</code> wrapped by <code>withInvariance</code>.</p>
+<div class="flow"><div class="step s-in"><span class="st">user request</span></div><span class="chev">&rsaquo;</span><div class="step s-gate"><span class="st">fetch pointer</span><span class="ss">cache:no-store · active only</span></div><span class="chev">&rsaquo;</span><div class="step s-gate"><span class="st">verifyBundle</span><span class="ss">sha256 + ed25519 + schema</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">QuickJS sandbox</span><span class="ss">budgets · no host bindings</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">capability + field checks</span><span class="ss">immutable multiset</span></div><span class="chev">&rsaquo;</span><div class="step s-apply"><span class="st">current = execution.result</span><span class="ss">→ response</span></div></div>
+<div class="grid grid-2" style="margin-top:14px">
+<div class="card c-gate"><div class="card-h"><span class="card-t">Defense in depth</span></div><ul class="bul"><li><b>Only <code>status==='active'</code> executes</b>; {code("verifyBundle")} re-checks hash + signature + schema before any hook runs ({cite("packages/schema/src/signing.ts:69")}).</li><li><b>Per-hook capability bounding</b>: <code>checkCapabilityWrites</code> discards any changed path not declared (<code class="cite">packages/server/src/enforce.ts:19</code>).</li><li><b>Immutable fields by multiset</b>: reorder OK, any add/remove/rewrite → return the ORIGINAL payload (all-or-nothing).</li></ul></div><div class="card c-logic"><div class="card-h"><span class="card-t">The apply line</span></div><ul class="bul"><li>Kept only when the hook succeeded <i>and</i> capability check passed <i>and</i> field-constraint check passed: <b><code>current = execution.result</code></b> (<code class="cite">packages/server/src/runtime.ts:226</code>).</li><li>Any exception anywhere → original payload. <b>Fail-open everywhere.</b></li><li>An already-verified bundle is cached by <code>contentHash</code> (immutable, so sound).</li></ul></div></div>
+</section><section id="distribution"><div class="sec-kicker">09</div><h2>Distribution model</h2>
+<p class="lead">Two-step, so a kill-switch or supersession propagates within the pointer TTL while bundles stay
+cacheable forever.</p>
+<div class="grid grid-2">
+<div class="card c-cdn"><div class="card-h"><span class="card-t">Mutable side — pointer</span></div><ul class="bul"><li>Short-TTL (~5s) per-subject pointer: "active modset = hash X".</li><li>Manifest publish marks active mods <b>stale</b> (lazy migration); kill-switch flips <b>disabled</b>/<b>active</b>; superseded mods cannot flip.</li><li>Runtime fetches it with <code>cache:'no-store'</code> — a stale cache here once silently no-op&rsquo;d all hooks.</li></ul></div><div class="card c-look"><div class="card-h"><span class="card-t">Immutable side — bundle</span></div><ul class="bul"><li>ed25519-signed envelope over canonical JSON (sorted keys at every depth); <code>contentHash = sha256(payload)</code>.</li><li>Served content-addressed with <code>cache-control: immutable</code>. New revisions supersede via the pointer.</li><li>Trust is in the signature → bundles can be mirrored into the customer&rsquo;s own CDN.</li></ul></div></div>
+<h3>Pointer status</h3>
+<div class="tbl-wrap"><table class="routes"><thead><tr><th>Status</th><th>Runtime behavior</th></tr></thead>
+<tbody><tr><td><span class="pill p-ok">active</span></td><td>executes — the live modset for this subject</td></tr><tr><td><span class="pill p-warn">stale</span></td><td>manifest changed; base behavior until the next client session revalidates</td></tr><tr><td><span class="pill p-warn">degraded</span></td><td>verification/migration downgraded it; base behavior, AI re-fix offered</td></tr><tr><td><span class="pill p-bad">disabled</span></td><td>kill switch flipped; base behavior (superseded mods cannot flip)</td></tr><tr><td><span class="pill p-muted">none</span></td><td>no mod for this subject; base app</td></tr></tbody></table></div>
+<div class="callout c-dev" style="margin-top:14px"><b>Developer release path:</b> new manifest version → registry marks
+affected bindings stale → next user session revalidates → pass / degrade-to-base / offer AI re-fix. The prod path touches
+only static CDN artifacts + a local signature check.</div>
+</section><section id="enforcement"><div class="sec-kicker">10</div><h2>Enforcement semantics</h2>
+<p class="lead">The <i>same</i> path / diff semantics run at verify-time (control plane) and run-time (data plane) —
+defense in depth. These are the rules both engines share.</p>
+<div class="grid grid-2">
+<div class="card c-logic"><div class="card-h"><span class="card-t">Paths & diffs</span></div><ul class="bul"><li><code>diffPaths</code> treats a pure array permutation as a write to the array <i>itself</i>, not its element fields — so "sort my list" mods are possible (<code class="cite">paths.ts:64</code>).</li><li>Immutable-field policies compare the <b>multiset</b> of values at the path: reordering is legal; rewriting/adding/hiding a protected value is not.</li></ul></div><div class="card c-gate"><div class="card-h"><span class="card-t">Write declarations</span></div><ul class="bul"><li>The verifier rejects declared writes targeting an immutable field (descendant-or-equal path) and whole-body writes on such endpoints — but allows strict-ancestor declarations (e.g. <code>shows</code>).</li><li><code>fields:undefined</code> = whole-body write (allowed unless the endpoint has immutable fields); <code>fields:[]</code> = explicitly rejected.</li><li><code>statusCode ≥ 400</code> responses are never transformed; GET endpoints reject request-phase hooks.</li></ul></div></div>
+<h3>The two "apply" moments</h3>
+<div class="grid grid-2">
+  <div class="apply-card c-look"><div class="ac-h">LOOK — goes live at</div>
+    <code class="big">root.style.setProperty(key, value)</code>
+    <div class="ac-f"><code class="cite">packages/design/src/runtime/apply.ts:34</code> · guarded by <code>verifyV2</code> · fail-open = base CSS</div></div>
+  <div class="apply-card c-logic"><div class="ac-h">BUSINESS-LOGIC — goes live at</div>
+    <code class="big">current = execution.result</code>
+    <div class="ac-f"><code class="cite">packages/server/src/runtime.ts:226</code> · guarded by verifyBundle + capability + multiset · fail-open = original payload</div></div>
+</div>
+</section><section id="invariants"><div class="sec-kicker">11</div><h2>Core invariants &amp; sharp edges</h2>
+<div class="grid grid-2">
+  <div><h3>System invariants</h3><ul class="bul big-bul"><li>Runtimes execute <b>only</b> signed, verified Mod Bundles (<code>verifyBundle</code> before anything).</li><li>Bundles are immutable; new revisions supersede via the registry pointer.</li><li>User prompts never go into bundles (PII) — they live control-plane-side.</li><li>Verification is deterministic — no LLM in the verify step.</li><li>Hooks run sandboxed with hard budgets, touching only declared endpoints/fields.</li><li>Any fetch/verify failure fails open to base app behavior. The developer's infra stores nothing durably.</li></ul></div>
+  <div><h3>Sharp edges the trace surfaced</h3><div class="edges"><div class="edge"><div class="edge-t">Signing-key durability</div><div class="edge-d">Without persisted <code>INVARIANCE_SIGNING_*</code>, keys regenerate on restart → every bundle fails verification → universal silent no-op. Open hand-off footgun.</div></div><div class="edge"><div class="edge-t">Auto-repair widens writes</div><div class="edge-d">The final <code>writes</code> set is partly acorn-inferred; safety rests on the verifier&rsquo;s immutable-field check running on the <i>repaired</i> bundle.</div></div><div class="edge"><div class="edge-t">Two look-plane verifiers</div><div class="edge-d">THEME/SLOT_F1 use <code>verifyV2</code> (7 tests); F2–F4 use the older v5 engine. Confirm overlap.</div></div><div class="edge"><div class="edge-t">Kill-switch latency</div><div class="edge-d">A disabled mod can keep executing until the cached pointer expires (~5s).</div></div><div class="edge"><div class="edge-t">One-shot drop warning</div><div class="edge-d">After warning once, a weak model is trusted to drop existing customizations (prevents non-convergence).</div></div></div></div>
+</div>
+</section><section id="poster"><div class="sec-kicker">12</div><h2>Appendix — the pipeline poster</h2>
+<p class="lead">The same look + business-logic pipelines as a single dense, zoomable diagram (scroll sideways).</p>
+<details open><summary>Show / hide the full pipeline poster</summary>
+<div class="poster-scroll"><svg xmlns="http://www.w3.org/2000/svg" width="1520" height="2241" viewBox="0 0 1520 2241" font-family="sans-serif">
+<defs><marker id="ah_6b7280" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6.5,3 L0,6 Z" fill="#6b7280"/></marker><marker id="ah_56c7f5" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6.5,3 L0,6 Z" fill="#56c7f5"/></marker><marker id="ah_f2b545" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6.5,3 L0,6 Z" fill="#f2b545"/></marker><marker id="ah_46d6a0" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6.5,3 L0,6 Z" fill="#46d6a0"/></marker><marker id="ah_ffd66b" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6.5,3 L0,6 Z" fill="#ffd66b"/></marker><marker id="ah_7fd4b0" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6.5,3 L0,6 Z" fill="#7fd4b0"/></marker><marker id="ah_9aa0ab" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6.5,3 L0,6 Z" fill="#9aa0ab"/></marker><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#101216"/><stop offset="1" stop-color="#0a0b0d"/></linearGradient><radialGradient id="vig" cx="0.5" cy="0.12" r="0.9">
+  <stop offset="0" stop-color="#1b2030" stop-opacity="0.55"/>
+  <stop offset="1" stop-color="#000000" stop-opacity="0"/></radialGradient><pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse">
+  <path d="M34 0 H0 V34" fill="none" stroke="#ffffff" stroke-opacity="0.022" stroke-width="1"/></pattern><linearGradient id="lane_look" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#56c7f5" stop-opacity="0.07"/>
+      <stop offset="1" stop-color="#56c7f5" stop-opacity="0.015"/></linearGradient><linearGradient id="lane_logic" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f2b545" stop-opacity="0.07"/>
+      <stop offset="1" stop-color="#f2b545" stop-opacity="0.015"/></linearGradient><linearGradient id="lane_gate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#46d6a0" stop-opacity="0.07"/>
+      <stop offset="1" stop-color="#46d6a0" stop-opacity="0.015"/></linearGradient><linearGradient id="lane_apply" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd66b" stop-opacity="0.07"/>
+      <stop offset="1" stop-color="#ffd66b" stop-opacity="0.015"/></linearGradient><linearGradient id="lane_onb" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7fd4b0" stop-opacity="0.07"/>
+      <stop offset="1" stop-color="#7fd4b0" stop-opacity="0.015"/></linearGradient><filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="7"/></filter></defs>
+<rect width="1520" height="2241" fill="url(#bg)"/>
+<rect width="1520" height="2241" fill="url(#grid)"/>
+<rect width="1520" height="2241" fill="url(#vig)"/>
+<rect x="0.0" y="0.0" width="1520.0" height="10.0" rx="0.0" ry="0.0" fill="none"/>
+<text x="46.0" y="58.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="15" font-weight="800" fill="#56c7f5" letter-spacing="3.4">INVARIANCE</text>
+<text x="1474.0" y="58.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="12.5" font-weight="400" fill="#6b7280" text-anchor="end" letter-spacing="0.4">system design · two planes, three pipelines</text>
+<text x="46.0" y="102.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="29" font-weight="800" fill="#e9eaee">End-user customization of live web apps — under developer-declared invariants</text>
+<text x="46.0" y="140.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="13.5" font-weight="500" fill="#9aa0ab">The governing rule, everywhere below:  the LLM is in the loop, never in the gate — it only proposes; what&#x27;s enforced is enforced by deterministic TypeScript + crypto.</text>
+<text x="46.0" y="162.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11.5" font-weight="400" fill="#6b7280">Source: docs/INVARIANTS-PIPELINE.md + docs/ONBOARDING-PIPELINE.md, traced to repo (file:line citations are real).</text>
+<rect x="46.0" y="188.0" width="1428.0" height="30.0" rx="8.0" ry="8.0" fill="url(#lane_onb)" stroke="#7fd4b0" stroke-width="1.0"/>
+<rect x="58.0" y="194.0" width="174.8" height="17.0" rx="5.0" ry="5.0" fill="#10241c" stroke="#7fd4b0" stroke-width="1.0" opacity="0.95"/>
+<text x="145.4" y="206.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#7fd4b0" text-anchor="middle" letter-spacing="0.3">DEVELOPER-TIME · RUNS ONCE</text>
+<text x="276.0" y="208.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="800" fill="#e9eaee" letter-spacing="0.4">ONBOARDING / SCANNER PIPELINE</text>
+<text x="516.0" y="208.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="12.5" font-weight="500" fill="#9aa0ab">raw, un-wired multi-page app  →  governable app</text>
+<text x="1462.0" y="208.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="400" fill="#6b7280" text-anchor="end">React + Tailwind · fan-out · design NOT finalized</text>
+<rect x="46.0" y="232.0" width="190.3" height="96.0" rx="10.0" ry="10.0" fill="#191c22" stroke="#2a2e37" stroke-width="1.3"/>
+<rect x="46.0" y="232.0" width="190.3" height="4.0" rx="2.0" ry="2.0" fill="#9aa6b8" opacity="0.85"/>
+<text x="59.0" y="257.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="15" font-weight="800" fill="#9aa6b8">1</text>
+<text x="76.0" y="257.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="12.6" font-weight="700" fill="#e9eaee">Discover archetypes</text>
+<text x="59.0" y="275.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.0" font-weight="400" fill="#9aa0ab">router walk → route</text>
+<text x="59.0" y="288.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.0" font-weight="400" fill="#9aa0ab">patterns; [id] ⇒ 1</text>
+<rect x="58.0" y="303.0" width="29.9" height="17.0" rx="5.0" ry="5.0" fill="#20242c" stroke="#9aa6b8" stroke-width="1.0" opacity="0.95"/>
+<text x="73.0" y="315.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#9aa6b8" text-anchor="middle" letter-spacing="0.3">det</text>
+<path d="M240.3,274.0 L248.3,280.0 L240.3,286.0" fill="none" stroke="#6b7280" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="252.3" y="232.0" width="190.3" height="96.0" rx="10.0" ry="10.0" fill="#191c22" stroke="#2a2e37" stroke-width="1.3"/>
+<rect x="252.3" y="232.0" width="190.3" height="4.0" rx="2.0" ry="2.0" fill="#b79bff" opacity="0.85"/>
+<text x="265.3" y="257.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="15" font-weight="800" fill="#b79bff">2</text>
+<text x="282.3" y="257.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="12.6" font-weight="700" fill="#e9eaee">Per-archetype map</text>
+<text x="265.3" y="275.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.0" font-weight="400" fill="#9aa0ab">AST sections;</text>
+<text x="265.3" y="288.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.0" font-weight="400" fill="#9aa0ab">LLM names/levels/grammar</text>
+<rect x="264.3" y="303.0" width="29.9" height="17.0" rx="5.0" ry="5.0" fill="#20242c" stroke="#9aa6b8" stroke-width="1.0" opacity="0.95"/>
+<text x="279.2" y="315.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#9aa6b8" text-anchor="middle" letter-spacing="0.3">det</text>
+<rect x="299.2" y="303.0" width="29.9" height="17.0" rx="5.0" ry="5.0" fill="#241d3a" stroke="#b79bff" stroke-width="1.0" opacity="0.95"/>
+<text x="314.1" y="315.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#b79bff" text-anchor="middle" letter-spacing="0.3">LLM</text>
+<path d="M446.6,274.0 L454.6,280.0 L446.6,286.0" fill="none" stroke="#6b7280" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="458.6" y="232.0" width="190.3" height="96.0" rx="10.0" ry="10.0" fill="#191c22" stroke="#2a2e37" stroke-width="1.3"/>
+<rect x="458.6" y="232.0" width="190.3" height="4.0" rx="2.0" ry="2.0" fill="#9aa6b8" opacity="0.85"/>
+<text x="471.6" y="257.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="15" font-weight="800" fill="#9aa6b8">3</text>
+<text x="488.6" y="257.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="12.6" font-weight="700" fill="#e9eaee">Reconcile palette</text>
+<text x="471.6" y="275.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.0" font-weight="400" fill="#9aa0ab">merge clusters → role</text>
+<text x="471.6" y="288.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.0" font-weight="400" fill="#9aa0ab">tokens; seed default</text>
+<rect x="470.6" y="303.0" width="29.9" height="17.0" rx="5.0" ry="5.0" fill="#20242c" stroke="#9aa6b8" stroke-width="1.0" opacity="0.95"/>
+<text x="485.5" y="315.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#9aa6b8" text-anchor="middle" letter-spacing="0.3">det</text>
+<path d="M652.9,274.0 L660.9,280.0 L652.9,286.0" fill="none" stroke="#6b7280" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="664.9" y="232.0" width="190.3" height="96.0" rx="10.0" ry="10.0" fill="#191c22" stroke="#2a2e37" stroke-width="1.3"/>
+<rect x="664.9" y="232.0" width="190.3" height="4.0" rx="2.0" ry="2.0" fill="#9aa6b8" opacity="0.85"/>
+<text x="677.9" y="257.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="15" font-weight="800" fill="#9aa6b8">4</text>
+<text x="694.9" y="257.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="12.6" font-weight="700" fill="#e9eaee">Generate artifacts</text>
+<text x="677.9" y="275.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.0" font-weight="400" fill="#9aa0ab">tailwind.config · manifest</text>
+<text x="677.9" y="288.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.0" font-weight="400" fill="#9aa0ab">designSurface · layout.ts</text>
+<rect x="676.9" y="303.0" width="29.9" height="17.0" rx="5.0" ry="5.0" fill="#20242c" stroke="#9aa6b8" stroke-width="1.0" opacity="0.95"/>
+<text x="691.8" y="315.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#9aa6b8" text-anchor="middle" letter-spacing="0.3">det</text>
+<path d="M859.1,274.0 L867.1,280.0 L859.1,286.0" fill="none" stroke="#6b7280" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="871.1" y="232.0" width="190.3" height="96.0" rx="10.0" ry="10.0" fill="#191c22" stroke="#2a2e37" stroke-width="1.3"/>
+<rect x="871.1" y="232.0" width="190.3" height="4.0" rx="2.0" ry="2.0" fill="#9aa6b8" opacity="0.85"/>
+<text x="884.1" y="257.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="15" font-weight="800" fill="#9aa6b8">5</text>
+<text x="901.1" y="257.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="12.6" font-weight="700" fill="#e9eaee">Codemod</text>
+<text x="884.1" y="275.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.0" font-weight="400" fill="#9aa0ab">repoint classes · wrap</text>
+<text x="884.1" y="288.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.0" font-weight="400" fill="#9aa0ab">m.slot · mount provider</text>
+<rect x="883.1" y="303.0" width="29.9" height="17.0" rx="5.0" ry="5.0" fill="#20242c" stroke="#9aa6b8" stroke-width="1.0" opacity="0.95"/>
+<text x="898.1" y="315.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#9aa6b8" text-anchor="middle" letter-spacing="0.3">det</text>
+<path d="M1065.4,274.0 L1073.4,280.0 L1065.4,286.0" fill="none" stroke="#6b7280" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="1077.4" y="232.0" width="190.3" height="96.0" rx="10.0" ry="10.0" fill="#191c22" stroke="#2a2e37" stroke-width="1.3"/>
+<rect x="1077.4" y="232.0" width="190.3" height="4.0" rx="2.0" ry="2.0" fill="#46d6a0" opacity="0.85"/>
+<text x="1090.4" y="257.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="15" font-weight="800" fill="#46d6a0">6</text>
+<text x="1107.4" y="257.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="12.6" font-weight="700" fill="#e9eaee">Verify</text>
+<text x="1090.4" y="275.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.0" font-weight="400" fill="#9aa0ab">build · verifyV2 · layout</text>
+<text x="1090.4" y="288.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.0" font-weight="400" fill="#9aa0ab">verifier · visual-QA=before</text>
+<rect x="1089.4" y="303.0" width="36.2" height="17.0" rx="5.0" ry="5.0" fill="#0f2a22" stroke="#46d6a0" stroke-width="1.0" opacity="0.95"/>
+<text x="1107.5" y="315.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#46d6a0" text-anchor="middle" letter-spacing="0.3">gate</text>
+<path d="M1271.7,274.0 L1279.7,280.0 L1271.7,286.0" fill="none" stroke="#6b7280" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="1283.7" y="232.0" width="190.3" height="96.0" rx="10.0" ry="10.0" fill="#191c22" stroke="#2a2e37" stroke-width="1.3"/>
+<rect x="1283.7" y="232.0" width="190.3" height="4.0" rx="2.0" ry="2.0" fill="#7fd4b0" opacity="0.85"/>
+<text x="1296.7" y="257.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="15" font-weight="800" fill="#7fd4b0">7</text>
+<text x="1313.7" y="257.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="12.6" font-weight="700" fill="#e9eaee">Reviewable diff</text>
+<text x="1296.7" y="275.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.0" font-weight="400" fill="#9aa0ab">branch/PR → dev edits</text>
+<text x="1296.7" y="288.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.0" font-weight="400" fill="#9aa0ab">names/levels → merge</text>
+<rect x="1295.7" y="303.0" width="48.8" height="17.0" rx="5.0" ry="5.0" fill="#13241d" stroke="#7fd4b0" stroke-width="1.0" opacity="0.95"/>
+<text x="1320.1" y="315.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#7fd4b0" text-anchor="middle" letter-spacing="0.3">review</text>
+<text x="553.7" y="341.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="9.6" font-weight="400" fill="#6b7280" text-anchor="middle" font-style="italic">▲ barrier: needs every archetype&#x27;s palette</text>
+<text x="1172.6" y="341.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="9.6" font-weight="400" fill="#fb7185" text-anchor="middle" font-style="italic">↺ fail → bounded repair loop</text>
+<line x1="760.0" y1="350.0" x2="760.0" y2="363.0" stroke="#7fd4b0" stroke-width="1.8"/>
+<path d="M755.0,362.0 L765.0,362.0 L760.0,370.0 Z" fill="#7fd4b0"/>
+<rect x="46.0" y="370.0" width="1428.0" height="86.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#2a2e37" stroke-width="1.3"/>
+<text x="64.0" y="392.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="12.5" font-weight="700" fill="#e9eaee">OUTPUT — three centralization layers (name everything customizable once; later changes edit a name&#x27;s value, never call sites)</text>
+<rect x="62.0" y="404.0" width="285.8" height="40.0" rx="8.0" ry="8.0" fill="#191c22" stroke="#56c7f5" stroke-width="1.2" opacity="0.95"/>
+<rect x="62.0" y="404.0" width="3.5" height="40.0" rx="2.0" ry="2.0" fill="#56c7f5"/>
+<text x="74.0" y="420.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.8" font-weight="800" fill="#56c7f5">Token</text>
+<text x="74.0" y="434.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="9.3" font-weight="400" fill="#9aa0ab">var(--inv-*) · ~role tokens</text>
+<text x="74.0" y="444.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="9" font-weight="400" fill="#e9eaee"></text>
+<rect x="361.8" y="404.0" width="285.8" height="40.0" rx="8.0" ry="8.0" fill="#191c22" stroke="#7fd4b0" stroke-width="1.2" opacity="0.95"/>
+<rect x="361.8" y="404.0" width="3.5" height="40.0" rx="2.0" ry="2.0" fill="#7fd4b0"/>
+<text x="373.8" y="420.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.8" font-weight="800" fill="#7fd4b0">Archetype</text>
+<text x="373.8" y="434.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="9.3" font-weight="400" fill="#9aa0ab">designSurface: patterns + sections + levels</text>
+<text x="373.8" y="444.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="9" font-weight="400" fill="#e9eaee"></text>
+<rect x="661.6" y="404.0" width="285.8" height="40.0" rx="8.0" ry="8.0" fill="#191c22" stroke="#f2b545" stroke-width="1.2" opacity="0.95"/>
+<rect x="661.6" y="404.0" width="3.5" height="40.0" rx="2.0" ry="2.0" fill="#f2b545"/>
+<text x="673.6" y="420.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.8" font-weight="800" fill="#f2b545">Layout</text>
+<text x="673.6" y="434.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="9.3" font-weight="400" fill="#9aa0ab">LayoutSpec grammar per archetype</text>
+<text x="673.6" y="444.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="9" font-weight="400" fill="#e9eaee"></text>
+<path d="M937.4,413.0 L963.4,413.0" stroke="#7fd4b0" stroke-width="2" marker-end="url(#ah_7fd4b0)"/>
+<rect x="971.4" y="386.0" width="486.6" height="54.0" rx="9.0" ry="9.0" fill="url(#lane_onb)" stroke="#7fd4b0" stroke-width="1.5"/>
+<text x="1214.7" y="406.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="13.5" font-weight="800" fill="#7fd4b0" text-anchor="middle" letter-spacing="0.6">WIRED APP</text>
+<text x="1214.7" y="422.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.2" font-weight="400" fill="#9aa0ab" text-anchor="middle">role tokens · m.slots · manifest · LayoutSpec</text>
+<line x1="760.0" y1="464.0" x2="760.0" y2="490.0" stroke="#6b7280" stroke-width="1.8" stroke-dasharray="5 4"/>
+<text x="772.0" y="481.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="700" fill="#6b7280">hands off to the runtime pipelines  ▼</text>
+<path d="M755.0,490.0 L765.0,490.0 L760.0,498.0 Z" fill="#6b7280"/>
+<rect x="46.0" y="508.0" width="1428.0" height="30.0" rx="8.0" ry="8.0" fill="#15171c" stroke="#2a2e37" stroke-width="1.0"/>
+<rect x="58.0" y="514.0" width="200.0" height="17.0" rx="5.0" ry="5.0" fill="#332a10" stroke="#ffd66b" stroke-width="1.0" opacity="0.95"/>
+<text x="158.0" y="526.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#ffd66b" text-anchor="middle" letter-spacing="0.3">END-USER · EVERY PROMPT · LIVE</text>
+<text x="296.0" y="528.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="800" fill="#e9eaee" letter-spacing="0.4">RUNTIME — the invariants pipeline</text>
+<text x="586.0" y="528.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="12" font-weight="400" fill="#9aa0ab">one prompt, classified into two planes with two different “apply” moments</text>
+<rect x="580.0" y="554.0" width="360.0" height="71.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#e9eaee" stroke-width="1.5"/>
+<rect x="580.0" y="554.0" width="4.5" height="71.0" rx="3.0" ry="3.0" fill="#e9eaee"/>
+<text x="597.0" y="574.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="15" font-weight="700" fill="#e9eaee">USER PROMPT</text>
+<text x="597.0" y="589.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">typed into the in-app widget</text>
+<text x="760.0" y="585.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="9" font-weight="400" fill="#e9eaee"></text>
+<rect x="525.0" y="618.0" width="470.0" height="40.0" rx="20.0" ry="20.0" fill="#191c22" stroke="#6b7280" stroke-width="1.4"/>
+<text x="760.0" y="636.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.5" font-weight="700" fill="#9aa0ab" text-anchor="middle">classify intent</text>
+<text x="760.0" y="650.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#e9eaee" text-anchor="middle">theme / look   ◀——————▶   logic / data</text>
+<path d="M690.0,658.0 C391.0,676.0 391.0,668.0 391.0,686.0" fill="none" stroke="#56c7f5" stroke-width="2.0" marker-end="url(#ah_56c7f5)"/>
+<path d="M830.0,658.0 C1129.0,676.0 1129.0,668.0 1129.0,686.0" fill="none" stroke="#f2b545" stroke-width="2.0" marker-end="url(#ah_f2b545)"/>
+<rect x="46.0" y="676.0" width="690.0" height="1335.0" rx="16.0" ry="16.0" fill="url(#lane_look)" stroke="#56c7f5" stroke-width="1.0" opacity="0.9"/>
+<rect x="784.0" y="676.0" width="690.0" height="1335.0" rx="16.0" ry="16.0" fill="url(#lane_logic)" stroke="#f2b545" stroke-width="1.0" opacity="0.9"/>
+<rect x="70.0" y="688.0" width="642.0" height="46.0" rx="9.0" ry="9.0" fill="none" stroke="#56c7f5" stroke-width="1.6"/>
+<rect x="70.0" y="688.0" width="642.0" height="46.0" rx="9.0" ry="9.0" fill="url(#lane_look)" stroke="none" stroke-width="1.4"/>
+<text x="86.0" y="708.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="15" font-weight="800" fill="#56c7f5" letter-spacing="0.3">LOOK PLANE</text>
+<text x="86.0" y="725.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11" font-weight="500" fill="#9aa0ab">@invariance/design · runs in the browser, live</text>
+<text x="698.0" y="715.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="700" fill="#56c7f5" text-anchor="end">client-side</text>
+<line x1="391.0" y1="738.0" x2="391.0" y2="739.0" stroke="#6b7280" stroke-width="1.8"/>
+<path d="M386.0,738.0 L396.0,738.0 L391.0,746.0 Z" fill="#6b7280"/>
+<rect x="70.0" y="748.0" width="642.0" height="86.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#46d6a0" stroke-width="1.5"/>
+<rect x="70.0" y="748.0" width="4.5" height="86.0" rx="3.0" ry="3.0" fill="#46d6a0"/>
+<rect x="632.2" y="755.0" width="29.9" height="17.0" rx="5.0" ry="5.0" fill="#20242c" stroke="#9aa6b8" stroke-width="1.0" opacity="0.95"/>
+<text x="647.2" y="767.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#9aa6b8" text-anchor="middle" letter-spacing="0.3">det</text>
+<rect x="668.1" y="755.0" width="29.9" height="17.0" rx="5.0" ry="5.0" fill="#241d3a" stroke="#b79bff" stroke-width="1.0" opacity="0.95"/>
+<text x="683.1" y="767.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#b79bff" text-anchor="middle" letter-spacing="0.3">LLM</text>
+<text x="87.0" y="768.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">Gatekeeper — level gate</text>
+<text x="87.0" y="783.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">deterministic allowedLevel = min(slot, page);</text>
+<text x="87.0" y="798.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">LLM only classifies intent (advisory)</text>
+<text x="698.0" y="822.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#46d6a0" text-anchor="end">gatekeeper.ts:62</text>
+<line x1="391.0" y1="838.0" x2="391.0" y2="849.0" stroke="#6b7280" stroke-width="1.8"/>
+<path d="M386.0,848.0 L396.0,848.0 L391.0,856.0 Z" fill="#6b7280"/>
+<rect x="70.0" y="858.0" width="642.0" height="86.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#b79bff" stroke-width="1.5"/>
+<rect x="70.0" y="858.0" width="4.5" height="86.0" rx="3.0" ry="3.0" fill="#b79bff"/>
+<rect x="668.1" y="865.0" width="29.9" height="17.0" rx="5.0" ry="5.0" fill="#241d3a" stroke="#b79bff" stroke-width="1.0" opacity="0.95"/>
+<text x="683.1" y="877.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#b79bff" text-anchor="middle" letter-spacing="0.3">LLM</text>
+<text x="87.0" y="878.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">Designer LLM → StyleSpec</text>
+<text x="87.0" y="893.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">structured design intent —</text>
+<text x="87.0" y="908.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">no raw color values</text>
+<text x="698.0" y="932.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#b79bff" text-anchor="end">designer.ts:31</text>
+<line x1="391.0" y1="948.0" x2="391.0" y2="959.0" stroke="#6b7280" stroke-width="1.8"/>
+<path d="M386.0,958.0 L396.0,958.0 L391.0,966.0 Z" fill="#6b7280"/>
+<rect x="70.0" y="968.0" width="642.0" height="86.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#9aa6b8" stroke-width="1.5"/>
+<rect x="70.0" y="968.0" width="4.5" height="86.0" rx="3.0" ry="3.0" fill="#9aa6b8"/>
+<rect x="668.1" y="975.0" width="29.9" height="17.0" rx="5.0" ry="5.0" fill="#20242c" stroke="#9aa6b8" stroke-width="1.0" opacity="0.95"/>
+<text x="683.1" y="987.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#9aa6b8" text-anchor="middle" letter-spacing="0.3">det</text>
+<text x="87.0" y="988.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">Compiler → 38 role tokens</text>
+<text x="87.0" y="1003.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">OKLCH contrast search; locked tokens</text>
+<text x="87.0" y="1018.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">written last &amp; override; chroma cap</text>
+<text x="698.0" y="1042.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#9aa6b8" text-anchor="end">compile.ts:27</text>
+<line x1="391.0" y1="1058.0" x2="391.0" y2="1069.0" stroke="#6b7280" stroke-width="1.8"/>
+<path d="M386.0,1068.0 L396.0,1068.0 L391.0,1076.0 Z" fill="#6b7280"/>
+<rect x="70.0" y="1078.0" width="642.0" height="71.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#9aa6b8" stroke-width="1.5"/>
+<rect x="70.0" y="1078.0" width="4.5" height="71.0" rx="3.0" ry="3.0" fill="#9aa6b8"/>
+<rect x="668.1" y="1085.0" width="29.9" height="17.0" rx="5.0" ry="5.0" fill="#20242c" stroke="#9aa6b8" stroke-width="1.0" opacity="0.95"/>
+<text x="683.1" y="1097.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#9aa6b8" text-anchor="middle" letter-spacing="0.3">det</text>
+<text x="87.0" y="1098.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">Layout profile</text>
+<text x="87.0" y="1113.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">vibe axes → grid / standard preset</text>
+<text x="698.0" y="1137.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#9aa6b8" text-anchor="end">layout-profile.ts:15</text>
+<line x1="391.0" y1="1153.0" x2="391.0" y2="1164.0" stroke="#46d6a0" stroke-width="1.8"/>
+<path d="M386.0,1163.0 L396.0,1163.0 L391.0,1171.0 Z" fill="#46d6a0"/>
+<text x="400.0" y="1165.5" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="700" fill="#46d6a0">ok ↓</text>
+<rect x="70.0" y="1173.0" width="642.0" height="86.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#46d6a0" stroke-width="1.5"/>
+<rect x="70.0" y="1173.0" width="4.5" height="86.0" rx="3.0" ry="3.0" fill="#46d6a0"/>
+<rect x="660.2" y="1164.0" width="39.8" height="18.0" rx="5.0" ry="5.0" fill="#0a0b0d" stroke="#46d6a0" stroke-width="1.2"/>
+<text x="680.1" y="1176.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="800" fill="#46d6a0" text-anchor="middle" letter-spacing="0.6">GATE</text>
+<text x="87.0" y="1193.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">verifyV2 — INVARIANT GATE</text>
+<text x="87.0" y="1208.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">7 deterministic tests: tokens present, locked</text>
+<text x="87.0" y="1223.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">byte-equal, contrast floor, chroma cap, fonts</text>
+<rect x="85.0" y="1234.0" width="205.0" height="17.0" rx="5.0" ry="5.0" fill="#2a1414" stroke="#fb7185" stroke-width="1.0"/>
+<text x="187.5" y="1245.8" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.0" font-weight="700" fill="#fb7185" text-anchor="middle">✗ → retry ≤2 (re-enter Designer)</text>
+<text x="698.0" y="1247.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#46d6a0" text-anchor="end">compiled-tests.ts:391</text>
+<line x1="391.0" y1="1263.0" x2="391.0" y2="1274.0" stroke="#6b7280" stroke-width="1.8"/>
+<path d="M386.0,1273.0 L396.0,1273.0 L391.0,1281.0 Z" fill="#6b7280"/>
+<rect x="70.0" y="1283.0" width="642.0" height="71.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#9aa6b8" stroke-width="1.5"/>
+<rect x="70.0" y="1283.0" width="4.5" height="71.0" rx="3.0" ry="3.0" fill="#9aa6b8"/>
+<text x="87.0" y="1303.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">persistAndApply → applyAnyTheme</text>
+<text x="87.0" y="1318.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">save → themeStore.setTheme</text>
+<text x="698.0" y="1342.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#9aa6b8" text-anchor="end">pipeline-io.ts:30</text>
+<line x1="391.0" y1="1358.0" x2="391.0" y2="1369.0" stroke="#ffd66b" stroke-width="1.8"/>
+<path d="M386.0,1368.0 L396.0,1368.0 L391.0,1376.0 Z" fill="#ffd66b"/>
+<text x="400.0" y="1370.5" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="700" fill="#ffd66b">pass</text>
+<rect x="65.0" y="1373.0" width="652.0" height="111.0" rx="16.0" ry="16.0" fill="#ffd66b" opacity="0.12"/>
+<rect x="65.0" y="1373.0" width="652.0" height="111.0" rx="16.0" ry="16.0" fill="none" stroke="#ffd66b" stroke-width="1.0" opacity="0.5"/>
+<rect x="70.0" y="1378.0" width="642.0" height="101.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#ffd66b" stroke-width="2.0"/>
+<rect x="70.0" y="1378.0" width="4.5" height="101.0" rx="3.0" ry="3.0" fill="#ffd66b"/>
+<rect x="660.2" y="1369.0" width="39.8" height="18.0" rx="5.0" ry="5.0" fill="#0a0b0d" stroke="#ffd66b" stroke-width="1.2"/>
+<text x="680.1" y="1381.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="800" fill="#ffd66b" text-anchor="middle" letter-spacing="0.6">LIVE</text>
+<text x="87.0" y="1398.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">APPLY  ·  root.style.setProperty(:root)</text>
+<text x="87.0" y="1413.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">the change is visible the instant this runs —</text>
+<text x="87.0" y="1428.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">pure CSS cascade, zero React re-render</text>
+<text x="87.0" y="1443.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.2" font-weight="600" fill="#fb7185">↳ fail → drop theme, base CSS wins</text>
+<text x="698.0" y="1467.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#ffd66b" text-anchor="end">runtime/apply.ts:34</text>
+<rect x="808.0" y="688.0" width="642.0" height="46.0" rx="9.0" ry="9.0" fill="none" stroke="#f2b545" stroke-width="1.6"/>
+<rect x="808.0" y="688.0" width="642.0" height="46.0" rx="9.0" ry="9.0" fill="url(#lane_logic)" stroke="none" stroke-width="1.4"/>
+<text x="824.0" y="708.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="15" font-weight="800" fill="#f2b545" letter-spacing="0.3">BUSINESS-LOGIC PLANE</text>
+<text x="824.0" y="725.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11" font-weight="500" fill="#9aa0ab">control-plane (build) + @invariance/server (run)</text>
+<text x="1436.0" y="715.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="700" fill="#f2b545" text-anchor="end">signed bundles</text>
+<line x1="808.0" y1="750.0" x2="1450.0" y2="750.0" stroke="#f2b545" stroke-width="1" stroke-dasharray="4 4" opacity="0.7"/>
+<rect x="808.0" y="740.0" width="301.4" height="20.0" rx="5.0" ry="5.0" fill="#0a0b0d" stroke="#f2b545" stroke-width="1.0"/>
+<text x="958.7" y="753.6" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.4" font-weight="800" fill="#f2b545" text-anchor="middle" letter-spacing="0.4">CONTROL PLANE — authoring (build the bundle)</text>
+<text x="1450.0" y="753.6" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="9.6" font-weight="400" fill="#6b7280" text-anchor="end" font-style="italic">our infra</text>
+<line x1="1129.0" y1="770.0" x2="1129.0" y2="769.0" stroke="#6b7280" stroke-width="1.8"/>
+<path d="M1124.0,768.0 L1134.0,768.0 L1129.0,776.0 Z" fill="#6b7280"/>
+<rect x="808.0" y="778.0" width="642.0" height="71.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#9aa0ab" stroke-width="1.5"/>
+<rect x="808.0" y="778.0" width="4.5" height="71.0" rx="3.0" ry="3.0" fill="#9aa0ab"/>
+<rect x="1393.5" y="785.0" width="42.5" height="17.0" rx="5.0" ry="5.0" fill="#22252c" stroke="#9aa0ab" stroke-width="1.0" opacity="0.95"/>
+<text x="1414.8" y="797.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#9aa0ab" text-anchor="middle" letter-spacing="0.3">entry</text>
+<text x="825.0" y="798.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">POST …/subjects/:id/prompts → authorMod</text>
+<text x="825.0" y="813.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">prompt ≤2000 chars; no LLM → 503</text>
+<text x="1436.0" y="837.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#9aa0ab" text-anchor="end">authoring/pipeline.ts:85</text>
+<line x1="1129.0" y1="853.0" x2="1129.0" y2="864.0" stroke="#6b7280" stroke-width="1.8"/>
+<path d="M1124.0,863.0 L1134.0,863.0 L1129.0,871.0 Z" fill="#6b7280"/>
+<rect x="808.0" y="873.0" width="642.0" height="71.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#b79bff" stroke-width="1.5"/>
+<rect x="808.0" y="873.0" width="4.5" height="71.0" rx="3.0" ry="3.0" fill="#b79bff"/>
+<rect x="1406.1" y="880.0" width="29.9" height="17.0" rx="5.0" ry="5.0" fill="#241d3a" stroke="#b79bff" stroke-width="1.0" opacity="0.95"/>
+<text x="1421.0" y="892.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#b79bff" text-anchor="middle" letter-spacing="0.3">LLM</text>
+<text x="825.0" y="893.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">LLM draft: uiOps + hooks + capabilities</text>
+<text x="825.0" y="908.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">model proposes the mod</text>
+<text x="1436.0" y="932.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#b79bff" text-anchor="end">generateDraft</text>
+<line x1="1129.0" y1="948.0" x2="1129.0" y2="959.0" stroke="#6b7280" stroke-width="1.8"/>
+<path d="M1124.0,958.0 L1134.0,958.0 L1129.0,966.0 Z" fill="#6b7280"/>
+<rect x="808.0" y="968.0" width="642.0" height="86.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#9aa6b8" stroke-width="1.5"/>
+<rect x="808.0" y="968.0" width="4.5" height="86.0" rx="3.0" ry="3.0" fill="#9aa6b8"/>
+<rect x="1406.1" y="975.0" width="29.9" height="17.0" rx="5.0" ry="5.0" fill="#20242c" stroke="#9aa6b8" stroke-width="1.0" opacity="0.95"/>
+<text x="1421.0" y="987.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#9aa6b8" text-anchor="middle" letter-spacing="0.3">det</text>
+<text x="825.0" y="988.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">deriveRepairedWrites (acorn AST)</text>
+<text x="825.0" y="1003.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">walks each hook; widens under-declared</text>
+<text x="825.0" y="1018.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">writes so they aren&#x27;t silently dropped</text>
+<text x="1436.0" y="1042.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#9aa6b8" text-anchor="end">derive-writes.ts</text>
+<line x1="1129.0" y1="1058.0" x2="1129.0" y2="1069.0" stroke="#46d6a0" stroke-width="1.8"/>
+<path d="M1124.0,1068.0 L1134.0,1068.0 L1129.0,1076.0 Z" fill="#46d6a0"/>
+<text x="1138.0" y="1070.5" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="700" fill="#46d6a0">ok ↓</text>
+<rect x="808.0" y="1078.0" width="642.0" height="101.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#46d6a0" stroke-width="1.5"/>
+<rect x="808.0" y="1078.0" width="4.5" height="101.0" rx="3.0" ry="3.0" fill="#46d6a0"/>
+<rect x="1398.2" y="1069.0" width="39.8" height="18.0" rx="5.0" ry="5.0" fill="#0a0b0d" stroke="#46d6a0" stroke-width="1.2"/>
+<text x="1418.1" y="1081.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="800" fill="#46d6a0" text-anchor="middle" letter-spacing="0.6">GATE</text>
+<text x="825.0" y="1098.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">VERIFY GATE — deterministic, NO LLM</text>
+<text x="825.0" y="1113.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">manifest binding · uiOps≤200 · token/CSS safety;</text>
+<text x="825.0" y="1128.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">AST hook legality (no eval/fetch/globalThis…);</text>
+<text x="825.0" y="1143.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">immutable-field write containment; budget caps</text>
+<rect x="823.0" y="1154.0" width="199.0" height="17.0" rx="5.0" ry="5.0" fill="#2a1414" stroke="#fb7185" stroke-width="1.0"/>
+<text x="922.5" y="1165.8" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.0" font-weight="700" fill="#fb7185" text-anchor="middle">✗ → retry ≤3 (verifier-in-loop)</text>
+<text x="1436.0" y="1167.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#46d6a0" text-anchor="end">verification/index.ts:22</text>
+<line x1="1129.0" y1="1183.0" x2="1129.0" y2="1194.0" stroke="#ffd66b" stroke-width="1.8"/>
+<path d="M1124.0,1193.0 L1134.0,1193.0 L1129.0,1201.0 Z" fill="#ffd66b"/>
+<text x="1138.0" y="1195.5" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="700" fill="#ffd66b">ok</text>
+<rect x="803.0" y="1198.0" width="652.0" height="96.0" rx="16.0" ry="16.0" fill="#ffd66b" opacity="0.12"/>
+<rect x="803.0" y="1198.0" width="652.0" height="96.0" rx="16.0" ry="16.0" fill="none" stroke="#ffd66b" stroke-width="1.0" opacity="0.5"/>
+<rect x="808.0" y="1203.0" width="642.0" height="86.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#ffd66b" stroke-width="2.0"/>
+<rect x="808.0" y="1203.0" width="4.5" height="86.0" rx="3.0" ry="3.0" fill="#ffd66b"/>
+<rect x="1383.8" y="1194.0" width="54.2" height="18.0" rx="5.0" ry="5.0" fill="#0a0b0d" stroke="#ffd66b" stroke-width="1.2"/>
+<text x="1410.9" y="1206.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="800" fill="#ffd66b" text-anchor="middle" letter-spacing="0.6">SEALED</text>
+<text x="825.0" y="1223.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">SIGN — canonical JSON + ed25519</text>
+<text x="825.0" y="1238.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">sorted-key serialize → sha256 contentHash →</text>
+<text x="825.0" y="1253.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">ed25519 envelope · prompt → ModRecord, NOT bundle</text>
+<text x="1436.0" y="1277.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#ffd66b" text-anchor="end">signing.ts:42</text>
+<line x1="1129.0" y1="1293.0" x2="1129.0" y2="1304.0" stroke="#6b7280" stroke-width="1.8"/>
+<path d="M1124.0,1303.0 L1134.0,1303.0 L1129.0,1311.0 Z" fill="#6b7280"/>
+<rect x="808.0" y="1313.0" width="642.0" height="86.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#f2b545" stroke-width="1.5"/>
+<rect x="808.0" y="1313.0" width="4.5" height="86.0" rx="3.0" ry="3.0" fill="#f2b545"/>
+<text x="825.0" y="1333.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">DISTRIBUTE — two-step</text>
+<text x="825.0" y="1348.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">immutable bundle @hash on CDN  +  per-subject</text>
+<text x="825.0" y="1363.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">pointer (~5s TTL: active|stale|disabled)</text>
+<text x="1436.0" y="1387.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#f2b545" text-anchor="end">registry.ts:126</text>
+<line x1="808.0" y1="1415.0" x2="1450.0" y2="1415.0" stroke="#f2b545" stroke-width="1" stroke-dasharray="4 4" opacity="0.7"/>
+<rect x="808.0" y="1405.0" width="268.4" height="20.0" rx="5.0" ry="5.0" fill="#0a0b0d" stroke="#f2b545" stroke-width="1.0"/>
+<text x="942.2" y="1418.6" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.4" font-weight="800" fill="#f2b545" text-anchor="middle" letter-spacing="0.4">CUSTOMER INFRA — runtime (takes effect)</text>
+<text x="1450.0" y="1418.6" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="9.6" font-weight="400" fill="#6b7280" text-anchor="end" font-style="italic">no prod request transits Invariance</text>
+<line x1="1129.0" y1="1435.0" x2="1129.0" y2="1434.0" stroke="#6b7280" stroke-width="1.8"/>
+<path d="M1124.0,1433.0 L1134.0,1433.0 L1129.0,1441.0 Z" fill="#6b7280"/>
+<rect x="808.0" y="1443.0" width="642.0" height="71.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#9aa0ab" stroke-width="1.5"/>
+<rect x="808.0" y="1443.0" width="4.5" height="71.0" rx="3.0" ry="3.0" fill="#9aa0ab"/>
+<text x="825.0" y="1463.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">real API request → withInvariance(handler)</text>
+<text x="825.0" y="1478.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">e.g. Nebula GET /api/shows</text>
+<text x="1436.0" y="1502.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#9aa0ab" text-anchor="end">invariance-server.ts:6</text>
+<line x1="1129.0" y1="1518.0" x2="1129.0" y2="1529.0" stroke="#46d6a0" stroke-width="1.8"/>
+<path d="M1124.0,1528.0 L1134.0,1528.0 L1129.0,1536.0 Z" fill="#46d6a0"/>
+<text x="1138.0" y="1530.5" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="700" fill="#46d6a0">verified ↓</text>
+<rect x="808.0" y="1538.0" width="642.0" height="101.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#46d6a0" stroke-width="1.5"/>
+<rect x="808.0" y="1538.0" width="4.5" height="101.0" rx="3.0" ry="3.0" fill="#46d6a0"/>
+<rect x="1398.2" y="1529.0" width="39.8" height="18.0" rx="5.0" ry="5.0" fill="#0a0b0d" stroke="#46d6a0" stroke-width="1.2"/>
+<text x="1418.1" y="1541.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="800" fill="#46d6a0" text-anchor="middle" letter-spacing="0.6">GATE</text>
+<text x="825.0" y="1558.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">fetch pointer (cache:no-store) · active only</text>
+<text x="825.0" y="1573.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">verifyBundle: re-check sha256 + ed25519</text>
+<text x="825.0" y="1588.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">+ re-parse schema  (cached by hash, immutable)</text>
+<text x="825.0" y="1603.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.2" font-weight="600" fill="#fb7185">↳ any failure → null → fail-open</text>
+<text x="1436.0" y="1627.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#46d6a0" text-anchor="end">runtime.ts:136</text>
+<line x1="1129.0" y1="1643.0" x2="1129.0" y2="1654.0" stroke="#6b7280" stroke-width="1.8"/>
+<path d="M1124.0,1653.0 L1134.0,1653.0 L1129.0,1661.0 Z" fill="#6b7280"/>
+<rect x="808.0" y="1663.0" width="642.0" height="86.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#9aa6b8" stroke-width="1.5"/>
+<rect x="808.0" y="1663.0" width="4.5" height="86.0" rx="3.0" ry="3.0" fill="#9aa6b8"/>
+<text x="825.0" y="1683.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">QuickJS-WASM sandbox</text>
+<text x="825.0" y="1698.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">fresh runtime/hook · CPU+mem budgets ·</text>
+<text x="825.0" y="1713.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">no host bindings · JSON-only boundary</text>
+<text x="1436.0" y="1737.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#9aa6b8" text-anchor="end">sandbox.ts:33</text>
+<line x1="1129.0" y1="1753.0" x2="1129.0" y2="1764.0" stroke="#6b7280" stroke-width="1.8"/>
+<path d="M1124.0,1763.0 L1134.0,1763.0 L1129.0,1771.0 Z" fill="#6b7280"/>
+<rect x="808.0" y="1773.0" width="642.0" height="101.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#9aa6b8" stroke-width="1.5"/>
+<rect x="808.0" y="1773.0" width="4.5" height="101.0" rx="3.0" ry="3.0" fill="#9aa6b8"/>
+<rect x="1406.1" y="1780.0" width="29.9" height="17.0" rx="5.0" ry="5.0" fill="#20242c" stroke="#9aa6b8" stroke-width="1.0" opacity="0.95"/>
+<text x="1421.0" y="1792.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#9aa6b8" text-anchor="middle" letter-spacing="0.3">det</text>
+<text x="825.0" y="1793.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">checkCapabilityWrites + checkFieldConstraints</text>
+<text x="825.0" y="1808.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">per-hook diffPaths bounds writes; immutable</text>
+<text x="825.0" y="1823.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">fields by multiset — reorder OK, edit rejected</text>
+<text x="825.0" y="1838.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.2" font-weight="600" fill="#fb7185">↳ violation → discard hook / original payload</text>
+<text x="1436.0" y="1862.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#9aa6b8" text-anchor="end">enforce.ts:19</text>
+<line x1="1129.0" y1="1878.0" x2="1129.0" y2="1889.0" stroke="#ffd66b" stroke-width="1.8"/>
+<path d="M1124.0,1888.0 L1134.0,1888.0 L1129.0,1896.0 Z" fill="#ffd66b"/>
+<text x="1138.0" y="1890.5" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="700" fill="#ffd66b">pass</text>
+<rect x="803.0" y="1893.0" width="652.0" height="111.0" rx="16.0" ry="16.0" fill="#ffd66b" opacity="0.12"/>
+<rect x="803.0" y="1893.0" width="652.0" height="111.0" rx="16.0" ry="16.0" fill="none" stroke="#ffd66b" stroke-width="1.0" opacity="0.5"/>
+<rect x="808.0" y="1898.0" width="642.0" height="101.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#ffd66b" stroke-width="2.0"/>
+<rect x="808.0" y="1898.0" width="4.5" height="101.0" rx="3.0" ry="3.0" fill="#ffd66b"/>
+<rect x="1398.2" y="1889.0" width="39.8" height="18.0" rx="5.0" ry="5.0" fill="#0a0b0d" stroke="#ffd66b" stroke-width="1.2"/>
+<text x="1418.1" y="1901.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="800" fill="#ffd66b" text-anchor="middle" letter-spacing="0.6">LIVE</text>
+<text x="825.0" y="1918.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="14.5" font-weight="700" fill="#e9eaee">APPLY  ·  current = execution.result → response</text>
+<text x="825.0" y="1933.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">kept only after signature + capability +</text>
+<text x="825.0" y="1948.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.6" font-weight="400" fill="#9aa0ab">immutable-multiset checks all pass</text>
+<text x="825.0" y="1963.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.2" font-weight="600" fill="#fb7185">↳ any exception → original payload (fail-open)</text>
+<text x="1436.0" y="1987.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="600" fill="#ffd66b" text-anchor="end">runtime.ts:226</text>
+<text x="391.0" y="1499.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11" font-weight="700" fill="#56c7f5" text-anchor="middle">▸ fewer steps · instant paint · client-side</text>
+<text x="1129.0" y="2019.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11" font-weight="700" fill="#f2b545" text-anchor="middle">▸ more gates · deferred · effective for THIS request</text>
+<rect x="70.0" y="1519.0" width="642.0" height="86.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#56c7f5" stroke-width="1.2" opacity="0.95"/>
+<rect x="70.0" y="1519.0" width="4.5" height="86.0" rx="3.0" ry="3.0" fill="#56c7f5"/>
+<text x="86.0" y="1541.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="12.5" font-weight="800" fill="#56c7f5">LIVE RECONCILIATION when the dev tightens an invariant</text>
+<text x="86.0" y="1560.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.3" font-weight="400" fill="#9aa0ab">Keyed on constraintsHash, the currently-applied theme is re-verified;</text>
+<text x="86.0" y="1575.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.3" font-weight="400" fill="#9aa0ab">if it now fails it recompiles under the new constraints — else drops to</text>
+<text x="86.0" y="1590.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.3" font-weight="400" fill="#9aa0ab">base CSS. Invariants win over the user&#x27;s vibe, live, no reload.</text>
+<text x="698.0" y="1598.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.4" font-weight="600" fill="#56c7f5" text-anchor="end">provider.tsx:162</text>
+<rect x="70.0" y="1621.0" width="642.0" height="80.0" rx="11.0" ry="11.0" fill="#15171c" stroke="#2a2e37" stroke-width="1.2"/>
+<text x="86.0" y="1643.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="12.5" font-weight="800" fill="#e9eaee">WHY TWO “APPLY” MOMENTS?</text>
+<text x="86.0" y="1662.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.3" font-weight="400" fill="#9aa0ab">Look = a value swap in the browser → safe to paint immediately.</text>
+<text x="86.0" y="1677.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.3" font-weight="400" fill="#9aa0ab">Logic = executable code at the API seam → must be signed, verified,</text>
+<text x="86.0" y="1692.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11.3" font-weight="400" fill="#9aa0ab">sandboxed &amp; capability-bounded before its result is ever kept.</text>
+<rect x="46.0" y="2055.0" width="1428.0" height="150.0" rx="12.0" ry="12.0" fill="#15171c" stroke="#2a2e37" stroke-width="1.3"/>
+<text x="66.0" y="2081.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="12.5" font-weight="800" fill="#e9eaee" letter-spacing="1.2">LEGEND</text>
+<rect x="156.0" y="2073.0" width="29.9" height="17.0" rx="5.0" ry="5.0" fill="#20242c" stroke="#9aa6b8" stroke-width="1.0" opacity="0.95"/>
+<text x="170.9" y="2085.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#9aa6b8" text-anchor="middle" letter-spacing="0.3">det</text>
+<text x="193.9" y="2085.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11" font-weight="400" fill="#9aa0ab">deterministic (AST / build / crypto)</text>
+<rect x="435.9" y="2073.0" width="29.9" height="17.0" rx="5.0" ry="5.0" fill="#241d3a" stroke="#b79bff" stroke-width="1.0" opacity="0.95"/>
+<text x="450.8" y="2085.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#b79bff" text-anchor="middle" letter-spacing="0.3">LLM</text>
+<text x="473.8" y="2085.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11" font-weight="400" fill="#9aa0ab">model proposes — advisory only</text>
+<rect x="679.8" y="2073.0" width="36.2" height="17.0" rx="5.0" ry="5.0" fill="#0f2a22" stroke="#46d6a0" stroke-width="1.0" opacity="0.95"/>
+<text x="697.9" y="2085.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#46d6a0" text-anchor="middle" letter-spacing="0.3">gate</text>
+<text x="724.0" y="2085.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11" font-weight="400" fill="#9aa0ab">deterministic verify, no LLM</text>
+<rect x="918.0" y="2073.0" width="42.5" height="17.0" rx="5.0" ry="5.0" fill="#332a10" stroke="#ffd66b" stroke-width="1.0" opacity="0.95"/>
+<text x="939.2" y="2085.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#ffd66b" text-anchor="middle" letter-spacing="0.3">APPLY</text>
+<text x="968.5" y="2085.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11" font-weight="400" fill="#9aa0ab">the moment the change goes live</text>
+<rect x="1180.5" y="2073.0" width="67.7" height="17.0" rx="5.0" ry="5.0" fill="#2a1414" stroke="#fb7185" stroke-width="1.0" opacity="0.95"/>
+<text x="1214.3" y="2085.4" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.3" font-weight="700" fill="#fb7185" text-anchor="middle" letter-spacing="0.3">fail-open</text>
+<text x="1256.2" y="2085.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="11" font-weight="400" fill="#9aa0ab">any failure → base app behavior</text>
+<rect x="66.0" y="2125.0" width="680.0" height="64.0" rx="9.0" ry="9.0" fill="url(#lane_look)" stroke="#56c7f5" stroke-width="1.2"/>
+<text x="80.0" y="2146.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="12" font-weight="800" fill="#56c7f5">LOOK — goes live at:</text>
+<text x="80.0" y="2164.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#e9eaee">root.style.setProperty(key, value)</text>
+<text x="80.0" y="2180.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="400" fill="#9aa0ab">design/src/runtime/apply.ts:34  ·  guarded by verifyV2</text>
+<rect x="766.0" y="2125.0" width="680.0" height="64.0" rx="9.0" ry="9.0" fill="url(#lane_logic)" stroke="#f2b545" stroke-width="1.2"/>
+<text x="780.0" y="2146.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="12" font-weight="800" fill="#f2b545">BUSINESS-LOGIC — goes live at:</text>
+<text x="780.0" y="2164.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#e9eaee">current = execution.result</text>
+<text x="780.0" y="2180.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="400" fill="#9aa0ab">server/src/runtime.ts:226  ·  guarded by verifyBundle + capability + multiset</text>
+<text x="66.0" y="2205.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.8" font-weight="500" fill="#6b7280">Core invariants:  runtimes execute only signed+verified bundles  ·  bundles immutable (new revisions supersede via pointer)  ·  user prompts never enter bundles (PII)  ·  verification has no LLM  ·  fail-open everywhere.</text>
+</svg></div></details>
+</section></main><footer>Generated by <code>docs/diagrams/gen_page.py</code> — a single self-contained page (no external assets). Citations are real <code>file:line</code> references; the onboarding pipeline is current design, not yet finalized.</footer><script>
+const links=[...document.querySelectorAll('nav a')];
+const map=new Map(links.map(a=>[a.dataset.sec,a]));
+const obs=new IntersectionObserver((es)=>{
+  es.forEach(e=>{ if(e.isIntersecting){ links.forEach(l=>l.classList.remove('active'));
+    const a=map.get(e.target.id); if(a)a.classList.add('active'); }});
+},{rootMargin:'-45% 0px -50% 0px',threshold:0});
+document.querySelectorAll('section[id]').forEach(s=>obs.observe(s));
+</script></body></html>
