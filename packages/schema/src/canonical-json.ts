@@ -1,21 +1,30 @@
-// Canonical JSON: recursively sorted object keys so identical documents are
-// byte-identical. Future signing/content-addressing depends on stable bytes;
-// adopting it now makes that an envelope later, not a data migration.
-export function canonicalStringify(value: unknown): string {
-  return JSON.stringify(canonicalize(value))
-}
-
-function canonicalize(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalize)
-  if (value !== null && typeof value === 'object') {
-    // Honor toJSON (Date, URL, ...) like JSON.stringify would — rebuilding from
-    // Object.keys() would otherwise silently serialize such values as {}.
-    const withToJson = value as { toJSON?: () => unknown }
-    if (typeof withToJson.toJSON === 'function') return canonicalize(withToJson.toJSON())
-    const record = value as Record<string, unknown>
-    const sorted: Record<string, unknown> = {}
-    for (const key of Object.keys(record).sort()) sorted[key] = canonicalize(record[key])
-    return sorted
+/**
+ * Deterministic JSON serialization: object keys sorted lexicographically at
+ * every depth. Signing and content-addressing both hash this form, so two
+ * structurally equal bundles always produce the same hash and signature.
+ */
+export function canonicalJson(value: unknown): string {
+  if (value === null) return "null";
+  switch (typeof value) {
+    case "string":
+    case "boolean":
+      return JSON.stringify(value);
+    case "number":
+      if (!Number.isFinite(value)) {
+        throw new TypeError("cannot canonicalize non-finite number");
+      }
+      return JSON.stringify(value);
+    case "object": {
+      if (Array.isArray(value)) {
+        return `[${value.map((v) => canonicalJson(v === undefined ? null : v)).join(",")}]`;
+      }
+      const entries = Object.entries(value as Record<string, unknown>)
+        .filter(([, v]) => v !== undefined)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`);
+      return `{${entries.join(",")}}`;
+    }
+    default:
+      throw new TypeError(`cannot canonicalize value of type ${typeof value}`);
   }
-  return value
 }

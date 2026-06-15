@@ -1,157 +1,140 @@
-# CLAUDE.md -- Invariance v6
+# CLAUDE.md — Invariance v5
 
 ## Project Overview
 
-Invariance is a developer framework that makes existing React/Next.js apps customizable by end-users through natural language, with developer-defined invariants that can never be violated. v6's defining requirement: **every output must look professionally designed.** Aesthetic coherence and WCAG contrast are guaranteed by deterministic code (the Theme Compiler), never requested from a model.
+Invariance lets end users of existing web apps customize them through natural-language prompts — UI (tokens, styles, slots) and business logic at the API seam — while developers stay in control via declared invariants. Full design: `docs/DESIGN.md`.
 
-Two adoption modes share one brain:
-- **Trial Mode**: a script snippet (`invariance.js`) that demos themes on the rendered DOM of any staging site. Fragile by design, exists to sell Product Mode. F1 + hide only.
-- **Product Mode**: SDK + Scanner. Wrappers and `var(--inv-*)` references live in the developer's source. Governed, render-driven, F1-F4, shipped to all users.
+History note: everything before the git tag `v4-final` is the previous iteration (theme.json + CSS-variable architecture, scanner codemod). v5 is a ground-up rebuild; the v4 scanner and verification ideas may be ported where they fit.
 
-### The Quality Pipeline (the heart of v6)
+## Architecture (two planes)
 
-```
-User: "make it more retro"
-  -> Gatekeeper (LLM, Haiku-class, temp 0.1): classify THEME | SLOT_F1 | F2 | F3 | F4 | CLARIFY | REJECT, validate levels
-  -> Designer  (LLM, Sonnet-class, temp 0.7): output a StyleSpec (structured design intent, ~12 enum/number fields). NEVER raw hex/px values.
-  -> Theme Compiler (pure TS + culori, NO LLM): expand StyleSpec into the full semantic token set.
-       OKLCH ramps, contrast solved by binary search on lightness, gamut-mapped to sRGB.
-       Harmony and AA contrast hold by construction.
-  -> Verification (deterministic, safety net)
-  -> Store theme.json, write tokens to :root (and SSR-inline them)
-```
+- **Control plane (our infra):** authoring (prompt → mod via an LLM — **qwen2.5 via Ollama by default, Anthropic opt-in** — with the verifier in the generation loop), verification (static analysis → capability extraction → contract checks → policy engine), registry (per-user mod revisions, CDN publishing, kill-switch flags), analytics. Modular monolith in `apps/control-plane`.
+- **Data plane (customer infra):** client SDK (mod loader, UI override engine, prompt widget) and server SDK (Express/Next middleware, QuickJS-on-WASM sandboxed hook executor with capability enforcement). No production request ever transits our systems.
 
-Slot-level F1 ("make the sidebar blue") skips the Designer: constrained value pick + contrast solve for that slot's dependent tokens.
-F2/F3/F4 use the Builder as before, with structured outputs.
+Two customization planes coexist: `@invariance/design` (UI/theme, client-side) and `@invariance/client`+`@invariance/server`+control-plane (signed-bundle business-logic at the API seam, with invariants). Nebula uses the design plane in-app; its API is governed by the business-logic plane.
 
-### Two-tier tokens
+Distribution is two-step: short-TTL mutable pointer per user → immutable content-addressed signed bundle on CDN. Any fetch/verify failure fails open to base app behavior.
 
-- **Roles** (15-25 app-wide): `--inv-surface-0/1/2`, `--inv-text-primary/secondary`, `--inv-accent`, `--inv-accent-contrast`, `--inv-border`, `--inv-font-display/body`, `--inv-radius-base`, `--inv-shadow-1`, density/border-weight tokens.
-- **Slot tokens** default to role references: `--inv-sidebar-bg: var(--inv-surface-1)`. Whole-app themes rewrite roles; precision edits override one slot token with a literal; reset restores the var() reference.
-
-The Scanner assigns roles during semantic analysis: deterministic clustering of observed values first, LLM only resolves ambiguity and names. LLM never picks values.
-
----
+Core invariants of the system itself:
+- Runtimes execute **only** signed, verified Mod Bundles (`verifyBundle` before anything).
+- Bundles are immutable; new revisions supersede via the registry pointer.
+- User prompts never go into bundles (PII; bundles are CDN-public-ish). Prompts live control-plane-side.
+- Verification is deterministic — no LLM in the verify step.
+- Hooks run sandboxed with hard budgets and may only touch endpoints/fields declared in their capability manifest.
 
 ## Tech Stack
 
-| Layer | Technology | Notes |
-|-------|-----------|-------|
-| Language | TypeScript strict | everywhere |
-| Target apps | React 18+ / Next.js 14+ | |
-| Package manager | pnpm only | never npm/yarn |
-| Monorepo | pnpm workspaces + turborepo | test depends on ^build |
-| Color math | culori | OKLCH ramps, gamut mapping, WCAG contrast in compiler |
-| Config | js-yaml + zod | |
-| LLM | OpenAI-compatible endpoint (Ollama) OR Anthropic API, via raw fetch with structured outputs, selected by config; zod revalidation + retry make native schema enforcement optional, so weaker local models work | no SDK, no prompt-and-parse |
-| Models | **Current default: open-source `qwen2.5` (Ollama) for all four agent roles, via the demo's `/api/llm` server proxy — no Anthropic key needed.** Anthropic is env opt-in (Gatekeeper: Haiku-class, Designer/Builder: Sonnet-class). | model ids in one constants file |
-| Scanner | ts-morph, tailwindcss resolveConfig | |
-| Trial snippet | vanilla TS bundle, no React dep, <35KB gz | esbuild |
-| Testing | vitest; Playwright + screenshots for visual QA (CI only) | |
+| Layer | Technology |
+|-------|-----------|
+| Language | TypeScript, strict mode, ESM (`"type": "module"`) |
+| Package manager | pnpm only (do not use npm or yarn) |
+| Monorepo | pnpm workspaces + turborepo |
+| Validation | zod (schemas are the source of truth, types via `z.infer`) |
+| Signing | ed25519 via `node:crypto`, canonical JSON (sorted keys) |
+| Testing | vitest |
+| Sandbox | QuickJS compiled to WASM (externalize the `quickjs-emscripten` chain in Next hosts — see `apps/nebula/next.config.js`) |
+| LLM (authoring) | qwen2.5 via Ollama (OpenAI-compatible) by default; Anthropic opt-in. NOT a hard dependency — see [[no-anthropic-models-for-now]] |
+| UI (console + Nebula) | Tailwind; console + Nebula share a fixed-neutral dark design language |
 
-## Directory Structure (delta from v5)
+## Layout & Phase Status
 
 ```
-packages/
-├── schema/src/                  # NEW (phase 4): @invariance/schema — keystone contracts, depends only on zod
-│   ├── style-spec.ts            # StyleSpec type + zod (moved from core/compiler)
-│   ├── theme.ts                 # theme.json v1/v2 types + InvarianceConfig (moved from core/config/types)
-│   ├── theme-schemas.ts         # zod schemas (moved from core/config/schema)
-│   ├── role-tokens.ts           # role vocabulary (moved from core/compiler/roles)
-│   └── canonical-json.ts        # sorted-key serialization (stable bytes for future signing)
-├── core/src/                    # re-exports moved names from their old paths (back-compat stubs)
-│   ├── compiler/                # NEW: the Theme Compiler
-│   │   ├── style-spec.ts        # StyleSpec type + zod schema
-│   │   ├── ramps.ts             # OKLCH neutral/accent ramp generation (culori)
-│   │   ├── contrast.ts          # binary-search lightness solver, WCAG math
-│   │   ├── roles.ts             # ramp -> role assignment, brand-lock pass-through
-│   │   ├── tokens.ts            # radius/shadow/density token tables
-│   │   └── compile.ts           # compileTheme(spec, constraints, locks) -> roles map
-│   ├── registries/              # NEW: taste as data
-│   │   ├── font-pairings.ts     # ~30 curated Google Fonts pairings with tags
-│   │   └── theme-packs.ts       # ~15 named StyleSpec presets (few-shot + one-tap)
-│   ├── agent/
-│   │   ├── gatekeeper.ts        # adds THEME vs SLOT_F1 routing
-│   │   ├── designer.ts          # NEW: StyleSpec via structured outputs
-│   │   ├── builder.ts           # F2/F3/F4 only; theme.slots fallback REMOVED
-│   │   ├── slot-edit.ts         # NEW: micro-mutation path for slot-level F1
-│   │   ├── api.ts               # NEW: shared raw-fetch client, structured-output helper
-│   │   └── pipeline.ts          # routing per DESIGN Part 3
-│   ├── runtime/
-│   │   ├── apply-theme.ts       # roles + slots to :root; v1 globals accepted+upgraded
-│   │   ├── ssr.ts               # NEW: render :root style block server-side
-│   │   └── (apply-content.ts, apply-layout.ts DELETED -> render-driven)
-│   ├── primitives/
-│   │   ├── slot.tsx             # childCss/!important + inline theme.slots REMOVED
-│   │   ├── text.tsx             # renders override from context
-│   │   └── sections.tsx         # NEW: renders section order/visibility from context
-│   └── fonts/loader.ts          # NEW: inject <link> for registry fonts on demand
-├── scanner/src/
-│   ├── roles/cluster.ts         # NEW: deterministic value clustering into roles
-│   └── emit/                    # emits role tier + slot var() references
-├── snippet/                     # NEW: Trial Mode bundle
-│   └── src/ (mini-scan.ts, virtual-tokens.ts, observe.ts, persist.ts, export.ts)
-└── cli additions: invariance check (CI guard), invariance migrate-theme (version bumps)
+packages/schema     # AppManifest, ModBundle, capability manifest, signing, path/diff utils
+packages/client     # mod loader, UI override engine, prompt widget, telemetry
+packages/cli        # `invariance` bin: init, manifest publish, dev control plane
+apps/demo           # Netflix-style demo app, living integration test (e2e per phase)
+apps/nebula        # Nebula — Next.js 14 + Tailwind showcase demo. Customization
+                   # via the DESIGN plane (@invariance/design: CustomizationPanel,
+                   # m.* slots). Business-logic mods + invariants run on
+                   # the BUSINESS-LOGIC plane (Next API routes wrapped with
+                   # @invariance/server withInvariance; appId "nebula"), demoed via
+                   # the console/Guardrails. apps/demo (Streamline, Vite) is kept as
+                   # the platform integration test.
+apps/control-plane  # authoring, verification, registry + lazy migration, analytics
+packages/server     # Express/Next middleware, QuickJS sandbox, runtime enforcement
+apps/console        # developer dashboard + the SINGLE invariants surface: manifest,
+                   # mods + kill switches, analytics, Guardrails (test enforcement live),
+                   # the Invariants view (#/invariants): read-only data-invariants
+                   # (manifest policies) + editable look-invariants (design-config),
+                   # and the Themes view (#/themes): theme version history + rollback.
+                   # Tailwind, fixed-neutral dark UI.
 ```
 
-## theme.json v2
+## Current state (2026-06-14)
 
-`theme.roles` + `theme.slots` (CSS-var keys, values are literals or `var(...)` refs) + `theme.styleSpec` (provenance). Loader accepts v1 `theme.globals` and partitions it. The old inline-style slots object is gone. Serialized canonically (sorted keys via `canonicalStringify`) so identical themes are byte-identical — future signing/content-addressing is an envelope, not a migration. Stored themes are re-verified on load before applying (integrity net, not a permission system).
+Showcase demo is **Nebula** (`apps/nebula`, Next.js + Tailwind); **Streamline** (`apps/demo`,
+Vite) is kept as the platform integration test (its `guardrails-catalog` e2e). The **Console**
+is the single developer surface for invariants: *data* invariants (manifest policies) are
+viewed + Guardrails-tested; *look* invariants are edited via the control-plane **design-config**
+(`GET/PUT /v1/apps/:appId/design-config`), which Nebula reads per request and merges into its
+live config. Two enforcement engines remain by design (design compiler for look; verifier +
+sandbox for data). Per-effort design history lives in `docs/superpowers/specs/` + `…/plans/`.
 
-## Verification (additions to the v5 suite)
+**Recently shipped (2026-06-14, on `combined`):** SP2
+(`docs/superpowers/plans/2026-06-14-sp2-theme-history-and-vocab.md`) — theme history + rollback
+moved into the control plane (`theme_versions` store + `GET/PUT /v1/apps/:appId/themes`,
+`…/themes/history`, `…/themes/rollback`) and the Console (`#/themes` view); Nebula reads/writes
+themes there and its `/dev` page is **deleted**. The look-invariant vocabulary is now
+manifest-driven via `AppManifest.designSurface` (the Console's per-app hardcode is gone).
+Verified live end-to-end (qwen-free pack path + manifest-driven controls + edit round-trip).
+Also shipped: a **one-command demo launcher** (`pnpm demo` / `pnpm demo:stop` → `scripts/demo.sh`,
+`docs/DEMO-RUNBOOK.md`) that starts the stack in order with health-gating; and a fix in
+`@invariance/server` runtime — registry GET fetches now set `cache:'no-store'` so a Next.js Data
+Cache can't serve a **stale per-process signing key** (which silently no-op'd all runtime hooks).
 
-`styleSpecValid`, `compilerOutputComplete`, `lockedTokensUntouched`, `contrastPairs` (independent recompute, the safety net), `fontInRegistry`, `varRefsResolve` (slot var() targets exist). All v5 F2/F3/F4 tests unchanged.
+Then three more demo-readiness items (all verified):
+- **Console shows theme design intent** — `summarizeStyleSpec` ported into the Console (kept
+  decoupled from `@invariance/design`) and surfaced on the `#/themes` version cards.
+- **Nebula home consumes its governed API** — `HomeScreen` renders static rows for first paint,
+  then client-fetches the `withInvariance`-wrapped `/api/shows` + `/api/featured` (as `demo-user`)
+  and reconciles, so business-logic mods + invariants flow through to the showcase (fail-open).
+- **Reliable logic-hook authoring on weak models** — the authoring pipeline statically derives a
+  hook's top-level writes (`modules/authoring/derive-writes.ts`) and **auto-repairs** an
+  under-declared `writes` capability before signing, so a correct hook a weak model mis-declared
+  no longer silently no-ops at runtime. (The verifier still rejects writes to immutable fields.)
 
-## Invariant Config (v6 defaults)
+Then two design-plane fixes/features (both verified live):
+- **Gatekeeper level gate fixed** — the `m.slot`/`m.text` primitives registered with
+  `pageName: ''`, so the level lookup in `gatekeeper.ts` always read level 0 and *non-
+  deterministically* rejected legal edits ("'header' is locked … level 0"). They now register
+  against the **live page** (`buildSlotRegistration(page, …)`, effect keyed on `page`), so the
+  per-page customization level gate is correct. The gate is the deterministic guard; the LLM only
+  classifies the prompt.
+- **Themes relayout, not just restyle** — a theme is a `StyleSpec` (no layout axis), but its shape
+  axes signal how blocky the look is. `agent/layout-profile.ts` maps a spec to a structural
+  profile (`galleryProfile`: sharp + not-spacious + not-comfortable → `'grid'`, else `'standard'`);
+  apps map profile → concrete layout/components preset via `AppManifest`-style
+  `frontend.layout_profiles` (app-specific slot/component names stay in the app, not the generic
+  package). Applied on **both** the pack and free-text theme routes (`apply-pack.ts`, `pipeline.ts`),
+  merged by page over the user's current structure. So "make it retro" swaps Nebula's home
+  carousels → grids (`gridHome()` in `invariance-config.ts`, via the live F4 `CarouselRow→GridRow`
+  swap); soft/roomy vibes keep carousels.
 
-Relational constraints replace exact-hex allowlists as the default:
+**Remaining for demo-readiness (not built):** clean-checkout/hand-off fragility (cold start needs
+`pnpm -F @invariance/design build` — handled by `pnpm demo`; default model ids ≠ the pulled
+`qwen2.5:latest` — `pnpm demo` pins it; persist `INVARIANCE_SIGNING_*` keys for durable stores) —
+only matters for hand-off; deprioritized (demo runs live on this machine).
 
-```yaml
-design:
-  constraints:
-    contrast: ">= 4.5"
-    accent_chroma_max: 0.25
-    locked_tokens: { --inv-accent: "#e94560" }
-    allowed_modes: [light, dark]
-    font_registry: default
-  legacy_palette: []   # optional hard allowlist, still supported
-```
+Phases (exit criteria in `docs/DESIGN.md`): 1 foundations/schema ✅ · 2 Tier-0
+vertical slice ✅ · 3 authoring+verification v0 ✅ · 4 Tier-1 hooks/sandbox ✅ ·
+5 versioning+lazy migration ✅ · 6 analytics+console ✅. Implementation notes
+for 4–6 live in `docs/HANDOFF-PHASES-4-6.md`.
 
-After scan: pages level 0 as before, but constraints are relational so unlocking F1 immediately enables high-quality theming.
+Enforcement semantics worth knowing (shared by verifier and server runtime):
+- `diffPaths` treats a pure array permutation as a write to the array itself,
+  not its element fields — so "sort my list" mods are possible.
+- Immutable field policies compare the *multiset* of values at the path:
+  reordering is legal; rewriting, adding, or hiding a protected value is not.
+- The verifier rejects declared writes that target an immutable field
+  (descendant-or-equal path) and whole-body writes on such endpoints, but
+  allows strict-ancestor declarations (e.g. `shows`), relying on the runtime
+  checks above.
+- Middleware executes only `active` pointers; `stale` subjects get base API
+  behavior until their next client session revalidates.
 
-## Coding Conventions
+## Conventions
 
-Unchanged from v5: strict TS, named exports, no `any`, async/await only, single quotes, no semicolons, kebab-case files, colocated tests, comments explain why. New: every compiler function is pure and unit-tested against golden token snapshots; agent prompts live in template files next to their agent, not inline strings scattered around.
-
-## Build/Test Discipline
-
-- `pnpm build` then `pnpm test` must pass at every commit; turbo `test.dependsOn: ["^build"]` so fresh clones work.
-- Do not regress the existing suite (136 tests at v5 baseline). Deleted features (DOM appliers, theme.slots fallback) take their tests with them; everything else stays green.
-- Compiler determinism test: same StyleSpec in, byte-identical roles out.
-
-## Phase Scope (v6 rework — resequenced 2026-06-11, see DESIGN.md Part 5)
-
-1. ✅ Theme Compiler + registries (pure, no UI) with golden tests
-2. ✅ theme.json v2 + v1 upgrade path
-3. ✅ Designer agent + structured-outputs client; Gatekeeper routing update
-4. ✅ Slot-edit micro-mutation path; Builder cleanup (F2-F4 only — theme.slots fallback, the v1 pipeline path, and slot.tsx inline-style machinery all deleted); platform-readiness retrofits (usage hook + injectable base URL in the API client, canonical theme.json serialization, verify-on-load); `@invariance/schema` extraction. *Exit: "make the sidebar blue" lands as a contrast-solved slot literal; no inline-style path remains; schema package builds standalone.*
-5. ✅ Demo app ("Nebula", `apps/demo`) — Netflix-class media browser on the two-tier token system + `/gauntlet` visual harness. *Exit met: ten-vibe gauntlet judged visually distinct/coherent/readable; "sidebar blue" works live.*
-   → **Decision gate before 6-7 (UNRESOLVED):** the scanner-vs-overlay integration question with the cofounder. Phases 6-7 were built on the scanner bet; revisit if that argument reopens.
-6. ✅ Render-driven F2/F3 (m.text from context, m.sections); DOM appliers deleted. *Exit met: text override + reorder/hide survive React re-render (proven via `/gauntlet?demo=overrides`).*
-7. ✅ Scanner: deterministic role clustering + v2 initial-theme emission with var() slot refs; verifier completeness/font checks gated on styleSpec presence so partial scanner seeds pass verify-on-load. *Exit met: fixture scan round-trips through ThemeJsonV2Schema + verifyV2.*
-8. ✅ SSR theme inlining (cookie-mirror channel) + runtime font loader + hydration-safe page resolution; token values constrained to a safe CSS grammar (closes a cookie CSS-injection vector). *Exit met: themed first paint proven via curl with no flash.*
-9. ✅ `invariance-check` (CI guard) + `invariance-migrate-theme` CLIs. *Exit met: removing a wrapped slot makes check exit non-zero naming the slot.*
-10. ✅ Trial Mode snippet (`@invariance/snippet`, ~75KB gz, no React via `invariance/headless`): mini-scan/virtual-tokens/observe/persist/export + vanilla-DOM panel; scan-binds elements to roles once, then themes by `:root` role-value swap. *Exit met: snippet themes an unmodified static demo copy (Playwright); exported theme round-trips through `prepareStoredTheme`.*
-11. ✅ Demo polish: one-tap theme packs in the SDK panel (`applyPack`, keyless, self-defending via compile+verifyV2); Playwright visual-QA harness asserting ten distinct AA-passing accents + font links (exit-nonzero on failure); gauntlet sign-off at `docs/gauntlet-signoff.md`. *Exit met: v6 success criteria recorded with evidence.*
-
-**v6 rework complete.** All eleven phases merged to main. Full suite: 546 tests (schema 11 + core 396 + scanner 84 + snippet 55) + the demo app.
-
-> **Note:** `apps/demo` is the live Nebula demo (built phase 5). The v5-era scanner spec is archived at `docs/scanner-v5.md` and predates the role-tier model. Per-phase implementation plans live in `docs/superpowers/plans/`.
-
-### Success criteria
-
-Ten consecutive vibe prompts (retro, brutalist, pastel, terminal, glassy, editorial, ocean, sunset, mono, corporate) each produce a distinct, coherent, AA-compliant theme with zero verification failures; "make the sidebar blue" adjusts contrast automatically; snippet-exported theme round-trips into the SDK post-scan; `invariance check` blocks a removed slot in CI.
-
-## Deferred
-
-Review UI, F5+ source path, blob storage, B-levels, theme sharing links, runtime vision QA.
+- Zod schema first; export both `XSchema` and `type X = z.infer<typeof XSchema>`.
+- Workspace packages export TS source directly (`"exports": { ".": "./src/index.ts" }`); no build step until packages are published externally.
+- Cross-schema integrity checks live in `superRefine` blocks (e.g. hooks must be covered by capabilities; policies must reference real endpoints) — keep these exhaustive, they are the first verification layer.
+- Tests colocated per package under `test/`, run with `pnpm test` at root (turbo) or `pnpm -F @invariance/schema test`.

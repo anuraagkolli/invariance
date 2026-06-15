@@ -1,6 +1,8 @@
-export * from './style-spec'
-export * from './theme'
-export * from './theme-schemas'
-export * from './role-tokens'
-export * from './canonical-json'
-export * from './css-token-value'
+// Browser-safe exports only. Node signing utilities live in
+// "@invariance/schema/signing" so importing the root never pulls node:crypto.
+export * from "./canonical-json";
+export { DesignConfigSchema, type DesignConfig } from "./design-config";
+export * from "./envelope";
+export * from "./manifest";
+export * from "./mod";
+export * from "./paths";

@@ -1,19 +1,19 @@
 {
   "name": "invariance",
   "private": true,
-  "version": "0.0.1",
+  "version": "5.0.0-dev",
   "scripts": {
     "build": "turbo run build",
     "test": "turbo run test",
-    "lint": "turbo run lint",
-    "validate": "turbo run validate"
+    "typecheck": "turbo run typecheck",
+    "demo": "bash scripts/demo.sh",
+    "demo:stop": "bash scripts/demo-stop.sh"
   },
   "devDependencies": {
-    "turbo": "^2.0.0",
-    "typescript": "^5.4.0",
-    "prettier": "^3.2.0"
+    "turbo": "^2.5.0",
+    "typescript": "^5.6.0"
   },
-  "packageManager": "pnpm@9.0.0",
+  "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=20"
   }
