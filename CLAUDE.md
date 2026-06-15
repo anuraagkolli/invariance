@@ -93,6 +93,23 @@ Then three more demo-readiness items (all verified):
   under-declared `writes` capability before signing, so a correct hook a weak model mis-declared
   no longer silently no-ops at runtime. (The verifier still rejects writes to immutable fields.)
 
+Then two design-plane fixes/features (both verified live):
+- **Gatekeeper level gate fixed** — the `m.slot`/`m.text` primitives registered with
+  `pageName: ''`, so the level lookup in `gatekeeper.ts` always read level 0 and *non-
+  deterministically* rejected legal edits ("'header' is locked … level 0"). They now register
+  against the **live page** (`buildSlotRegistration(page, …)`, effect keyed on `page`), so the
+  per-page customization level gate is correct. The gate is the deterministic guard; the LLM only
+  classifies the prompt.
+- **Themes relayout, not just restyle** — a theme is a `StyleSpec` (no layout axis), but its shape
+  axes signal how blocky the look is. `agent/layout-profile.ts` maps a spec to a structural
+  profile (`galleryProfile`: sharp + not-spacious + not-comfortable → `'grid'`, else `'standard'`);
+  apps map profile → concrete layout/components preset via `AppManifest`-style
+  `frontend.layout_profiles` (app-specific slot/component names stay in the app, not the generic
+  package). Applied on **both** the pack and free-text theme routes (`apply-pack.ts`, `pipeline.ts`),
+  merged by page over the user's current structure. So "make it retro" swaps Nebula's home
+  carousels → grids (`gridHome()` in `invariance-config.ts`, via the live F4 `CarouselRow→GridRow`
+  swap); soft/roomy vibes keep carousels.
+
 **Remaining for demo-readiness (not built):** clean-checkout/hand-off fragility (cold start needs
 `pnpm -F @invariance/design build` — handled by `pnpm demo`; default model ids ≠ the pulled
 `qwen2.5:latest` — `pnpm demo` pins it; persist `INVARIANCE_SIGNING_*` keys for durable stores) —

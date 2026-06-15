@@ -38,6 +38,10 @@ URLs and the model in use; logs land in `.demo/logs/`.
 2. Either tap a **theme pack** chip (instant, no LLM) **or** type a vibe — e.g.
    *"make it a warm sunset — deep orange and magenta"*. The whole UI re-themes;
    **AA contrast and palette harmony are compiled in**, never asked of the model.
+   A theme **restyles *and* relayouts**: a blocky vibe — *"make it retro"* / brutalist /
+   terminal (sharp corners, tight density) — resolves to the *grid* layout profile and turns
+   the home carousels into grids; soft or roomy vibes keep the scroll-snap carousels. (The
+   StyleSpec→profile map is deterministic; the row swap is the live F4 `CarouselRow→GridRow`.)
 3. Open the **Console → Themes** (http://localhost:4600/#/themes). The edit shows up as a
    new version **with the exact prompt that produced it** (a `pipeline` / `pack` badge).
 4. Click **Roll back** on an earlier version → reload the Showcase → it renders the

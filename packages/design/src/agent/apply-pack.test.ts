@@ -47,7 +47,8 @@ describe('applyPack', () => {
     expect(ctx.themeStore.getTheme()?.version).toBe(2)
   })
 
-  // retro-arcade has framing:'compact' → the 'grid' layout profile.
+  // retro-arcade is radius:'sharp' (+ compact density/framing) → the 'grid' profile.
+  // radius is the load-bearing axis in galleryProfile; framing/density only exclude.
   const gridProfile = {
     layout_profiles: { grid: { components: { pages: { '/': { 'row-trending': { component: 'GridRow' } } } } } },
   }
@@ -62,8 +63,8 @@ describe('applyPack', () => {
     expect(stored.components?.pages?.['/']?.['row-trending']?.component).toBe('GridRow')
   })
 
-  it('does not relayout a non-compact pack (ocean → standard profile, no grid)', async () => {
-    // ocean has framing:'spacious' → 'standard' profile, which the app didn't map.
+  it('does not relayout a soft pack (ocean → standard profile, no grid)', async () => {
+    // ocean is radius:'rounded' (soft) → 'standard' profile, which the app didn't map.
     const ctx = ioContext({ app: 'demo', frontend: gridProfile })
     await applyPack('ocean', ctx)
     const stored = (await ctx.storageBackend.loadTheme('u', 'a')) as { components?: unknown }
