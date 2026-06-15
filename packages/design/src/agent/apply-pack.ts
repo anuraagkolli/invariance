@@ -47,8 +47,15 @@ export async function applyPack(
     },
   }
   if (currentV2.content !== undefined) candidate.content = currentV2.content
-  if (currentV2.layout !== undefined) candidate.layout = currentV2.layout
-  if (currentV2.components !== undefined) candidate.components = currentV2.components
+  // A pack is a whole look: if the app declares a structural preset for it
+  // (frontend.pack_layouts), apply that pack's layout/components too — so a
+  // pack relayouts (e.g. retro → grid rows), not just restyles. The preset wins
+  // per page; pages it doesn't touch keep the user's existing structure.
+  const preset = context.config.frontend?.pack_layouts?.[packId]
+  const layout = mergeSectionPages(currentV2.layout, preset?.layout)
+  const components = mergeSectionPages(currentV2.components, preset?.components)
+  if (layout) candidate.layout = layout
+  if (components) candidate.components = components
 
   // Safety net: vetted packs should always pass, but the verifier stays the
   // independent gate (same as the THEME route) — never trust the input blindly.
@@ -76,6 +83,16 @@ export async function applyPack(
     ...(compiled.warnings.length > 0 ? { warnings: compiled.warnings } : {}),
     slotName: 'theme',
   }
+}
+
+// Merge two page-keyed sections (layout or components): `over`'s pages win,
+// pages only in `base` are kept. Returns undefined when neither is present.
+function mergeSectionPages<T extends { pages: Record<string, unknown> }>(
+  base: T | undefined,
+  over: T | undefined,
+): T | undefined {
+  if (!base && !over) return undefined
+  return { ...(over ?? base), pages: { ...(base?.pages ?? {}), ...(over?.pages ?? {}) } } as T
 }
 
 // Pure: the packs that compile cleanly under the config's constraints. Drives

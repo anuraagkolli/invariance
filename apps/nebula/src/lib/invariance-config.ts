@@ -1,5 +1,15 @@
 import type { InvarianceConfig } from '@invariance/design'
 
+// The home carousels, by slot name (mirrors home-screen.tsx ROWS). Used to build
+// pack layout presets that swap every row to the wide grid.
+const HOME_ROWS = ['row-trending', 'row-continue', 'row-originals', 'row-new', 'row-acclaimed']
+
+// A structural preset that turns the home carousels into grids (the F4 swap the
+// rows already support — CarouselRow → GridRow, registered in providers.tsx).
+const gridHome = (): { components: { pages: Record<string, Record<string, { component: string }>> } } => ({
+  components: { pages: { '/': Object.fromEntries(HOME_ROWS.map((s) => [s, { component: 'GridRow' }])) } },
+})
+
 // Relational constraints only — no palette mode. The compiler guarantees AA at
 // every level, so the config just floors contrast and caps accent chroma.
 // Exported for use by Providers and the gauntlet page.
@@ -15,6 +25,12 @@ export const invarianceConfig: InvarianceConfig = {
       },
     },
     pages: { '/': { level: 4 }, '/series': { level: 4 } },
+    // A theme pack restyles AND relayouts: the blocky packs lay the home out as
+    // grids instead of scroll-snap carousels (the renderer swap is already live).
+    pack_layouts: {
+      'retro-arcade': gridHome(),
+      neobrutalist: gridHome(),
+    },
   },
 }
 

@@ -34,6 +34,12 @@ export interface InvarianceConfig {
       all_images?: string
     }
     pages?: Record<string, { level: number; required?: string[] }>
+    /** App-authored structural presets per theme pack: applying pack `<id>` also
+     *  writes this layout/components change, so a one-tap pack restyles AND
+     *  relayouts (e.g. retro → grid galleries). App-specific by nature (keys are
+     *  page paths + slot/component names this app registers); kept here, in the
+     *  app's own config, so the generic design package stays app-agnostic. */
+    pack_layouts?: Record<string, { layout?: LayoutSection; components?: ComponentsSection }>
   }
 }
 

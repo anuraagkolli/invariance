@@ -47,6 +47,57 @@ describe('applyPack', () => {
     expect(ctx.themeStore.getTheme()?.version).toBe(2)
   })
 
+  it('applies the app-declared layout preset for a pack (relayout, not just restyle)', async () => {
+    const ctx = ioContext({
+      app: 'demo',
+      frontend: {
+        pack_layouts: {
+          'retro-arcade': {
+            components: { pages: { '/': { 'row-trending': { component: 'GridRow' } } } },
+          },
+        },
+      },
+    })
+    const result = await applyPack('retro-arcade', ctx)
+    expect(result.type).toBe('success')
+    const stored = (await ctx.storageBackend.loadTheme('u', 'a')) as {
+      components?: { pages?: Record<string, Record<string, { component: string }>> }
+    }
+    expect(stored.components?.pages?.['/']?.['row-trending']?.component).toBe('GridRow')
+  })
+
+  it('does not invent layout/components for a pack with no preset', async () => {
+    const ctx = ioContext({ app: 'demo' }) // no pack_layouts
+    await applyPack('retro-arcade', ctx)
+    const stored = (await ctx.storageBackend.loadTheme('u', 'a')) as { components?: unknown }
+    expect(stored.components).toBeUndefined()
+  })
+
+  it('merges the preset by page, preserving the user\'s structure on other pages', async () => {
+    const ctx = ioContext({
+      app: 'demo',
+      frontend: {
+        pack_layouts: {
+          'retro-arcade': { components: { pages: { '/': { 'row-trending': { component: 'GridRow' } } } } },
+        },
+      },
+    })
+    // The user already swapped a component on /series.
+    await ctx.storageBackend.saveTheme('u', 'a', {
+      version: 2,
+      base_app_version: 'v1',
+      theme: { roles: {}, slots: {} },
+      components: { pages: { '/series': { 'row-genre': { component: 'GridRow' } } } },
+    } as AnyThemeJson)
+
+    await applyPack('retro-arcade', ctx)
+    const stored = (await ctx.storageBackend.loadTheme('u', 'a')) as {
+      components?: { pages?: Record<string, Record<string, { component: string }>> }
+    }
+    expect(stored.components?.pages?.['/']?.['row-trending']?.component).toBe('GridRow') // preset page
+    expect(stored.components?.pages?.['/series']?.['row-genre']?.component).toBe('GridRow') // kept
+  })
+
   it('errors on an unknown pack id', async () => {
     const result = await applyPack('does-not-exist', ioContext({ app: 'demo' }))
     expect(result).toEqual({ type: 'error', message: 'Unknown theme pack.' })

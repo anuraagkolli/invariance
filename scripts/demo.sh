@@ -90,9 +90,10 @@ rm -rf "$ROOT/apps/nebula/.next/cache/fetch-cache" 2>/dev/null || true
 # ---------------------------------------------------------------------------
 # 2) Build @invariance/design (its consumers import from dist/)
 # ---------------------------------------------------------------------------
-say "building @invariance/design (cold-start dependency)…"
-pnpm -F @invariance/design build >/dev/null 2>&1 && ok "design built" \
-  || die "design build failed — run: pnpm -F @invariance/design build"
+say "building @invariance/design-schema + @invariance/design (consumers import dist/)…"
+pnpm -F @invariance/design-schema build >/dev/null 2>&1 \
+  && pnpm -F @invariance/design build >/dev/null 2>&1 && ok "design built" \
+  || die "design build failed — run: pnpm -F @invariance/design-schema build && pnpm -F @invariance/design build"
 
 # ---------------------------------------------------------------------------
 # 3) Control plane :4400  → seed manifest
