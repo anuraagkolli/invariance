@@ -219,9 +219,9 @@ function conformance(name: string, makeStore: () => Promise<Store>) {
 
     it("theme timeline: listThemeTimelines summarizes per user, is app-scoped", async () => {
       const store = await makeStore();
-      await store.appendThemeVersion("app1", "u1", { a: 1 });
-      await store.appendThemeVersion("app1", "u1", { a: 2 });
-      await store.appendThemeVersion("app1", "u2", { b: 1 });
+      await store.appendThemeVersion("app1", "u1", { a: 1 }, { prompt: "make it retro" });
+      await store.appendThemeVersion("app1", "u1", { a: 2 }, { prompt: "warmer accent", source: "pipeline" });
+      await store.appendThemeVersion("app1", "u2", { b: 1 }, { source: "pack" });
       // Different app — should not appear in app1 summary
       await store.appendThemeVersion("app2", "u1", { c: 1 });
 
@@ -230,7 +230,12 @@ function conformance(name: string, makeStore: () => Promise<Store>) {
       const byUser = Object.fromEntries(timelines.map((t) => [t.userId, t]));
       expect(byUser["u1"]!.count).toBe(2);
       expect(typeof byUser["u1"]!.latestAt).toBe("string");
+      // Newest version's prompt/source surface on the summary
+      expect(byUser["u1"]!.latestPrompt).toBe("warmer accent");
+      expect(byUser["u1"]!.latestSource).toBe("pipeline");
       expect(byUser["u2"]!.count).toBe(1);
+      expect(byUser["u2"]!.latestSource).toBe("pack");
+      expect(byUser["u2"]!.latestPrompt).toBeUndefined();
       // app2 is isolated
       const app2Timelines = await store.listThemeTimelines("app2");
       expect(app2Timelines.length).toBe(1);

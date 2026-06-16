@@ -5,4 +5,5 @@ export { DesignConfigSchema, type DesignConfig } from "./design-config";
 export * from "./envelope";
 export * from "./manifest";
 export * from "./mod";
+export * from "./onboarding";
 export * from "./paths";

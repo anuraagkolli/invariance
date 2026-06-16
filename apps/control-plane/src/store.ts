@@ -97,10 +97,17 @@ export interface Store {
   ): Promise<ThemeVersionEntry>;
   /** A subject's versions, newest first. */
   listThemeVersions(appId: string, userId: string): Promise<ThemeVersionEntry[]>;
-  /** Per-user timeline summaries for this app. */
-  listThemeTimelines(
-    appId: string,
-  ): Promise<Array<{ userId: string; count: number; latestAt: string }>>;
+  /** Per-user timeline summaries for this app (newest entry's prompt/source surfaced). */
+  listThemeTimelines(appId: string): Promise<ThemeTimelineSummary[]>;
+}
+
+/** One row of the per-user theme timeline list (Console dashboard + Themes view). */
+export interface ThemeTimelineSummary {
+  userId: string;
+  count: number;
+  latestAt: string;
+  latestPrompt?: string;
+  latestSource?: ThemeVersionMeta["source"];
 }
 
 interface AppState {
@@ -283,17 +290,18 @@ export class MemoryStore implements Store {
     return [...timeline.entries].reverse();
   }
 
-  async listThemeTimelines(
-    appId: string,
-  ): Promise<Array<{ userId: string; count: number; latestAt: string }>> {
+  async listThemeTimelines(appId: string): Promise<ThemeTimelineSummary[]> {
     const state = this.app(appId);
-    const result: Array<{ userId: string; count: number; latestAt: string }> = [];
+    const result: ThemeTimelineSummary[] = [];
     for (const [userId, timeline] of state.themeTimelines) {
       if (timeline.entries.length > 0) {
+        const latest = timeline.entries[timeline.entries.length - 1]!;
         result.push({
           userId,
           count: timeline.entries.length,
-          latestAt: timeline.entries[timeline.entries.length - 1]!.at,
+          latestAt: latest.at,
+          ...(latest.meta?.prompt ? { latestPrompt: latest.meta.prompt } : {}),
+          ...(latest.meta?.source ? { latestSource: latest.meta.source } : {}),
         });
       }
     }

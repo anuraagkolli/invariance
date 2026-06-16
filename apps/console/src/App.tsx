@@ -1,11 +1,12 @@
-import type { AppManifest, UiOp } from "@invariance/schema";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import type { AppManifest, OnboardingPatch, UiOp } from "@invariance/schema";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   type AnalyticsSummary,
   type DesignConfig,
   type ModContents,
   type ModRow,
+  type OnboardingSession,
   type RecentEvent,
   type SubjectOverview,
   type ThemeTimeline,
@@ -87,7 +88,22 @@ function isInvariantsHash(): boolean {
 }
 
 function isThemesHash(): boolean {
-  return window.location.hash === "#/themes";
+  return window.location.hash === "#/themes" || window.location.hash.startsWith("#/themes/");
+}
+
+function isOnboardingHash(): boolean {
+  return window.location.hash === "#/onboarding";
+}
+
+/** Origin of the running customer app embedded in the onboarding preview. */
+const PREVIEW_ORIGIN =
+  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_PREVIEW_ORIGIN ??
+  "http://localhost:4321";
+
+/** "#/themes/<userId>" focuses the Themes view on one user; "#/themes" shows all. */
+function themeUserFromHash(): string | null {
+  const match = /^#\/themes\/(.+)$/.exec(window.location.hash);
+  return match ? decodeURIComponent(match[1]!) : null;
 }
 
 export default function App() {
@@ -96,6 +112,8 @@ export default function App() {
   const [guardrails, setGuardrails] = useState<boolean>(() => isGuardrailsHash());
   const [invariants, setInvariants] = useState<boolean>(() => isInvariantsHash());
   const [themes, setThemes] = useState<boolean>(() => isThemesHash());
+  const [themeUser, setThemeUser] = useState<string | null>(() => themeUserFromHash());
+  const [onboarding, setOnboarding] = useState<boolean>(() => isOnboardingHash());
 
   useEffect(() => {
     const onHash = () => {
@@ -103,6 +121,8 @@ export default function App() {
       setGuardrails(isGuardrailsHash());
       setInvariants(isInvariantsHash());
       setThemes(isThemesHash());
+      setThemeUser(themeUserFromHash());
+      setOnboarding(isOnboardingHash());
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
@@ -111,11 +131,14 @@ export default function App() {
   const openSubject = (subjectId: string) => {
     window.location.hash = `#/u/${encodeURIComponent(subjectId)}`;
   };
+  const openThemeUser = (userId: string) => {
+    window.location.hash = `#/themes/${encodeURIComponent(userId)}`;
+  };
   const closeSubject = () => {
     window.location.hash = "";
   };
 
-  const onDashboard = !subject && !guardrails && !invariants && !themes;
+  const onDashboard = !subject && !guardrails && !invariants && !themes && !onboarding;
 
   return (
     <div className="min-h-screen bg-ink px-6 py-10 text-white sm:px-10">
@@ -141,6 +164,7 @@ export default function App() {
             {invariants && <p className="mt-1 font-mono text-xs text-white/50">invariants</p>}
             {guardrails && <p className="mt-1 font-mono text-xs text-white/50">guardrails</p>}
             {themes && <p className="mt-1 font-mono text-xs text-white/50">themes</p>}
+            {onboarding && <p className="mt-1 font-mono text-xs text-white/50">onboarding</p>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <a
@@ -148,6 +172,12 @@ export default function App() {
               href="#"
             >
               Dashboard
+            </a>
+            <a
+              className={`${BTN_SECONDARY} ${onboarding ? "text-white" : ""}`}
+              href="#/onboarding"
+            >
+              Onboarding
             </a>
             <a
               className={`${BTN_SECONDARY} ${invariants ? "text-white" : ""}`}
@@ -179,19 +209,435 @@ export default function App() {
           </div>
         </header>
 
-        {invariants ? (
+        {onboarding ? (
+          <OnboardingView appId={appId} />
+        ) : invariants ? (
           <InvariantsView appId={appId} />
         ) : themes ? (
-          <ThemesView appId={appId} />
+          <ThemesView appId={appId} initialUser={themeUser} />
         ) : guardrails ? (
           <GuardrailsView appId={appId} />
         ) : subject ? (
           <SubjectView appId={appId} subjectId={subject} onBack={closeSubject} />
         ) : (
-          <Dashboard appId={appId} onOpenSubject={openSubject} />
+          <Dashboard appId={appId} onOpenSubject={openSubject} onOpenThemeUser={openThemeUser} />
         )}
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Onboarding — scan a repo, review the governable surface, finalize    */
+/* into a published manifest + design-config. Live preview of the       */
+/* running app with section/color/font highlighting via the bridge.     */
+/* ------------------------------------------------------------------ */
+
+const LEVELS = ["locked", "theme", "+ content", "+ layout", "+ components"];
+const LEVEL_HELP =
+  "0 locked · 1 theme/style · 2 + content · 3 + layout · 4 + components";
+
+function OnboardingView({ appId }: { appId: string }) {
+  const [phase, setPhase] = useState<"connect" | "review" | "done">("connect");
+  const [useUrl, setUseUrl] = useState(false);
+  const [repoUrl, setRepoUrl] = useState("");
+  const [path, setPath] = useState("apps/nebula");
+  const [scanning, setScanning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [session, setSession] = useState<OnboardingSession | null>(null);
+  const [archIdx, setArchIdx] = useState(0);
+  const [selSection, setSelSection] = useState<string | null>(null);
+  const [tab, setTab] = useState<"sections" | "palette" | "api">("sections");
+  const [finalizing, setFinalizing] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  const plan = session?.plan ?? null;
+  const arch = plan?.archetypes[archIdx] ?? null;
+
+  const post = useCallback((msg: Record<string, unknown>) => {
+    iframeRef.current?.contentWindow?.postMessage(
+      { source: "inv-onboard", ...msg },
+      PREVIEW_ORIGIN,
+    );
+  }, []);
+
+  async function runScan() {
+    setScanning(true);
+    setError(null);
+    try {
+      const s = await api.onboardingScan(appId, useUrl ? { repoUrl } : { path });
+      setSession(s);
+      setPhase("review");
+      setArchIdx(0);
+      setTab("sections");
+      setSelSection(s.plan.archetypes[0]?.sections[0]?.id ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  const patch = useCallback(
+    async (p: OnboardingPatch) => {
+      if (!session) return;
+      try {
+        setSession(await api.onboardingPatch(session.sessionId, p));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [session],
+  );
+
+  async function finalize() {
+    if (!session) return;
+    setFinalizing(true);
+    setError(null);
+    try {
+      const s = await api.onboardingFinalize(session.sessionId);
+      setSession(s);
+      setPhase("done");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setFinalizing(false);
+    }
+  }
+
+  // Highlight the selected section whenever it (or the page) changes.
+  const selected = arch?.sections.find((s) => s.id === selSection) ?? null;
+  useEffect(() => {
+    if (phase !== "review" || tab !== "sections" || !selected) return;
+    post({ type: "highlight-section", domIndex: selected.domIndex, name: selected.name });
+  }, [selected, phase, tab, post]);
+
+  const previewSrc = `${PREVIEW_ORIGIN}${arch?.route ?? "/"}?inv-onboard=1`;
+
+  if (phase === "connect") {
+    return (
+      <section className="flex flex-col gap-5">
+        <div className={CARD}>
+          <h2 className={H2}>Connect a repository</h2>
+          <p className={`${HINT} mt-1`}>
+            Scan a React + file-routed app into its <strong>governable surface</strong>: page
+            archetypes, the sections end users may customize, a role-token palette seeded from
+            its own colors, and the API endpoints behind it. You review and adjust everything
+            before it's published.
+          </p>
+          <div className="mt-4 flex gap-2 text-xs">
+            <button
+              className={`${BTN_SECONDARY} ${!useUrl ? "text-white ring-1 ring-emerald-400/40" : ""}`}
+              onClick={() => setUseUrl(false)}
+            >
+              Local path
+            </button>
+            <button
+              className={`${BTN_SECONDARY} ${useUrl ? "text-white ring-1 ring-emerald-400/40" : ""}`}
+              onClick={() => setUseUrl(true)}
+            >
+              GitHub URL
+            </button>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {useUrl ? (
+              <input
+                className={`${INPUT} min-w-[22rem] flex-1`}
+                placeholder="https://github.com/acme/app"
+                value={repoUrl}
+                onChange={(e) => setRepoUrl(e.target.value)}
+                spellCheck={false}
+              />
+            ) : (
+              <input
+                className={`${INPUT} min-w-[22rem] flex-1`}
+                placeholder="apps/nebula"
+                value={path}
+                onChange={(e) => setPath(e.target.value)}
+                spellCheck={false}
+              />
+            )}
+            <button
+              className={BTN_PRIMARY}
+              onClick={runScan}
+              disabled={scanning || (useUrl ? !repoUrl : !path)}
+            >
+              {scanning ? "Scanning…" : "Scan repository"}
+            </button>
+          </div>
+          <p className="mt-2 font-mono text-[11px] text-white/40">
+            target app · <span className="text-white/60">{appId}</span> · a URL is shallow-cloned;
+            a path resolves against the monorepo root.
+          </p>
+        </div>
+        {error && <div className={ERROR}>{error}</div>}
+      </section>
+    );
+  }
+
+  if (phase === "done" && session) {
+    const fin = session.finalized;
+    return (
+      <section className="flex flex-col gap-5">
+        <div className={CARD}>
+          <h2 className={H2}>Onboarding complete</h2>
+          <p className={`${HINT} mt-1`}>
+            Published manifest <span className={CODE}>v{fin?.manifestVersion}</span> and the
+            design-config for <span className="text-white/80">{appId}</span>. The look and
+            business-logic pipelines can now drive this app.
+          </p>
+          <ul className="mt-3 space-y-1 text-sm text-white/70">
+            <li>· {plan?.archetypes.length} page archetypes wired</li>
+            <li>
+              · {plan?.archetypes.reduce((n, a) => n + a.sections.length, 0)} customizable sections
+            </li>
+            <li>· {Object.keys(plan?.roles ?? {}).length} role tokens declared</li>
+            <li>· {plan?.endpoints.length} API endpoints registered (logic plane)</li>
+            {fin?.staleMods ? <li>· {fin.staleMods} existing mods marked stale for re-check</li> : null}
+          </ul>
+          <div className="mt-4 flex gap-2">
+            <a className={BTN_SECONDARY} href="#/invariants">
+              View invariants →
+            </a>
+            <a className={BTN_SECONDARY} href="#/themes">
+              View themes →
+            </a>
+            <button
+              className={BTN_SECONDARY}
+              onClick={() => {
+                setSession(null);
+                setPhase("connect");
+              }}
+            >
+              Onboard another
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // review
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {plan?.archetypes.map((a, i) => (
+            <button
+              key={a.key}
+              className={`${BTN_SECONDARY} ${i === archIdx ? "text-white ring-1 ring-emerald-400/40" : ""}`}
+              onClick={() => {
+                setArchIdx(i);
+                setTab("sections");
+                setSelSection(a.sections[0]?.id ?? null);
+              }}
+              title={a.pageFile}
+            >
+              {a.key}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[11px] text-white/40">{session?.plan.repo.ref}</span>
+          <button className={BTN_PRIMARY} onClick={finalize} disabled={finalizing}>
+            {finalizing ? "Publishing…" : "Finalize & publish"}
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_22rem]">
+        {/* live preview */}
+        <div className="overflow-hidden rounded-xl ring-1 ring-white/10">
+          <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.03] px-3 py-1.5">
+            <span className="font-mono text-[11px] text-white/50">{previewSrc}</span>
+            <span className="text-[11px] text-white/40">live preview</span>
+          </div>
+          <iframe
+            key={arch?.key}
+            ref={iframeRef}
+            src={previewSrc}
+            title="app preview"
+            className="h-[640px] w-full bg-white"
+            onLoad={() => {
+              if (selected) {
+                window.setTimeout(
+                  () =>
+                    post({
+                      type: "highlight-section",
+                      domIndex: selected.domIndex,
+                      name: selected.name,
+                    }),
+                  500,
+                );
+              }
+            }}
+          />
+        </div>
+
+        {/* controls */}
+        <div className="flex flex-col gap-3">
+          <div className="flex gap-1.5 text-xs">
+            {(["sections", "palette", "api"] as const).map((t) => (
+              <button
+                key={t}
+                className={`${BTN_SECONDARY} ${tab === t ? "text-white ring-1 ring-emerald-400/40" : ""}`}
+                onClick={() => {
+                  setTab(t);
+                  post({ type: "clear" });
+                }}
+              >
+                {t === "sections" ? "Sections" : t === "palette" ? "Palette" : "API"}
+              </button>
+            ))}
+          </div>
+
+          {tab === "sections" && arch && (
+            <div className={`${CARD} flex flex-col gap-2`}>
+              <p className={SUBHEAD} title={LEVEL_HELP}>
+                {arch.key} · {arch.sections.length} sections
+              </p>
+              {arch.sections.length === 0 && (
+                <p className={HINT}>No sections segmented for this page.</p>
+              )}
+              {arch.sections.map((s) => {
+                const active = s.id === selSection;
+                return (
+                  <div
+                    key={s.id}
+                    className={`rounded-lg p-2.5 ring-1 transition-colors ${
+                      active ? "bg-emerald-500/10 ring-emerald-400/40" : "bg-white/[0.03] ring-white/10"
+                    }`}
+                    onMouseEnter={() => {
+                      setSelSection(s.id);
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        className={`${INPUT} flex-1`}
+                        value={s.name}
+                        onChange={(e) => patch({ sections: [{ id: s.id, name: e.target.value }] })}
+                        spellCheck={false}
+                      />
+                      <span className="font-mono text-[10px] text-white/30">&lt;{s.tagName}&gt;</span>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-[11px] text-white/40">level</span>
+                      <select
+                        className={`${INPUT} flex-1`}
+                        value={s.level}
+                        onChange={(e) =>
+                          patch({ sections: [{ id: s.id, level: Number(e.target.value) }] })
+                        }
+                      >
+                        {LEVELS.map((label, lv) => (
+                          <option key={lv} value={lv}>
+                            {lv} · {label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {s.colors.length > 0 && (
+                      <div className="mt-2 flex gap-1">
+                        {s.colors.slice(0, 6).map((c) => (
+                          <span
+                            key={c}
+                            className="h-3.5 w-3.5 rounded ring-1 ring-white/20"
+                            style={{ background: c }}
+                            title={c}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {tab === "palette" && plan && (
+            <div className={`${CARD} flex flex-col gap-2`}>
+              <p className={SUBHEAD}>Role tokens · seeded from observed colors</p>
+              {plan.tokens
+                .filter((t) => t.salient)
+                .map((t) => (
+                  <div
+                    key={t.role}
+                    className="flex items-center gap-2 rounded-lg bg-white/[0.03] p-2 ring-1 ring-white/10"
+                    onMouseEnter={() => post({ type: "highlight-color", value: t.value })}
+                    onMouseLeave={() => post({ type: "clear" })}
+                  >
+                    <span
+                      className="h-6 w-6 rounded ring-1 ring-white/20"
+                      style={{ background: t.value }}
+                    />
+                    <div className="flex-1">
+                      <p className="font-mono text-[11px] text-white/70">{t.role}</p>
+                      <p className="font-mono text-[10px] text-white/30">{t.value}</p>
+                    </div>
+                    <label className="flex items-center gap-1 text-[11px] text-white/50">
+                      <input
+                        type="checkbox"
+                        checked={t.locked}
+                        onChange={(e) => patch({ tokens: [{ role: t.role, locked: e.target.checked }] })}
+                      />
+                      lock
+                    </label>
+                  </div>
+                ))}
+              {plan.fonts.length > 0 && (
+                <>
+                  <p className={`${SUBHEAD} mt-2`}>Fonts</p>
+                  {plan.fonts.map((f) => (
+                    <div
+                      key={f.family}
+                      className="flex items-center justify-between rounded-lg bg-white/[0.03] p-2 text-xs ring-1 ring-white/10"
+                      onMouseEnter={() => post({ type: "highlight-font", family: f.family })}
+                      onMouseLeave={() => post({ type: "clear" })}
+                    >
+                      <span style={{ fontFamily: f.family }} className="text-white/80">
+                        {f.family}
+                      </span>
+                      <span className="font-mono text-[10px] text-white/30">{f.role}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+
+          {tab === "api" && plan && (
+            <div className={`${CARD} flex flex-col gap-1.5`}>
+              <p className={SUBHEAD}>Detected endpoints · logic plane (read-only)</p>
+              {plan.endpoints.length === 0 && <p className={HINT}>No API endpoints detected.</p>}
+              {plan.endpoints.map((e) => (
+                <div
+                  key={`${e.method} ${e.path}`}
+                  className="flex items-center gap-2 rounded-lg bg-white/[0.03] p-2 text-xs ring-1 ring-white/10"
+                >
+                  <span className="w-12 shrink-0 font-mono text-[10px] font-semibold text-emerald-300">
+                    {e.method}
+                  </span>
+                  <span className="font-mono text-[11px] text-white/70">{e.path}</span>
+                </div>
+              ))}
+              <p className="mt-1 text-[11px] text-white/40">
+                Endpoints are registered in the manifest now; field-level invariants and
+                business-logic mods are configured later in Invariants / authoring.
+              </p>
+            </div>
+          )}
+
+          {plan && plan.warnings.length > 0 && (
+            <div className="rounded-xl bg-amber-500/10 p-3 text-[11px] text-amber-200 ring-1 ring-amber-500/30">
+              {plan.warnings.map((w, i) => (
+                <p key={i}>· {w}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      {error && <div className={ERROR}>{error}</div>}
+    </section>
   );
 }
 
@@ -287,17 +733,18 @@ function InvariantsView({ appId }: { appId: string }) {
 /* (ported from Nebula's /dev, app-agnostic: no design-plane runtime)   */
 /* ------------------------------------------------------------------ */
 
-function ThemesView({ appId }: { appId: string }) {
+function ThemesView({ appId, initialUser }: { appId: string; initialUser?: string | null }) {
   const [timelines, setTimelines] = useState<ThemeTimeline[]>([]);
-  const [selectedUser, setSelectedUser] = useState("");
+  const [selectedUser, setSelectedUser] = useState(initialUser ?? "");
   const [entries, setEntries] = useState<ThemeVersionEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const [nonce, setNonce] = useState(0);
 
   // Timelines + the user selector. The chosen user self-heals: keep it if it's
-  // still a valid timeline (survives a nonce-bump refresh), else default to the
-  // first (covers initial load and an appId switch to a different app's users).
+  // still a valid timeline (survives a nonce-bump refresh), else prefer the
+  // deep-linked user (#/themes/<id>), else default to the first (covers initial
+  // load and an appId switch to a different app's users).
   useEffect(() => {
     let active = true;
     api
@@ -305,7 +752,11 @@ function ThemesView({ appId }: { appId: string }) {
       .then((tls) => {
         if (!active) return;
         setTimelines(tls);
-        setSelectedUser((prev) => (tls.some((t) => t.userId === prev) ? prev : tls[0]?.userId ?? ""));
+        setSelectedUser((prev) => {
+          if (tls.some((t) => t.userId === prev)) return prev;
+          if (initialUser && tls.some((t) => t.userId === initialUser)) return initialUser;
+          return tls[0]?.userId ?? "";
+        });
         setError(null);
       })
       .catch((err) => {
@@ -314,7 +765,7 @@ function ThemesView({ appId }: { appId: string }) {
     return () => {
       active = false;
     };
-  }, [appId, nonce]);
+  }, [appId, nonce, initialUser]);
 
   // Entries for the selected user. Empty selection → no fetch, just clear.
   useEffect(() => {
@@ -397,24 +848,38 @@ function ThemesView({ appId }: { appId: string }) {
   );
 }
 
-function Dashboard({ appId, onOpenSubject }: { appId: string; onOpenSubject: (s: string) => void }) {
+function Dashboard({
+  appId,
+  onOpenSubject,
+  onOpenThemeUser,
+}: {
+  appId: string;
+  onOpenSubject: (s: string) => void;
+  onOpenThemeUser: (s: string) => void;
+}) {
   const [manifest, setManifest] = useState<AppManifest | null>(null);
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [mods, setMods] = useState<ModRow[]>([]);
+  const [themes, setThemes] = useState<ThemeTimeline[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
   const [modsQuery, setModsQuery] = useState("");
 
   const refresh = useCallback(async () => {
     try {
-      const [m, s, list] = await Promise.all([
+      const [m, s, list, tls] = await Promise.all([
         api.manifest(appId).catch(() => null),
         api.summary(appId),
         api.mods(appId),
+        // Theme restyles live in their own (design-plane) store, not the mod
+        // registry — fetch them so the dashboard shows them too. Fail-soft: a
+        // themes-store hiccup must not blank the whole dashboard.
+        api.themeTimelines(appId).catch(() => [] as ThemeTimeline[]),
       ]);
       setManifest(m);
       setSummary(s);
       setMods(list);
+      setThemes(tls);
       setError(null);
       setLoadedAt(new Date().toLocaleTimeString());
     } catch (err) {
@@ -451,7 +916,7 @@ function Dashboard({ appId, onOpenSubject }: { appId: string; onOpenSubject: (s:
         <section className={`${CARD} lg:row-span-2`}>
           <h2 className={H2}>At a glance</h2>
           {summary ? (
-            <SummaryPanel summary={summary} onFilter={setModsQuery} />
+            <SummaryPanel summary={summary} onFilter={setModsQuery} themedUsers={themes.length} />
           ) : (
             <p className={`mt-3 ${HINT}`}>No data yet.</p>
           )}
@@ -459,18 +924,21 @@ function Dashboard({ appId, onOpenSubject }: { appId: string; onOpenSubject: (s:
 
         <section className={CARD}>
           <h2 className={H2}>
-            Your users&rsquo; customizations <span className="text-white/40">({mods.length})</span>
+            Your users&rsquo; customizations{" "}
+            <span className="text-white/40">({mods.length + themes.length})</span>
           </h2>
           <p className={`mt-1 ${HINT}`}>
-            Every change a user has made, newest first. Click a user for the full story, or kill
-            anything that shouldn&rsquo;t be live — it takes effect within seconds.
+            Every change a user has made — logic mods and look &amp; feel restyles — newest first.
+            Click a user for the full story, or kill anything that shouldn&rsquo;t be live.
           </p>
-          <ModsTable
+          <CustomizationsTable
             mods={mods}
+            themes={themes}
             query={modsQuery}
             onQuery={setModsQuery}
             onAct={act}
             onOpenSubject={onOpenSubject}
+            onOpenThemeUser={onOpenThemeUser}
           />
         </section>
 
@@ -560,15 +1028,22 @@ function HelpBanner() {
 function SummaryPanel({
   summary,
   onFilter,
+  themedUsers,
 }: {
   summary: AnalyticsSummary;
   onFilter: (query: string) => void;
+  themedUsers: number;
 }) {
   return (
     <div className="mt-4 flex flex-col gap-5">
       <div className="grid grid-cols-2 gap-3">
         <Stat label="customizations" value={summary.mods.total} />
         <Stat label="live now" value={summary.mods.byStatus["active"] ?? 0} />
+        <Stat
+          label="themed users"
+          value={themedUsers}
+          help="Users who have restyled the look & feel through the design plane."
+        />
         <Stat
           label="paused"
           value={summary.mods.degraded}
@@ -726,30 +1201,61 @@ function modMatches(mod: ModRow, q: string): boolean {
   );
 }
 
-function ModsTable({
+function themeMatches(t: ThemeTimeline, q: string): boolean {
+  return (
+    t.userId.toLowerCase().includes(q) ||
+    (t.latestPrompt?.toLowerCase().includes(q) ?? false) ||
+    (t.latestSource?.includes(q) ?? false) ||
+    "theme".includes(q) ||
+    "look & feel".includes(q)
+  );
+}
+
+/**
+ * A customization is either a registry mod (logic/UI bundle) or a design-plane
+ * theme restyle. They live in different stores but are one thing to a developer
+ * — "what did this user change?" — so the dashboard merges them into one table,
+ * newest-first, tagged by kind. `at` is the common sort key (ISO timestamps).
+ */
+type CustomizationRow =
+  | { kind: "mod"; at: string; mod: ModRow }
+  | { kind: "theme"; at: string; theme: ThemeTimeline };
+
+function CustomizationsTable({
   mods,
+  themes,
   query,
   onQuery,
   onAct,
   onOpenSubject,
+  onOpenThemeUser,
 }: {
   mods: ModRow[];
+  themes: ThemeTimeline[];
   query: string;
   onQuery: (q: string) => void;
   onAct: (action: "kill" | "restore", modId: string) => Promise<void>;
   onOpenSubject: (subjectId: string) => void;
+  onOpenThemeUser: (userId: string) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
-  const filtered = useMemo(() => {
-    const ordered = [...mods].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-    const live = showHistory ? ordered : ordered.filter((m) => m.status !== "superseded");
+  const filtered = useMemo<CustomizationRow[]>(() => {
     const q = query.trim().toLowerCase();
-    return q ? live.filter((m) => modMatches(m, q)) : live;
-  }, [mods, query, showHistory]);
+    // showHistory is mod-only (superseded revisions); themes always show latest.
+    const modRows: CustomizationRow[] = (
+      showHistory ? mods : mods.filter((m) => m.status !== "superseded")
+    )
+      .filter((m) => !q || modMatches(m, q))
+      .map((m) => ({ kind: "mod", at: m.createdAt, mod: m }));
+    const themeRows: CustomizationRow[] = themes
+      .filter((t) => !q || themeMatches(t, q))
+      .map((t) => ({ kind: "theme", at: t.latestAt, theme: t }));
+    return [...modRows, ...themeRows].sort((a, b) => (a.at < b.at ? 1 : -1));
+  }, [mods, themes, query, showHistory]);
 
-  if (mods.length === 0) {
+  if (mods.length === 0 && themes.length === 0) {
     return (
       <p className={`mt-4 ${HINT}`}>
         No customizations yet. They will appear here the moment a user submits one.
@@ -771,15 +1277,17 @@ function ModsTable({
             setShowAll(false);
           }}
         />
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-white/50">
-          <input
-            type="checkbox"
-            className="accent-emerald-400"
-            checked={showHistory}
-            onChange={(e) => setShowHistory(e.target.checked)}
-          />
-          include replaced revisions
-        </label>
+        {mods.length > 0 && (
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-white/50">
+            <input
+              type="checkbox"
+              className="accent-emerald-400"
+              checked={showHistory}
+              onChange={(e) => setShowHistory(e.target.checked)}
+            />
+            include replaced revisions
+          </label>
+        )}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
@@ -790,7 +1298,7 @@ function ModsTable({
               </th>
               <th
                 className="border-b border-white/10 px-3 py-2 text-left text-[11px] uppercase tracking-wide text-white/40"
-                title="Each new request replaces the previous revision of that user's mod."
+                title="Each new request replaces the previous revision (mods) / appends a new version (themes)."
               >
                 rev
               </th>
@@ -799,13 +1307,13 @@ function ModsTable({
               </th>
               <th
                 className="border-b border-white/10 px-3 py-2 text-left text-[11px] uppercase tracking-wide text-white/40"
-                title="Which surfaces this mod touches: style properties, CSS rules, UI areas, API hooks."
+                title="What this customization touches: style properties, CSS rules, UI areas, API hooks, or a whole-theme restyle."
               >
                 what it changes
               </th>
               <th
                 className="border-b border-white/10 px-3 py-2 text-left text-[11px] uppercase tracking-wide text-white/40"
-                title="The app version this mod was verified against."
+                title="The app version this mod was verified against. Themes aren't manifest-bound."
               >
                 app version
               </th>
@@ -816,58 +1324,22 @@ function ModsTable({
             </tr>
           </thead>
           <tbody>
-            {visible.map((mod) => (
-              <tr
-                key={mod.modId}
-                className={`transition-colors hover:bg-white/[0.02] ${
-                  mod.status === "superseded" ? "opacity-45" : ""
-                }`}
-              >
-                <td className="border-b border-white/5 px-3 py-3 align-top">
-                  <button
-                    className={BTN_LINK}
-                    title="Open this user's full history"
-                    onClick={() => onOpenSubject(mod.subjectId)}
-                  >
-                    {mod.subjectId}
-                  </button>
-                </td>
-                <td className="border-b border-white/5 px-3 py-3 align-top text-sm text-white/70">
-                  {mod.revision}
-                </td>
-                <td className="border-b border-white/5 px-3 py-3 align-top">
-                  <StatusChip status={mod.status} />
-                  {mod.status === "degraded" && mod.reasons.length > 0 && (
-                    <div className="mt-1 text-xs text-red-300">{mod.reasons.join("; ")}</div>
-                  )}
-                </td>
-                <td className="border-b border-white/5 px-3 py-3 align-top text-sm text-white/70">
-                  {mod.classification ? surfacesLabel(mod.classification.surfaces) : "—"}
-                </td>
-                <td className="border-b border-white/5 px-3 py-3 align-top text-sm text-white/70">
-                  v{mod.boundManifestVersion}
-                </td>
-                <td className="max-w-[260px] border-b border-white/5 px-3 py-3 align-top text-sm text-white/70">
-                  {mod.prompts.at(-1) ?? <span className="text-white/40">published by a developer</span>}
-                </td>
-                <td className="border-b border-white/5 px-3 py-3 align-top">
-                  {(mod.status === "active" || mod.status === "stale" || mod.status === "degraded") && (
-                    <button
-                      className={BTN_DANGER}
-                      title="Disable this mod. The user falls back to the base app within seconds."
-                      onClick={() => void onAct("kill", mod.modId)}
-                    >
-                      Kill
-                    </button>
-                  )}
-                  {mod.status === "disabled" && (
-                    <button className={BTN_SECONDARY} onClick={() => void onAct("restore", mod.modId)}>
-                      Restore
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {visible.map((row) =>
+              row.kind === "mod" ? (
+                <ModRowView
+                  key={row.mod.modId}
+                  mod={row.mod}
+                  onAct={onAct}
+                  onOpenSubject={onOpenSubject}
+                />
+              ) : (
+                <ThemeRowView
+                  key={`theme:${row.theme.userId}`}
+                  theme={row.theme}
+                  onOpenThemeUser={onOpenThemeUser}
+                />
+              ),
+            )}
           </tbody>
         </table>
       </div>
@@ -878,13 +1350,112 @@ function ModsTable({
       )}
       {filtered.length === 0 && (
         <p className="text-sm text-white/50">
-          No mods match “{query}”.{" "}
+          No customizations match “{query}”.{" "}
           <button className={BTN_LINK} onClick={() => onQuery("")}>
             Clear
           </button>
         </p>
       )}
     </div>
+  );
+}
+
+const TD = "border-b border-white/5 px-3 py-3 align-top text-sm text-white/70";
+
+function ModRowView({
+  mod,
+  onAct,
+  onOpenSubject,
+}: {
+  mod: ModRow;
+  onAct: (action: "kill" | "restore", modId: string) => Promise<void>;
+  onOpenSubject: (subjectId: string) => void;
+}) {
+  return (
+    <tr
+      className={`transition-colors hover:bg-white/[0.02] ${
+        mod.status === "superseded" ? "opacity-45" : ""
+      }`}
+    >
+      <td className="border-b border-white/5 px-3 py-3 align-top">
+        <button
+          className={BTN_LINK}
+          title="Open this user's full history"
+          onClick={() => onOpenSubject(mod.subjectId)}
+        >
+          {mod.subjectId}
+        </button>
+      </td>
+      <td className={TD}>{mod.revision}</td>
+      <td className="border-b border-white/5 px-3 py-3 align-top">
+        <StatusChip status={mod.status} />
+        {mod.status === "degraded" && mod.reasons.length > 0 && (
+          <div className="mt-1 text-xs text-red-300">{mod.reasons.join("; ")}</div>
+        )}
+      </td>
+      <td className={TD}>{mod.classification ? surfacesLabel(mod.classification.surfaces) : "—"}</td>
+      <td className={TD}>v{mod.boundManifestVersion}</td>
+      <td className={`max-w-[260px] ${TD}`}>
+        {mod.prompts.at(-1) ?? <span className="text-white/40">published by a developer</span>}
+      </td>
+      <td className="border-b border-white/5 px-3 py-3 align-top">
+        {(mod.status === "active" || mod.status === "stale" || mod.status === "degraded") && (
+          <button
+            className={BTN_DANGER}
+            title="Disable this mod. The user falls back to the base app within seconds."
+            onClick={() => void onAct("kill", mod.modId)}
+          >
+            Kill
+          </button>
+        )}
+        {mod.status === "disabled" && (
+          <button className={BTN_SECONDARY} onClick={() => void onAct("restore", mod.modId)}>
+            Restore
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function ThemeRowView({
+  theme,
+  onOpenThemeUser,
+}: {
+  theme: ThemeTimeline;
+  onOpenThemeUser: (userId: string) => void;
+}) {
+  return (
+    <tr className="transition-colors hover:bg-white/[0.02]">
+      <td className="border-b border-white/5 px-3 py-3 align-top">
+        <button
+          className={BTN_LINK}
+          title="Open this user's theme history"
+          onClick={() => onOpenThemeUser(theme.userId)}
+        >
+          {theme.userId}
+        </button>
+      </td>
+      <td className={TD}>{theme.count}</td>
+      <td className="border-b border-white/5 px-3 py-3 align-top">
+        <span
+          className="inline-block whitespace-nowrap rounded-full bg-violet-500/15 px-2.5 py-0.5 text-xs text-violet-300 ring-1 ring-violet-500/30"
+          title="A look & feel restyle (design plane). Applied on the user's next load; roll back from the Themes view."
+        >
+          theme
+        </span>
+      </td>
+      <td className={TD}>look &amp; feel</td>
+      <td className={`${TD} text-white/40`} title="Themes aren't bound to a manifest version.">
+        —
+      </td>
+      <td className={`max-w-[260px] ${TD}`}>{themeRequestLabel(theme)}</td>
+      <td className="border-b border-white/5 px-3 py-3 align-top">
+        <button className={BTN_SECONDARY} onClick={() => onOpenThemeUser(theme.userId)}>
+          History
+        </button>
+      </td>
+    </tr>
   );
 }
 
@@ -895,6 +1466,14 @@ function surfacesLabel(surfaces: { tokens: number; styles: number; slots: number
   if (surfaces.slots) parts.push(`${surfaces.slots} UI area${surfaces.slots > 1 ? "s" : ""}`);
   if (surfaces.hooks) parts.push(`${surfaces.hooks} API hook${surfaces.hooks > 1 ? "s" : ""}`);
   return parts.length > 0 ? parts.join(", ") : "empty";
+}
+
+/** A pack/rollback version carries no prompt; describe it from its source instead. */
+function themeRequestLabel(t: ThemeTimeline): React.ReactNode {
+  if (t.latestPrompt) return `“${t.latestPrompt}”`;
+  if (t.latestSource === "pack") return <span className="text-white/40">applied a preset theme</span>;
+  if (t.latestSource === "rollback") return <span className="text-white/40">rolled back to a prior version</span>;
+  return <span className="text-white/40">restyled the look &amp; feel</span>;
 }
 
 /* ------------------------------------------------------------------ */

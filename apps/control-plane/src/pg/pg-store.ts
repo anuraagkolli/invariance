@@ -4,6 +4,7 @@ import type {
   ModRecord,
   ModRecordStatus,
   Store,
+  ThemeTimelineSummary,
   ThemeVersionEntry,
   ThemeVersionMeta,
 } from "../store";
@@ -359,22 +360,34 @@ export class PgStore implements Store {
     ).map((row) => this.toThemeEntry(row));
   }
 
-  async listThemeTimelines(
-    appId: string,
-  ): Promise<Array<{ userId: string; count: number; latestAt: string }>> {
+  async listThemeTimelines(appId: string): Promise<ThemeTimelineSummary[]> {
+    // Join the per-user count with that user's newest row (max seq) so we can
+    // surface the latest prompt/source alongside the count + timestamp.
     const { rows } = await this.db.query(
-      `SELECT user_id, COUNT(*)::int AS count, MAX(at) AS latest_at
-       FROM theme_versions
-       WHERE app_id = $1
-       GROUP BY user_id`,
+      `SELECT t.user_id, cnt.count, t.at AS latest_at, t.meta AS latest_meta
+       FROM theme_versions t
+       JOIN (
+         SELECT user_id, COUNT(*)::int AS count, MAX(seq) AS max_seq
+         FROM theme_versions
+         WHERE app_id = $1
+         GROUP BY user_id
+       ) cnt ON cnt.user_id = t.user_id AND cnt.max_seq = t.seq
+       WHERE t.app_id = $1`,
       [appId],
     );
-    return (rows as Array<{ user_id: string; count: unknown; latest_at: string }>).map(
-      (row) => ({
-        userId: row.user_id,
-        count: Number(row.count),
-        latestAt: row.latest_at,
-      }),
-    );
+    return (
+      rows as Array<{
+        user_id: string;
+        count: unknown;
+        latest_at: string;
+        latest_meta: ThemeVersionMeta | null;
+      }>
+    ).map((row) => ({
+      userId: row.user_id,
+      count: Number(row.count),
+      latestAt: row.latest_at,
+      ...(row.latest_meta?.prompt ? { latestPrompt: row.latest_meta.prompt } : {}),
+      ...(row.latest_meta?.source ? { latestSource: row.latest_meta.source } : {}),
+    }));
   }
 }

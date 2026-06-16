@@ -5,6 +5,7 @@ import { renderThemeCss, themeFromCookieHeader } from '@invariance/design'
 
 import './globals.css'
 import { Providers } from './providers'
+import { OnboardBridge } from '../components/onboard-bridge'
 import { invarianceConfig } from '../lib/invariance-config'
 import { mergeInvarianceConfig } from '../lib/dev-config'
 import type { DevConfigOverlay } from '../lib/dev-config'
@@ -74,6 +75,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <div id="app-root">
           <Providers config={config}>{children}</Providers>
         </div>
+        <OnboardBridge />
       </body>
     </html>
   )

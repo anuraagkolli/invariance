@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { z } from "zod";
@@ -5,6 +7,7 @@ import {
   CapabilityManifestSchema,
   DesignConfigSchema,
   HookModuleSchema,
+  OnboardingPatchSchema,
   UiOpSchema,
 } from "@invariance/schema";
 import type { SigningKeyPair } from "@invariance/schema/signing";
@@ -30,6 +33,7 @@ import {
   setModStatus,
 } from "./modules/registry";
 import { verifyBundleAgainstManifest } from "./modules/verification";
+import { OnboardingSessions } from "./modules/onboarding";
 import { MemoryStore, type Store } from "./store";
 
 export interface ControlPlaneOptions {
@@ -49,6 +53,16 @@ export interface ControlPlaneOptions {
    * (a keyword classifier + callDesigner) whenever a design API key is set.
    */
   designAuthoring?: { classify: ThemeClassifier; design: ThemeDesigner };
+  /**
+   * Filesystem root that onboarding resolves relative `path` inputs against
+   * (so the demo can scan "apps/nebula"). Defaults to the monorepo root.
+   */
+  repoRoot?: string;
+}
+
+/** Monorepo root, derived from this file (apps/control-plane/src/app.ts). */
+function defaultRepoRoot(): string {
+  return resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 }
 
 function defaultAgent(): AuthoringAgent | null {
@@ -128,6 +142,9 @@ export function createControlPlane(options: ControlPlaneOptions = {}): ControlPl
   const maxAttempts =
     options.maxAuthoringAttempts ??
     (Number(process.env.INVARIANCE_AUTHORING_MAX_ATTEMPTS) || undefined);
+  const repoRoot =
+    options.repoRoot ?? process.env.INVARIANCE_MONOREPO_ROOT ?? defaultRepoRoot();
+  const onboarding = new OnboardingSessions(repoRoot);
   const app = new Hono();
 
   app.use("*", cors());
@@ -161,6 +178,48 @@ export function createControlPlane(options: ControlPlaneOptions = {}): ControlPl
     const manifest = await store.currentManifest(c.req.param("appId"));
     if (!manifest) return c.json({ error: "no manifest published" }, 404);
     return c.json(manifest);
+  });
+
+  /**
+   * Onboarding (developer-time scanner). Scan a repo into a reviewable plan
+   * (archetypes, sections, role tokens, detected endpoints); the Console wizard
+   * edits the plan and finalizes it into a published manifest + design-config.
+   * See docs/ONBOARDING-PIPELINE.md. Sessions are in-process and ephemeral.
+   */
+  const OnboardingScanSchema = z
+    .object({
+      appId: z.string().min(1),
+      repoUrl: z.string().min(1).optional(),
+      path: z.string().min(1).optional(),
+    })
+    .refine((b) => b.repoUrl || b.path, { message: "provide repoUrl or path" });
+
+  app.post("/v1/onboarding/scan", async (c) => {
+    const body = OnboardingScanSchema.parse(await c.req.json());
+    const session = await onboarding.scan(body.appId, {
+      ...(body.repoUrl ? { repoUrl: body.repoUrl } : {}),
+      ...(body.path ? { path: body.path } : {}),
+    });
+    return c.json(session, 201);
+  });
+
+  app.get("/v1/onboarding/:sid", (c) => {
+    const session = onboarding.get(c.req.param("sid"));
+    if (!session) return c.json({ error: "session not found" }, 404);
+    return c.json(session);
+  });
+
+  app.patch("/v1/onboarding/:sid", async (c) => {
+    const patch = OnboardingPatchSchema.parse(await c.req.json());
+    const session = onboarding.patch(c.req.param("sid"), patch);
+    if (!session) return c.json({ error: "session not found" }, 404);
+    return c.json(session);
+  });
+
+  app.post("/v1/onboarding/:sid/finalize", async (c) => {
+    const session = await onboarding.finalize(c.req.param("sid"), store);
+    if (!session) return c.json({ error: "session not found" }, 404);
+    return c.json(session);
   });
 
   /**

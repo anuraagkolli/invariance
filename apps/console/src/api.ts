@@ -1,4 +1,13 @@
-import type { AppManifest, HookModule, HookPhase, UiOp } from "@invariance/schema";
+import type {
+  AppManifest,
+  HookModule,
+  HookPhase,
+  OnboardingPatch,
+  OnboardingSession,
+  UiOp,
+} from "@invariance/schema";
+
+export type { OnboardingPatch, OnboardingSession } from "@invariance/schema";
 
 // Wire types for the control-plane admin API (kept local: the console is a
 // browser app and must not import node-only control-plane code).
@@ -102,6 +111,9 @@ export interface ThemeTimeline {
   userId: string;
   count: number;
   latestAt: string;
+  /** Newest version's originating prompt (absent for pack/rollback versions). */
+  latestPrompt?: string;
+  latestSource?: "pipeline" | "pack" | "rollback";
 }
 
 async function get<T>(path: string): Promise<T> {
@@ -163,6 +175,38 @@ export const api = {
     const body = (await res.json().catch(() => ({}))) as { reasons?: string[] };
     return { status: res.status, ok: res.ok, reasons: body.reasons ?? [] };
   },
+  /** Onboarding: scan a repo (URL or local path) into a reviewable plan. */
+  onboardingScan: async (
+    appId: string,
+    input: { repoUrl?: string; path?: string },
+  ): Promise<OnboardingSession> => {
+    const res = await fetch(`/v1/onboarding/scan`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ appId, ...input }),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? `scan failed (${res.status})`);
+    }
+    return (await res.json()) as OnboardingSession;
+  },
+  onboardingGet: (sid: string) => get<OnboardingSession>(`/v1/onboarding/${sid}`),
+  onboardingPatch: async (sid: string, patch: OnboardingPatch): Promise<OnboardingSession> => {
+    const res = await fetch(`/v1/onboarding/${sid}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) throw new Error(`onboarding PATCH ${res.status}`);
+    return (await res.json()) as OnboardingSession;
+  },
+  onboardingFinalize: async (sid: string): Promise<OnboardingSession> => {
+    const res = await fetch(`/v1/onboarding/${sid}/finalize`, { method: "POST" });
+    if (!res.ok) throw new Error(`onboarding finalize ${res.status}`);
+    return (await res.json()) as OnboardingSession;
+  },
+
   /** Hit the real demo API (via the /demo-api vite proxy) as a given subject. */
   fetchDemo: async (
     path: string,
