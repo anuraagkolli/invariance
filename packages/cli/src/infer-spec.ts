@@ -14,7 +14,7 @@ import type { RepoScan } from "./scan";
 
 const COLOR_VALUE = /^#[0-9a-fA-F]{3,8}$|^(rgb|hsl|oklch|oklab|lab|lch)\(/i;
 
-function kindFromName(name: string): ColorObservation["kind"] {
+export function kindFromName(name: string): ColorObservation["kind"] {
   const n = name.toLowerCase();
   if (/border|ring|divide|outline|stroke/.test(n)) return "border";
   if (/text|fg|foreground|ink|copy|label/.test(n)) return "text";
