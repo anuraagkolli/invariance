@@ -66,6 +66,11 @@ describe('designConfigConstraints (unit)', () => {
     expect(designConfigConstraints({ allowedModes: [] }).allowed_modes).toBeUndefined()
     expect(designConfigConstraints({}).allowed_modes).toBeUndefined()
   })
+
+  it('strips unknown modes, keeps valid ones', () => {
+    // cast: the input type is Array<'light'|'dark'>, but guard against junk at runtime
+    expect(designConfigConstraints({ allowedModes: ['light', 'system'] as Array<'light' | 'dark'> }).allowed_modes).toEqual(['light'])
+  })
 })
 
 // Helper: build an InvarianceConfig whose constraints come from the bridge.
@@ -91,6 +96,9 @@ describe('designConfigConstraints (end-to-end through deriveConstraints → comp
     const config = configFrom(dc)
     const constraints = deriveConstraints(config)
     const compiled = compileTheme(spec, constraints)
+    const unlocked = compileTheme(spec, {})
+    expect(unlocked.roles['--inv-accent']).not.toBe('#1E3A8A') // the computed accent is NOT the locked value...
+    // ...so the existing assertion below proves the lock OVERRODE the computed value, not a coincidence
     expect(compiled.roles['--inv-accent']).toBe('#1E3A8A') // lock won over the computed accent
     const theme: ThemeJsonV2 = { version: 2, base_app_version: 'v1', theme: { roles: compiled.roles, styleSpec: spec } }
     expect(verifyV2(theme, config, constraints).passed).toBe(true)
