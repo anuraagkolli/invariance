@@ -16,9 +16,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 N = {  # id -> x,y,w,h,title,sub,zone
  "enduser":  (116,40,148,40,"End user","customizes by prompt","actor"),
  "developer":(956,40,148,40,"Developer","declares invariants","actor"),
- "webapp":   (52,124,268,58,"Customer Web App","your product · React + Tailwind","browser"),
- "client":   (52,196,268,80,"@invariance/client","ModLoader · prompt widget · overlay","browser"),
- "design":   (52,292,268,90,"@invariance/design","Look plane · compiler · verifyV2 · apply","browser"),
+ "webapp":   (52,122,268,50,"Customer Web App","your product · React + Tailwind","browser"),
+ "client":   (52,182,268,72,"@invariance/client","ModLoader · prompt widget · overlay","browser"),
+ "gatekeeper":(64,308,120,40,"Gatekeeper","level-gate","browser"),
+ "designer": (188,308,120,40,"Designer","LLM → StyleSpec","browser"),
+ "compiler": (64,352,120,40,"Compiler","→ role tokens","browser"),
+ "verifyv2": (188,352,120,40,"verifyV2","7-test gate","browser"),
+ "applylook":(64,398,244,42,"Apply → :root","instant paint, no reload","browser"),
  "frontend": (388,124,268,56,"Frontend host","serves app + SDK bundles","dev"),
  "apiserver":(388,196,268,120,"API Server","@invariance/server · sandbox · enforce","dev"),
  "backend":  (388,336,268,56,"Customer backend / DB","your real data","dev"),
@@ -39,19 +43,28 @@ ZONES = [
  dict(x=812,y=96,w=432,h=470,label="INVARIANCE CONTROL PLANE",sub="our infra · authors · verifies · signs",plane="control",color="cp"),
 ]
 MONO = dict(x=828,y=116,w=400,h=236,label="control-plane monolith · Hono + Postgres")
+LOOKBOX = dict(x=52,y=268,w=268,h=206,label="look authoring + apply · client-side")
 
 FLOWS = {
  "look": dict(label="Author a look edit", color="#56c7f5", mk="sky",
-   nodes=["enduser","design","designstore"],
-   edges=[[[190,80],[190,88],[44,88],[44,337],[52,337]],
-          [[320,337],[354,337],[354,88],[1028,88],[1028,260]]],
-   steps=[("enduser","Open the in-app panel and type a vibe — “make it retro.”"),
-          ("design","Gatekeeper level-gate (LLM only classifies) → Designer → StyleSpec → compiler → verifyV2 (7 tests). Apply → :root: instant paint, no reload."),
-          ("designstore","Theme persisted to the control-plane design-config / themes store (history + rollback).")]),
+   nodes=["enduser","gatekeeper","designer","compiler","verifyv2","applylook","designstore"],
+   edges=[[[190,80],[190,88],[44,88],[44,328],[64,328]],
+          [[184,328],[188,328]],
+          [[248,348],[248,350],[124,350],[124,352]],
+          [[184,372],[188,372]],
+          [[248,392],[248,395],[186,395],[186,398]],
+          [[308,419],[354,419],[354,88],[1028,88],[1028,260]]],
+   steps=[("enduser","Type a vibe in the in-app panel (CustomizationPanel) — “make it retro.”"),
+          ("gatekeeper","Deterministic level-gate decides what's allowed; the LLM only classifies intent."),
+          ("designer","Designer LLM → StyleSpec — structured intent, no raw colors. This is where look authoring happens."),
+          ("compiler","Compile → ~38 role tokens; invariants (locked tokens, contrast floor, chroma cap) applied here, not by the LLM."),
+          ("verifyv2","7-test gate; on fail it recompiles via a Designer retry — never an unverified spec."),
+          ("applylook","root.style.setProperty(:root): instant paint, zero React re-render."),
+          ("designstore","The only control-plane hop: the theme is persisted to design-config / themes (history + rollback).")]),
  "logic": dict(label="Author a logic edit", color="#f2b545", mk="amber",
    nodes=["enduser","client","authoring","verification","registry","cdn","llm"],
-   edges=[[[190,80],[190,88],[44,88],[44,236],[52,236]],
-          [[320,236],[354,236],[354,92],[932,92],[932,160]],
+   edges=[[[190,80],[190,88],[44,88],[44,218],[52,218]],
+          [[320,218],[354,218],[354,92],[932,92],[932,160]],
           [[1020,181],[1036,181]],
           [[1124,202],[1124,206],[932,206],[932,210]],
           [[844,231],[818,231],[818,506],[800,506]]],
@@ -106,12 +119,36 @@ DATA = {
     "Prompt widget (submitPrompt) + async telemetry, off the request path."],
    ["packages/client/src/core/loader.ts"],
    why="A thin drop-in. The browser only ever runs static, signature-verified artifacts."),
- "design": D("@invariance/design — Look plane","browser","browser",
-   ["The whole look pipeline, client-side: CustomizationPanel + m.slots.",
-    "Gatekeeper level-gate + Designer LLM → StyleSpec (no raw colors).",
-    "compiler → role tokens · verifyV2 (7-test gate) · apply → root.style.setProperty(:root)."],
-   ["packages/design/src/agent/pipeline.ts:114","packages/design/src/runtime/apply.ts:34"],
-   why="Look edits are a value swap in the browser — safe to paint the instant they pass the gate."),
+ "gatekeeper": D("Gatekeeper — look level-gate","browser (look authoring)","browser",
+   ["Deterministic permission gate: allowedLevel = min(slot level, page level).",
+    "The LLM only classifies intent (THEME / SLOT / clarify / reject) — advisory.",
+    "Runs in the browser; the model can never override the gate."],
+   ["packages/design/src/agent/gatekeeper.ts:62"],
+   why="What's allowed is decided by TypeScript — the model can't widen your permissions."),
+ "designer": D("Designer — look authoring LLM","browser (look authoring)","browser",
+   ["Turns the prompt into a StyleSpec: structured design intent, no raw color values.",
+    "Calls the shared LLM (qwen2.5 via Ollama / Anthropic).",
+    "Zod-parse failures feed a Designer retry."],
+   ["packages/design/src/agent/designer.ts:31"],
+   why="This is where look authoring happens — client-side, not in the control plane."),
+ "compiler": D("Compiler — StyleSpec → tokens","browser (look authoring)","browser",
+   ["Deterministically derives ~38 role tokens: color ramps, fonts, spacing, radii.",
+    "Invariants enforced here, not by the LLM: locked tokens written last; OKLCH contrast search; chroma cap.",
+    "Also maps vibe → layout profile (grid / standard)."],
+   ["packages/design/src/compiler/compile.ts:27"],
+   why="Your look invariants are applied by code at compile time — the model only proposed the vibe."),
+ "verifyv2": D("verifyV2 — look invariant gate","browser (look authoring)","browser",
+   ["7 deterministic tests: tokens present, locked byte-identical, contrast floor, chroma cap, fonts, vars resolve.",
+    "On fail → recompile via a Designer retry (max 2). Never applies an unverified spec.",
+    "The look-plane counterpart to the control-plane verifier."],
+   ["packages/design/src/verify/compiled-tests.ts:391"],
+   why="Same rule as logic — LLM proposes, a deterministic gate disposes — just client-side and bundle-free."),
+ "applylook": D("Apply → :root","browser (look apply)","browser",
+   ["root.style.setProperty(:root): tokens repaint with zero React re-render; slot swaps re-render via the store.",
+    "The look ‘apply moment’ — visible the instant it runs.",
+    "Fail-open: drop the theme → base CSS. Live-reconciles if you later tighten an invariant."],
+   ["packages/design/src/runtime/apply.ts:34","packages/design/src/context/provider.tsx:162"],
+   why="No signing, no server round-trip — a value swap in the browser is safe to paint immediately."),
  "frontend": D("Frontend host","developer infra","dev",
    ["Serves your app plus the bundled Invariance client/design SDKs.",
     "Static hosting; holds no Invariance state."],
@@ -280,7 +317,7 @@ color:var(--sc);font:800 12px var(--sans);display:flex;align-items:center;justif
 '''
 
 JS = r'''
-const N=/*N*/, ZONES=/*ZONES*/, MONO=/*MONO*/, FLOWS=/*FLOWS*/, DATA=/*DATA*/, PITCH=/*PITCH*/;
+const N=/*N*/, ZONES=/*ZONES*/, MONO=/*MONO*/, LOOKBOX=/*LOOKBOX*/, FLOWS=/*FLOWS*/, DATA=/*DATA*/, PITCH=/*PITCH*/;
 const NS="http://www.w3.org/2000/svg";
 const map=document.getElementById("map");
 const ZC={browser:"#56c7f5",dev:"#46d6a0",cp:"#f2b545",cdn:"#9aa6ff",actor:"#aeb6c2"};
@@ -301,6 +338,8 @@ for(const z of ZONES){
 // monolith box + boundary
 E("rect",{x:MONO.x,y:MONO.y,width:MONO.w,height:MONO.h,rx:11,class:"mono-box"},gMono);
 const ml=E("text",{x:MONO.x+14,y:MONO.y+20,class:"zone-s",fill:"#9aa0ab"},gMono);ml.textContent=MONO.label;
+E("rect",{x:LOOKBOX.x,y:LOOKBOX.y,width:LOOKBOX.w,height:LOOKBOX.h,rx:11,class:"mono-box"},gMono);
+const ll=E("text",{x:LOOKBOX.x+12,y:LOOKBOX.y+18,class:"zone-s",fill:"#7fb6d8"},gMono);ll.textContent=LOOKBOX.label;
 E("line",{x1:742,y1:84,x2:742,y2:566,class:"bnd"},gMono);
 E("rect",{x:742-92,y:74,width:184,height:18,rx:5,fill:"#0a0b0d",stroke:"#3a4150"},gMono);
 const bl=E("text",{x:742,y:86.5,"text-anchor":"middle",class:"bnd-l"},gMono);bl.textContent="data plane  ┊  control plane";
@@ -376,7 +415,7 @@ showPitch();
 '''
 
 def inject(js):
-    repl = {"/*N*/":N,"/*ZONES*/":ZONES,"/*MONO*/":MONO,"/*FLOWS*/":FLOWS,"/*DATA*/":DATA,"/*PITCH*/":PITCH}
+    repl = {"/*N*/":N,"/*ZONES*/":ZONES,"/*MONO*/":MONO,"/*LOOKBOX*/":LOOKBOX,"/*FLOWS*/":FLOWS,"/*DATA*/":DATA,"/*PITCH*/":PITCH}
     for k,v in repl.items():
         js = js.replace(k, json.dumps(v))
     return js
