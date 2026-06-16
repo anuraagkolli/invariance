@@ -16,18 +16,19 @@ export interface DiscoveredVar {
   scope: string;
 }
 
-// Match `selector { ... }` rule blocks. Custom-property declarations don't nest,
-// so a flat (non-nested) block match is all MVP discovery needs.
-const RULE = /([^{}]+)\{([^{}]*)\}/g;
-// Match `--name: value;` declarations inside a block.
-const DECL = /(--[A-Za-z0-9-]+)\s*:\s*([^;]+);/g;
-
 /**
  * Collect every custom-property declaration in `css`, one entry per
  * (scope, name), in declaration order. Comments are stripped first so
  * commented-out declarations are not discovered.
  */
 export function discoverVars(css: string): DiscoveredVar[] {
+  // Match `selector { ... }` rule blocks. Custom-property declarations don't nest,
+  // so a flat (non-nested) block match is all MVP discovery needs.
+  const RULE = /([^{}]+)\{([^{}]*)\}/g;
+  // Match `--name: value;` declarations inside a block.
+  // MVP limitation: `([^;]+);` stops at the first `;`, so custom-property values containing a semicolon are not yet handled.
+  const DECL = /(--[A-Za-z0-9-]+)\s*:\s*([^;]+);/g;
+
   const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
   const out: DiscoveredVar[] = [];
   for (const rule of stripped.matchAll(RULE)) {
