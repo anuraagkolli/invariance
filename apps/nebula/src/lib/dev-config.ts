@@ -1,4 +1,5 @@
 import type { InvarianceConfig } from '@invariance/design'
+import { designConfigConstraints, type DesignConfigConstraintsInput } from '@invariance/design'
 
 // The developer's runtime lock/unlock state, layered over the static base
 // config. Pure and isomorphic (client + server): the Console edits it via the
@@ -17,11 +18,13 @@ export interface DevConfigOverlay {
   chromaCap?: number
   // minimum WCAG ratio; overrides constraints.contrast (in [1, 21])
   contrastFloor?: number
+  // vendor var → role binding; entries with locked:true + value pin a brand value
+  variableRoleMap?: DesignConfigConstraintsInput['variableRoleMap']
+  // modes customization may use; empty/absent = unrestricted
+  allowedModes?: Array<'light' | 'dark'>
 }
 
 export const EMPTY_OVERLAY: DevConfigOverlay = {}
-
-const HEX_RE = /^#[0-9a-f]{6}$/i
 
 const clampLevel = (n: number): number => Math.max(0, Math.min(4, Math.trunc(n)))
 
@@ -42,29 +45,20 @@ export function mergeInvarianceConfig(base: InvarianceConfig, overlay: DevConfig
     merged.frontend!.pages = pages
   }
 
-  // Accumulate every constraint override (accent lock, chroma cap, contrast
-  // floor) into one object and apply it in a single spread, so a config that
-  // sets several overlay fields doesn't clobber the others.
-  const constraintOverrides: NonNullable<NonNullable<InvarianceConfig['frontend']>['design']>['constraints'] = {}
-
-  if (typeof overlay.accentLock === 'string' && HEX_RE.test(overlay.accentLock)) {
-    constraintOverrides.locked_tokens = {
-      ...merged.frontend?.design?.constraints?.locked_tokens,
-      '--inv-accent': overlay.accentLock,
-    }
-  }
-
-  if (typeof overlay.chromaCap === 'number' && Number.isFinite(overlay.chromaCap) && overlay.chromaCap >= 0.1 && overlay.chromaCap <= 0.25) {
-    constraintOverrides.accent_chroma_max = overlay.chromaCap
-  }
-
-  if (typeof overlay.contrastFloor === 'number' && Number.isFinite(overlay.contrastFloor) && overlay.contrastFloor >= 1 && overlay.contrastFloor <= 21) {
-    constraintOverrides.contrast = '>= ' + overlay.contrastFloor
-  }
+  // All constraint governance (accent lock, value-pinned locks, chroma cap,
+  // contrast floor, allowed modes) is derived by the shared package bridge —
+  // one lock model, reused by the console + SDK.
+  const constraintOverrides = designConfigConstraints(overlay)
 
   if (Object.keys(constraintOverrides).length > 0) {
     const design = { ...merged.frontend?.design }
-    design.constraints = { ...design.constraints, ...constraintOverrides }
+    design.constraints = {
+      ...design.constraints,
+      ...constraintOverrides,
+      ...(constraintOverrides.locked_tokens
+        ? { locked_tokens: { ...design.constraints?.locked_tokens, ...constraintOverrides.locked_tokens } }
+        : {}),
+    }
     merged.frontend!.design = design
   }
 

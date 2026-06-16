@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { InvarianceConfig } from '@invariance/design'
 
 import { EMPTY_OVERLAY, mergeInvarianceConfig } from './dev-config'
+import { invarianceConfig } from './invariance-config'
 
 const base = (): InvarianceConfig => ({
   app: 'nebula-demo',
@@ -102,5 +103,24 @@ describe('mergeInvarianceConfig', () => {
     const snapshot = JSON.parse(JSON.stringify(original))
     mergeInvarianceConfig(original, { chromaCap: 0.12, contrastFloor: 7 })
     expect(original).toEqual(snapshot)
+  })
+})
+
+describe('mergeInvarianceConfig — variableRoleMap locks + allowedModes', () => {
+  it('stamps a value-pinned lock and narrows allowed modes into constraints', () => {
+    const merged = mergeInvarianceConfig(invarianceConfig, {
+      variableRoleMap: { '--primary': { role: 'accent', scope: ':root', locked: true, value: '#1E3A8A' } },
+      allowedModes: ['light'],
+    })
+    const c = merged.frontend?.design?.constraints
+    expect(c?.locked_tokens?.['--inv-accent']).toBe('#1E3A8A')
+    expect(c?.allowed_modes).toEqual(['light'])
+  })
+
+  it('still maps accentLock (legacy) and preserves base constraints', () => {
+    const merged = mergeInvarianceConfig(invarianceConfig, { accentLock: '#AABBCC' })
+    expect(merged.frontend?.design?.constraints?.locked_tokens?.['--inv-accent']).toBe('#AABBCC')
+    // base accent_chroma_max from invariance-config.ts survives the merge
+    expect(merged.frontend?.design?.constraints?.accent_chroma_max).toBe(0.18)
   })
 })
