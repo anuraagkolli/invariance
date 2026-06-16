@@ -2,6 +2,17 @@
 
 Repo: `~/Documents/projects/invariance`
 
+> **Superseded framing — read this first.** This is the original v5 *system
+> design* (the architecture skeleton: schema / client / server / control-plane /
+> console / cli). It remains an accurate map of the **as-built substrate we
+> reuse**, but its **product framing is superseded** by
+> [`DESIGN-GOVERNED-CUSTOMIZATION.md`](./DESIGN-GOVERNED-CUSTOMIZATION.md) (the
+> active design): the GTM is now **B2B SaaS governed customization**, not consumer
+> scale; **design-plane theming is the MVP**, with the API-seam hooks plane
+> (Tier 1 below) **deferred**; and onboarding is **non-invasive** (SDK +
+> `variable→role` map, never edits source), not the AST `init` codemod described
+> below. Treat the architecture here as substrate; treat the new doc as canon.
+
 ## Locked decisions (from discussion)
 - **v1 scope:** Tier 0 (client-side UI overlay) + Tier 1 (API-seam hooks via server middleware). Tier 2 (in-code declared extension points) deferred.
 - **Stacks:** React gets the first-class client SDK; framework-agnostic script-tag build as fallback. Server SDK ships Express + Next.js adapters.
@@ -42,7 +53,7 @@ Deliberately one deployable with internal module boundaries (authoring / verific
 Manifest viewer, invariant/policy editor, per-user mod browser with kill switches, analytics views ("what are users changing, where, why").
 
 ### 6. `packages/cli`
-- `init`: AI codemod that scans the customer repo, wires the SDKs, drafts the app manifest as a PR.
+- `init`: **(superseded — see [`ONBOARDING-PIPELINE.md`](./ONBOARDING-PIPELINE.md))** onboarding is now *non-invasive*: connect + scan the app's design **variables**, propose a `variable→role` map + baseline theme, emit the manifest/design-config — never edits source. (Originally specced as an AST codemod that rewrote the repo; that approach is retired.)
 - `manifest publish`: push manifest version at build time.
 - `dev`: local authoring/verification loop against a local control plane.
 

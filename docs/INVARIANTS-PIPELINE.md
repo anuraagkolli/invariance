@@ -12,13 +12,16 @@ checks pass at `server/runtime.ts:226`).*
 > runtime, or the design compiler/verifier, update this doc **and delete stale
 > claims** — don't just append.
 
-> **Upstream of everything here:** both pipelines below *assume* the app is
-> already **onboarded** — its components wired to `var(--inv-*)` role tokens, its
-> customizable regions wrapped in `<m.slot>`, and its archetypes + invariants
-> declared in `invariance.manifest.json`. How a raw, multi-page app gets into that
-> state — the **scanner / onboarding pipeline**, with its end-to-end diagram — is
-> documented separately in [`ONBOARDING-PIPELINE.md`](./ONBOARDING-PIPELINE.md).
-> *(Current design, not finalized.)*
+> **Upstream of everything here:** the pipelines below *assume* the app is already
+> **onboarded**. In the current onboarding design that's the lightest possible
+> touch — the app keeps theming through its own CSS variables, which Invariance
+> **maps to role tokens and redefines per tenant**, and the vendor's invariants
+> (locked brand vars, contrast floor, allowed modes) are declared once. **No source
+> edits, no `<m.slot>` wrapping.** The slot-level / structural features described
+> below (`m.slot`, F1–F4) are a deeper, **deferred** tier, not part of the current
+> onboarding wedge. How an app reaches the onboarded state — the **onboarding /
+> governed-theming pipeline** — is documented in
+> [`ONBOARDING-PIPELINE.md`](./ONBOARDING-PIPELINE.md). *(Current design, not finalized.)*
 
 ## 1. The key insight: two planes, two "apply" moments
 
