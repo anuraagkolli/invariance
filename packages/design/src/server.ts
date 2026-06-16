@@ -31,7 +31,7 @@ export type { RoleQualityOptions } from './compiler/quality'
 export { contrastPairs } from './compiler/contrast-pairs'
 
 // --- Deterministic colour clustering (feeds init manifest drafting) ---
-export { clusterColors } from './compiler/cluster'
+export { clusterColors, normalizeHex } from './compiler/cluster'
 export type { ColorObservation, RoleCluster, RoleAssignment, ColorKind } from './compiler/cluster'
 
 // --- Taste registries ---

@@ -61,7 +61,7 @@ const TEXT_CONTRAST_FLOOR = 3.0
 const toOklch = converter('oklch')
 
 /** Normalize 3/6-digit hex to uppercase 6-digit (#RRGGBB). */
-function normalizeHex(value: string): string | undefined {
+export function normalizeHex(value: string): string | undefined {
   const m = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(value.trim())
   if (!m || !m[1]) return undefined
   let hex = m[1]
