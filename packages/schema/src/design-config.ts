@@ -1,5 +1,19 @@
 import { z } from "zod";
 
+export const VariableRoleSchema = z.object({
+  /** Design role this variable drives, e.g. "accent", "surface-0", "text-primary". */
+  role: z.string().min(1),
+  /** CSS selector scope where the variable is defined. */
+  scope: z.string().min(1).default(":root"),
+  /** Brand-locked: customization may never change this variable. */
+  locked: z.boolean().default(false),
+});
+export type VariableRole = z.infer<typeof VariableRoleSchema>;
+
+/** Vendor CSS variable name (e.g. "--primary") -> the design role it drives. */
+export const VariableRoleMapSchema = z.record(VariableRoleSchema);
+export type VariableRoleMap = z.infer<typeof VariableRoleMapSchema>;
+
 /**
  * Developer-tunable "look" invariants for an app — the runtime layer over the
  * manifest's code-defined design-constraint defaults. Stored control-plane-side
@@ -17,5 +31,9 @@ export const DesignConfigSchema = z.object({
   chromaCap: z.number().min(0.1).max(0.25).optional(),
   /** minimum WCAG contrast ratio (1–21) */
   contrastFloor: z.number().min(1).max(21).optional(),
+  /** Onboarding output: the vendor's CSS variables, each bound to a design role. */
+  variableRoleMap: VariableRoleMapSchema.optional(),
+  /** Modes customization may use (subset of light/dark). */
+  allowedModes: z.array(z.enum(["light", "dark"])).optional(),
 });
 export type DesignConfig = z.infer<typeof DesignConfigSchema>;
