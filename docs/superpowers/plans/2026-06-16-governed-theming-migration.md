@@ -294,6 +294,11 @@ git commit -m "test(control-plane): subject=tenant theme isolation (native multi
 - **Reconcile the legacy lock:** route `accentLock` through the same `locked_tokens`
   path as the generalized per-variable lock (accent becomes one special case, not a
   parallel mechanism), so there is one lock model, not three.
+- **Settle `allowedModes` semantics here:** decide + enforce what an empty array
+  and duplicates mean (Phase 0 left the field as a bare `z.array(z.enum(...))`,
+  deliberately unenforced). Convention to confirm: *unset = unrestricted*, so an
+  empty array should be rejected (or normalized) rather than silently meaning "no
+  modes"; this is the phase that consumes the field, so it owns that rule.
 - **Exit:** a tenant prompt that would change a `locked: true` variable is
   rejected-or-recompiled with the locked value surviving byte-identical; a prompt
   requesting a disallowed mode is rejected — both asserted **through the existing
@@ -315,7 +320,7 @@ git commit -m "test(control-plane): subject=tenant theme isolation (native multi
 ### Phase 4 — Governance dashboard (Console reframe)
 
 - **Goal:** Connect/scan + coverage report, `variableRoleMap` confirm/edit, invariant editor (locked vars, contrast floor, allowed modes, chroma cap), per-tenant theme browser, kill-switch.
-- **Files:** New `apps/console` views; **reuse** `GET/PUT /v1/apps/:appId/design-config` + the themes endpoints + `summarizeStyleSpec`. Extend the existing Invariants/Themes views rather than replace.
+- **Files:** New `apps/console` views; **reuse** `GET/PUT /v1/apps/:appId/design-config` + the themes endpoints + `summarizeStyleSpec`. Extend the existing Invariants/Themes views rather than replace. **Sync the hand-mirrored config type:** `apps/console/src/api.ts` keeps a hand-maintained `DesignConfig` interface that Phase 0 left drifted (no `variableRoleMap` / `allowedModes`); update it here when the console first reads those fields (harmless until then — TS structural typing tolerates the extra JSON).
 - **Exit:** a vendor onboards + governs end-to-end in the UI; edits persist to `design-config`.
 
 ### Phase 5 — Reference app (living integration test)
