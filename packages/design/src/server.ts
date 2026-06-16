@@ -46,8 +46,11 @@ export type { DesignerInput, DesignerResult } from './agent/designer'
 export { callGatekeeper } from './agent/gatekeeper'
 export type { GatekeeperResult, GateKind, ConvTurn } from './agent/gatekeeper'
 
-// --- Config (design constraints parsing) ---
+// --- Config (design constraints parsing + DesignConfig bridge) ---
 export { parseConfig } from './config/parser'
+export { deriveConstraints } from './config/derive-constraints'
+export { designConfigConstraints } from './config/design-config-constraints'
+export type { DesignConfigConstraintsInput, DerivedConstraintsBlock } from './config/design-config-constraints'
 
 // --- StyleSpec intent summary (console / provenance display) ---
 export { summarizeStyleSpec } from './style-summary'

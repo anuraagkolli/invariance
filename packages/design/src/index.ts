@@ -121,5 +121,7 @@ export { styleSpecWireSchema } from './agent/wire-schemas'
 
 // Constraints + Verification (v6)
 export { deriveConstraints } from './config/derive-constraints'
+export { designConfigConstraints } from './config/design-config-constraints'
+export type { DesignConfigConstraintsInput, DerivedConstraintsBlock } from './config/design-config-constraints'
 export { verifyV2 } from './verify/compiled-tests'
 export { contrastPairs } from './compiler/contrast-pairs'
