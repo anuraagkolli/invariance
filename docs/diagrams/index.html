@@ -1,283 +1,94 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Invariance — Complete System Design</title><style>
-:root{
-  --bg0:#0a0b0d; --bg1:#0e1014; --panel:#14161b; --panel2:#191c22; --bd:#262a31;
-  --ink:#e9eaee; --mute:#9aa0ab; --faint:#6b7280;
-  --look:#56c7f5; --logic:#f2b545; --gate:#46d6a0; --llm:#b79bff; --cdn:#9aa6ff;
-  --apply:#ffd66b; --fail:#fb7185; --browser:#56c7f5; --dev:#46d6a0; --cp:#f2b545; --gov:#c9b27a; --rev:#7fd4b0;
-  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
-  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif;
-}
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Invariance — Interactive Architecture</title><style>
+:root{--bg0:#0a0b0d;--bg1:#0e1014;--panel:#14161b;--panel2:#181b21;--bd:#262a31;--ink:#e9eaee;
+--mute:#9aa0ab;--faint:#6b7280;--browser:#56c7f5;--dev:#46d6a0;--cp:#f2b545;--cdn:#9aa6ff;--llm:#b79bff;
+--mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;--sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif}
 *{box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{margin:0;background:
-  radial-gradient(1100px 480px at 50% -160px, rgba(86,150,200,.10), transparent 70%),
-  linear-gradient(var(--bg1),var(--bg0));
-  color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
-a{color:inherit;text-decoration:none}
-code{font-family:var(--mono);font-size:.86em;background:#1c2027;border:1px solid var(--bd);
-  border-radius:5px;padding:.5px 5px;color:#cdd3db}
-code.cite{color:var(--look);background:#10222b;border-color:#1c3a47}
-.cite{white-space:nowrap}
-
-/* header / nav */
-header.top{position:sticky;top:0;z-index:50;backdrop-filter:blur(10px);
-  background:rgba(10,11,13,.82);border-bottom:1px solid var(--bd)}
-.top-in{max-width:1240px;margin:0 auto;padding:11px 22px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
-.brand{font-weight:800;letter-spacing:.5px;font-size:14px;white-space:nowrap}
-.brand .dot{color:var(--logic)}
-nav{display:flex;gap:3px;flex-wrap:wrap;overflow-x:auto}
-nav a{font-size:12px;color:var(--mute);padding:5px 9px;border-radius:7px;white-space:nowrap;border:1px solid transparent}
-nav a:hover{color:var(--ink);background:#181b21}
-nav a.active{color:var(--ink);background:#1d2128;border-color:var(--bd)}
-
-main{max-width:1240px;margin:0 auto;padding:30px 22px 90px}
-.hero{padding:26px 0 8px}
-.hero h1{font-size:34px;margin:.1em 0 .15em;letter-spacing:-.3px;font-weight:850}
-.hero .tagline{color:var(--mute);font-size:15px;max-width:880px}
-.hero .meta{margin-top:12px;color:var(--faint);font-size:12px;font-family:var(--mono)}
-
-section{padding:30px 0;border-top:1px solid var(--bd);scroll-margin-top:64px}
-.sec-kicker{font-family:var(--mono);font-size:12px;color:var(--logic);font-weight:700;letter-spacing:2px}
-section h2{font-size:23px;margin:.15em 0 .5em;font-weight:800}
-section h3{font-size:15px;margin:1.4em 0 .6em;color:var(--ink);font-weight:800}
-.sub-h{color:var(--mute);font-weight:500;font-size:13px}
-.lead{color:var(--mute);max-width:920px;margin:.2em 0 1em}
-.note-line{color:var(--mute);font-size:13.5px;max-width:980px;margin:.6em 0}
-.kicker-note{margin:.2em 0 .6em;color:var(--mute);font-size:13px}
-
-/* grids + cards */
-.grid{display:grid;gap:14px}
-.grid-2{grid-template-columns:repeat(2,1fr)}
-.grid-3{grid-template-columns:repeat(3,1fr)}
-@media(max-width:980px){.grid-3{grid-template-columns:1fr}.grid-2{grid-template-columns:1fr}}
-.card{background:var(--panel);border:1px solid var(--bd);border-radius:12px;padding:15px 16px;position:relative;
-  border-left-width:3px}
-.card.c-browser,.card.c-look{border-left-color:var(--look)}
-.card.c-dev{border-left-color:var(--dev)}
-.card.c-cp,.card.c-logic{border-left-color:var(--cp)}
-.card.c-cdn{border-left-color:var(--cdn)}
-.card.c-llmc{border-left-color:var(--llm)}
-.card.c-gate{border-left-color:var(--gate)}
-.card-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px}
-.card-t{font-weight:800;font-size:14.5px}
-.where{font-size:11px;color:var(--faint);font-family:var(--mono);margin-bottom:8px}
-ul.bul{margin:.3em 0 0;padding-left:1.05em;list-style:none}
-ul.bul li{position:relative;margin:.42em 0;font-size:13px;color:var(--mute);padding-left:.1em}
-ul.bul li::before{content:"▹";position:absolute;left:-1em;color:var(--faint)}
-ul.bul li b{color:var(--ink);font-weight:700}
-ul.big-bul li{font-size:13.5px;margin:.55em 0}
-
-/* badges + tags */
-.b{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:5px;
-  border:1px solid;vertical-align:middle;letter-spacing:.3px}
-.b-det{color:#aeb6c2;border-color:#39414e;background:#1b1f26}
-.b-llm{color:var(--llm);border-color:#3a3160;background:#211b34}
-.b-gate{color:var(--gate);border-color:#1c4536;background:#0f261d}
-.b-apply{color:var(--apply);border-color:#4d3f15;background:#241d09}
-.b-browser{color:var(--browser);border-color:#1c3a47;background:#102029}
-.b-dev{color:var(--dev);border-color:#1c4536;background:#0f261d}
-.b-cp{color:var(--cp);border-color:#4d3f15;background:#241d09}
-.tag{font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;border:1px solid;white-space:nowrap}
-.t-browser,.t-look{color:var(--look);border-color:#1c3a47}.t-dev{color:var(--dev);border-color:#1c4536}
-.t-cp,.t-logic{color:var(--cp);border-color:#4d3f15}.t-cdn{color:var(--cdn);border-color:#34406b}
-.t-llmc{color:var(--llm);border-color:#3a3160}.t-gate{color:var(--gate);border-color:#1c4536}
-
-/* callouts */
-.callout{border:1px solid var(--bd);border-left-width:3px;border-radius:10px;padding:13px 15px;font-size:13.5px;color:var(--mute)}
-.callout b{color:var(--ink)} .callout u{text-decoration-color:var(--llm)}
-.callout.c-llm{border-left-color:var(--llm);background:linear-gradient(90deg,rgba(183,155,255,.06),transparent)}
-.callout.c-cp{border-left-color:var(--cp);background:linear-gradient(90deg,rgba(242,181,69,.06),transparent)}
-.callout.c-dev{border-left-color:var(--dev);background:linear-gradient(90deg,rgba(70,214,160,.06),transparent)}
-.hot{color:var(--apply);font-weight:700}
-
-/* flow chips */
-.flow{display:flex;align-items:stretch;flex-wrap:wrap;gap:7px;margin:.6em 0}
-.step{background:var(--panel2);border:1px solid var(--bd);border-radius:9px;padding:8px 11px;min-width:96px;
-  display:flex;flex-direction:column;justify-content:center;border-top-width:2px}
-.step .st{font-size:12px;font-weight:700;color:var(--ink)}
-.step .ss{font-size:10px;color:var(--mute);margin-top:1px;font-family:var(--mono)}
-.s-in{border-top-color:var(--faint)} .s-det{border-top-color:#9aa6b8}
-.s-llm{border-top-color:var(--llm)} .s-llm .st{color:#d7c9ff}
-.s-gate{border-top-color:var(--gate);background:#0e1a16} .s-gate .st{color:#9befcf}
-.s-apply{border-top-color:var(--apply);background:#1c1808} .s-apply .st{color:var(--apply)}
-.s-cdn{border-top-color:var(--cdn)} .s-cdn .st{color:#c3cbff}
-.s-rev{border-top-color:var(--rev)}
-.chev{align-self:center;color:var(--faint);font-size:18px;font-weight:700}
-.fail{color:var(--fail);font-weight:700}
-
-/* lifecycle */
-.lc-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media(max-width:980px){.lc-grid{grid-template-columns:1fr}}
-.lc{display:flex;gap:13px;background:var(--panel);border:1px solid var(--bd);border-radius:11px;padding:13px 15px}
-.lc-n{flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-weight:800;font-size:14px;border:2px solid}
-.n-look{color:var(--look);border-color:var(--look)} .n-logic{color:var(--cp);border-color:var(--cp)}
-.n-dev{color:var(--dev);border-color:var(--dev)} .n-cdn{color:var(--cdn);border-color:var(--cdn)}
-.n-gov{color:var(--gov);border-color:var(--gov)}
-.lc-t{font-weight:800;font-size:14px}
-.lc-w{font-family:var(--mono);font-size:10.5px;color:var(--faint);font-weight:600;margin-left:6px}
-.lc-d{font-size:12.5px;color:var(--mute);margin:3px 0 5px}
-.lc-hop code{font-size:11px}
-
-/* tables */
-.tbl-wrap{overflow-x:auto;border:1px solid var(--bd);border-radius:11px}
-table{border-collapse:collapse;width:100%;font-size:13px;min-width:560px}
-table th,table td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--bd);vertical-align:top}
-table th{color:var(--faint);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px;background:#101318}
-table tr:last-child td{border-bottom:none}
-table.cmp td:first-child{color:var(--faint);font-weight:600;white-space:nowrap;width:120px}
-th.look,td.look{color:var(--look)} th.logic,td.logic{color:var(--logic)} td.cdn{color:var(--cdn)}
-.yes{color:var(--gate);font-weight:700} .no{color:var(--fail);font-weight:700}
-.m{font-family:var(--mono);font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:5px;border:1px solid}
-.m-get{color:var(--gate);border-color:#1c4536} .m-post{color:var(--apply);border-color:#4d3f15}
-.m-mix{color:var(--cdn);border-color:#34406b}
-.pill{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;border:1px solid}
-.p-ok{color:var(--gate);border-color:#1c4536} .p-warn{color:var(--apply);border-color:#4d3f15}
-.p-bad{color:var(--fail);border-color:#5a2330} .p-muted{color:var(--faint);border-color:var(--bd)}
-
-/* apply cards + edges */
-.apply-card{border:1px solid var(--bd);border-radius:11px;padding:14px 16px;border-top-width:3px}
-.apply-card.c-look{border-top-color:var(--look);background:linear-gradient(180deg,rgba(86,199,245,.06),transparent)}
-.apply-card.c-logic{border-top-color:var(--logic);background:linear-gradient(180deg,rgba(242,181,69,.06),transparent)}
-.ac-h{font-size:12px;font-weight:800;letter-spacing:.4px;color:var(--mute);margin-bottom:8px}
-.c-look .ac-h{color:var(--look)} .c-logic .ac-h{color:var(--logic)}
-code.big{display:block;font-size:15px;color:var(--ink);background:#0e1116;border:1px solid var(--bd);
-  border-radius:8px;padding:10px 12px}
-.ac-f{font-size:11.5px;color:var(--faint);margin-top:8px}
-.edges{display:flex;flex-direction:column;gap:9px}
-.edge{border:1px solid var(--bd);border-left:3px solid var(--fail);border-radius:9px;padding:9px 13px;background:var(--panel)}
-.edge-t{font-weight:800;font-size:13px;color:#ffd0d6}
-.edge-d{font-size:12.5px;color:var(--mute);margin-top:2px}
-
-/* poster */
-details{border:1px solid var(--bd);border-radius:12px;background:var(--panel);overflow:hidden}
-summary{cursor:pointer;padding:12px 16px;font-weight:700;font-size:13px;color:var(--mute);user-select:none}
-summary:hover{color:var(--ink)}
-.poster-scroll{overflow:auto;max-height:80vh;padding:0 12px 12px;background:#0a0b0d}
-.poster-scroll svg{display:block;min-width:1400px;width:100%;height:auto}
-
-footer{max-width:1240px;margin:0 auto;padding:24px 22px 60px;color:var(--faint);font-size:12px;border-top:1px solid var(--bd)}
-footer code{font-size:11px}
-</style></head><body><header class="top"><div class="top-in"><span class="brand">INVARIANCE<span class="dot"> ·</span> system design</span><nav><a href="#overview" data-sec="overview">Overview</a><a href="#zones" data-sec="zones">Trust zones</a><a href="#components" data-sec="components">Components</a><a href="#api" data-sec="api">API</a><a href="#lifecycle" data-sec="lifecycle">Lifecycle</a><a href="#onboarding" data-sec="onboarding">Onboarding</a><a href="#look" data-sec="look">Look plane</a><a href="#logic" data-sec="logic">Logic plane</a><a href="#distribution" data-sec="distribution">Distribution</a><a href="#enforcement" data-sec="enforcement">Enforcement</a><a href="#invariants" data-sec="invariants">Invariants</a><a href="#poster" data-sec="poster">Poster</a></nav></div></header><main><div class="hero"><h1>The complete system design</h1><div class="tagline">End-user customization of a live web app — UI <i>and</i> business logic — under developer-declared invariants. Two planes, three trust zones, deterministic gates, fail-open everywhere.</div><div class="meta">grounded in the repo · sources: docs/INVARIANTS-PIPELINE.md + docs/ONBOARDING-PIPELINE.md + docs/DESIGN.md</div></div><section id="overview"><div class="sec-kicker">01</div><h2>Overview</h2>
-<p class="lead">Invariance lets <b>end users</b> of an existing web app customize it with natural-language prompts —
-both its <b>look</b> (tokens, styles, layout, slots) and its <b>business logic</b> at the API seam — while the app's
-<b>developers stay in control</b> through declared <i>invariants</i>. Two independent planes do this, and they answer
-the question <i>"when is the change actually live?"</i> in two different ways.</p>
-
-<div class="callout c-llm">
-  <b>The one rule that makes it safe:</b> the LLM is <u>in the loop, never in the gate</u>. The model only
-  <i>proposes</i>; everything that is enforced is enforced by deterministic TypeScript + cryptography. Verification
-  contains no LLM. Every failure path falls open to the base app.
-</div>
-
-<h3>The two planes at a glance</h3>
-<div class="tbl-wrap"><table class="cmp">
-<thead><tr><th></th><th class="look">LOOK plane</th><th class="logic">BUSINESS-LOGIC plane</th></tr></thead>
-<tbody>
-<tr><td>Package</td><td><code>@invariance/design</code></td><td><code>control-plane</code> + <code>@invariance/server</code></td></tr>
-<tr><td>Changes</td><td>tokens, colors, fonts, layout profile, slots</td><td>API request/response <i>data</i> (filter / transform shows, featured…)</td></tr>
-<tr><td>Runs where</td><td>the browser (+ SSR cookie mirror)</td><td>the customer's server, inside a QuickJS-WASM sandbox</td></tr>
-<tr><td>Authoring brain</td><td>Gatekeeper + Designer LLM</td><td>qwen2.5 (Ollama) / Anthropic LLM</td></tr>
-<tr><td>The gate</td><td>deterministic level-gate + <code>verifyV2</code> (7 tests)</td><td>deterministic <code>verifyBundleAgainstManifest</code> + Zod <code>superRefine</code></td></tr>
-<tr><td>Signed bundle?</td><td><span class="no">No</span> — theme JSON, stored + cookie-mirrored</td><td><span class="yes">Yes</span> — ed25519 over canonical JSON, content-addressed</td></tr>
-<tr><td><b>Goes live when…</b></td><td><code>root.style.setProperty()</code> runs — <b>immediate paint</b></td><td>runtime sets <code>current = execution.result</code> — <b>per request</b>, after crypto + capability checks</td></tr>
-<tr><td>Failure mode</td><td>drop theme → base CSS wins</td><td>fail-open → original payload returned</td></tr>
-</tbody></table></div>
-</section><section id="zones"><div class="sec-kicker">02</div><h2>Trust zones — who runs what</h2>
-<p class="lead">Three zones across a hard <b>control-plane / data-plane</b> boundary. The control plane (our infra)
-authors, verifies, signs and distributes. The data plane (the developer's own servers + the user's browser) only ever
-loads <i>static, signed</i> artifacts and verifies them locally.</p>
-<div class="grid grid-3"><div class="card c-browser"><div class="card-h"><span class="card-t">END-USER BROWSER</span></div><div class="where">data plane · runs developer-shipped code</div><ul class="bul"><li><span class="b b-browser">client</span> <b>Customer web app</b> — React+Tailwind, developer-shipped; components read <code>var(--inv-*)</code> tokens, regions wrapped in <code>&amp;lt;m.slot&amp;gt;</code>.</li><li><span class="b b-browser">client</span> <b>@invariance/client</b> (Tier-0): ModLoader (fetch→verify→cache bundle), UI overlay engine, prompt widget <code>submitPrompt()</code>, async telemetry.</li><li><span class="b b-browser">client</span> <b>@invariance/design</b> (look plane): CustomizationPanel + m.slots, Gatekeeper + Designer, compiler, <code>verifyV2</code>, apply → <code>:root</code>.</li></ul></div><div class="card c-dev"><div class="card-h"><span class="card-t">DEVELOPER INFRASTRUCTURE</span></div><div class="where">data plane · customer-owned · stores nothing durably</div><ul class="bul"><li><span class="b b-dev">server</span> <b>Frontend host</b> — serves the app + bundled Invariance SDKs; holds no Invariance state.</li><li><span class="b b-dev">server</span> <b>API server · @invariance/server</b> (Tier-1): <code>withInvariance</code>/Express middleware, runtime (fetch pointer + <code>verifyBundle</code>), QuickJS-WASM sandbox, capability + field enforcement.</li><li><span class="b b-dev">server</span> <b>Customer backend / DB</b> — the real data hooks transform on the way out; untouched unless a mod is active.</li></ul></div><div class="card c-cp"><div class="card-h"><span class="card-t">INVARIANCE CONTROL PLANE</span></div><div class="where">control plane · our infra</div><ul class="bul"><li><span class="b b-cp">our cloud</span> <b>control-plane monolith</b> (Hono+Postgres): Authoring (LLM + verifier-in-loop) · Verification (no LLM) · Registry (sign · publish · pointers · kill-switch · lazy-migrate) · Analytics · Design-config + Themes store.</li><li><span class="b b-cp">our cloud</span> <b>Postgres</b> — durable source of truth: manifests, mod revisions, pointers, prompts (PII), themes, events.</li><li><span class="b b-cp">Next.js</span> <b>Console</b> — manifest + Invariants surface, mods + kill switches, Guardrails, Themes/rollback.</li></ul></div></div>
-<div class="grid grid-2" style="margin-top:14px">
-<div class="card c-cdn"><div class="card-h"><span class="card-t">CDN</span></div><div class="where">shared static artifact store</div><ul class="bul"><li>Immutable, content-addressed signed bundles served at <code>/bundles/:hash</code> with <code>cache-control: immutable</code>.</li><li>Static — ours or mirrored into the customer&rsquo;s bucket. Trust comes from the <b>signature</b>, not the host.</li></ul></div><div class="card c-llmc"><div class="card-h"><span class="card-t">LLM</span></div><div class="where">authoring brain</div><ul class="bul"><li><b>qwen2.5 via Ollama</b> (OpenAI-compatible, default, no key) or <b>Anthropic</b> (opt-in).</li><li>Used <b>only</b> in authoring. Never in verification, never on the production request path.</li></ul></div></div>
-<div class="callout c-cp" style="margin-top:14px">
-  <b>No production request ever transits Invariance.</b> The prod path is <span class="hot">Browser ↔ Developer&rsquo;s server ↔ CDN</span>
-  (static fetch + local signature check). Control-plane downtime can never break the customer app — distribution is a
-  short-TTL mutable <b>pointer</b> ("active modset = hash X") in front of <b>immutable</b> signed bundles.
-</div>
-</section><section id="components"><div class="sec-kicker">03</div><h2>Packages &amp; components</h2>
-<p class="lead">Workspace packages export TypeScript source directly (no build step). Schema is the source of truth;
-types come from <code>z.infer</code>.</p>
-<div class="grid grid-3"><div class="card c-look"><div class="card-h"><span class="card-t">@invariance/schema</span><span class="tag t-look">shared</span></div><div class="where">imported everywhere</div><ul class="bul"><li>The keystone: zod schemas + types every component shares.</li><li>AppManifest (tokens, endpoints, invariants/policies), ModBundle (uiOps, hooks, capability manifest), ed25519 signing, path/diff utils.</li><li>Cross-schema integrity in <code>superRefine</code> — the first verification layer.</li></ul></div><div class="card c-browser"><div class="card-h"><span class="card-t">@invariance/client</span><span class="tag t-browser">browser</span></div><div class="where">end-user browser</div><ul class="bul"><li>Tier-0 SDK (React provider + vanilla build).</li><li><code>ModLoader</code> · UI overlay engine · prompt widget (<code>submitPrompt</code>/<code>requestRefix</code>) · <code>verifyEnvelope</code> · telemetry.</li></ul></div><div class="card c-browser"><div class="card-h"><span class="card-t">@invariance/design</span><span class="tag t-browser">browser</span></div><div class="where">browser (+ server export: callDesigner)</div><ul class="bul"><li>The entire LOOK plane: authoring + compile + verify + apply, client-side.</li><li><code>agent/</code> (gatekeeper, designer, pipeline) · <code>compiler/</code> · <code>verify/</code> · <code>runtime/apply.ts</code> · <code>panel/</code> · <code>primitives/</code> (m.slot).</li></ul></div><div class="card c-dev"><div class="card-h"><span class="card-t">@invariance/server</span><span class="tag t-dev">server</span></div><div class="where">developer&rsquo;s API server</div><ul class="bul"><li>Tier-1 SDK — wraps the customer API seam; everything fails open.</li><li><code>withInvariance</code>/<code>createInvarianceMiddleware</code> · <code>InvarianceRuntime</code> · <code>executeHook</code> (QuickJS sandbox) · <code>checkCapabilityWrites</code>/<code>checkFieldConstraints</code>.</li></ul></div><div class="card c-cp"><div class="card-h"><span class="card-t">apps/control-plane</span><span class="tag t-cp">our cloud</span></div><div class="where">control plane</div><ul class="bul"><li>Modular monolith (Hono + Postgres). Modules: authoring · verification · registry · analytics.</li><li>Agents: <code>OpenAiCompatAgent</code> (Ollama/qwen) · <code>AnthropicAgent</code> · design-aware wrap. Stores: mods, manifests, pointers, themes, events.</li></ul></div><div class="card c-cp"><div class="card-h"><span class="card-t">apps/console</span><span class="tag t-cp">Next.js</span></div><div class="where">control plane</div><ul class="bul"><li>Developer dashboard (Next.js) — the single invariants surface.</li><li>Manifest, mods + kill switches, analytics, Guardrails (live enforcement tests), Invariants view (data + look), Themes (history + rollback).</li></ul></div><div class="card c-gate"><div class="card-h"><span class="card-t">packages/cli</span><span class="tag t-gate">build-time</span></div><div class="where">developer&rsquo;s machine / CI</div><ul class="bul"><li>The <code>invariance</code> bin — developer-time.</li><li><code>init</code> (scan repo, wire SDKs, draft manifest as a PR) · <code>manifest publish</code> · <code>dev</code> (local control plane).</li></ul></div></div>
-</section><section id="api"><div class="sec-kicker">04</div><h2>Control-plane API surface</h2>
-<p class="lead">One Hono monolith, versioned under <code>/v1/apps/:appId/…</code>. Authoring, distribution,
-look-config, governance and analytics all live here; the data plane only calls the pointer + bundle endpoints.</p>
-<div class="tbl-wrap"><table class="routes"><thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
-<tbody><tr><td><span class="m m-post">POST</span></td><td><code>/v1/apps/:appId/manifest</code></td><td>publish a manifest version (marks affected mods stale → lazy migration)</td></tr><tr><td><span class="m m-get">GET</span></td><td><code>/v1/apps/:appId/manifest</code></td><td>current manifest</td></tr><tr><td><span class="m m-post">POST</span></td><td><code>…/subjects/:subjectId/prompts</code></td><td>author a mod from a prompt (the authoring pipeline)</td></tr><tr><td><span class="m m-post">POST</span></td><td><code>…/subjects/:subjectId/bundles</code></td><td>publish a hand-authored bundle (dev/test)</td></tr><tr><td><span class="m m-get">GET</span></td><td><code>…/subjects/:subjectId/pointer</code></td><td>the per-subject pointer: status + contentHash</td></tr><tr><td><span class="m m-post">POST</span></td><td><code>…/subjects/:subjectId/revalidate</code></td><td>re-check a stale subject against the live manifest</td></tr><tr><td><span class="m m-post">POST</span></td><td><code>…/subjects/:subjectId/refix</code></td><td>AI re-fix a degraded mod</td></tr><tr><td><span class="m m-get">GET</span></td><td><code>/v1/apps/:appId/bundles/:hash</code></td><td>immutable signed bundle (CDN origin, cache-control: immutable)</td></tr><tr><td><span class="m m-mix">GET/PUT</span></td><td><code>/v1/apps/:appId/design-config</code></td><td>look invariants (design plane); Nebula reads per request</td></tr><tr><td><span class="m m-mix">GET/PUT</span></td><td><code>/v1/apps/:appId/themes</code></td><td>current theme; + …/themes/history, …/themes/rollback</td></tr><tr><td><span class="m m-get">GET</span></td><td><code>/v1/apps/:appId/mods</code></td><td>all mods; + …/subjects/:id/overview</td></tr><tr><td><span class="m m-post">POST</span></td><td><code>/v1/apps/:appId/mods/:modId/kill</code></td><td>kill switch → pointer disabled; + …/restore</td></tr><tr><td><span class="m m-post">POST</span></td><td><code>/v1/apps/:appId/events</code></td><td>telemetry ingest; + GET …/analytics/summary, GET …/events</td></tr><tr><td><span class="m m-get">GET</span></td><td><code>/v1/apps/:appId/signing-key</code></td><td>public key for client/server verification</td></tr></tbody></table></div>
-</section><section id="lifecycle"><div class="sec-kicker">05</div><h2>End-to-end lifecycle</h2>
-<p class="lead">Eight flows tie the zones together. Authoring crosses into the control plane; serving never does.</p>
-<div class="lc-grid"><div class="lc"><div class="lc-n n-gov">1</div><div class="lc-b"><div class="lc-t">Onboard <span class="lc-w">dev-time, once</span></div><div class="lc-d">CLI scans + wires the app, drafts the manifest; developer declares invariants in the Console.</div><div class="lc-hop"><code>@invariance/cli → control-plane registry + Console</code></div></div></div><div class="lc"><div class="lc-n n-look">2</div><div class="lc-b"><div class="lc-t">Author a LOOK edit <span class="lc-w">live, in browser</span></div><div class="lc-d">the in-browser design pipeline applies instantly; the theme is persisted to the control-plane design-config / themes store.</div><div class="lc-hop"><code>browser · @invariance/design → control plane (persist)</code></div></div></div><div class="lc"><div class="lc-n n-logic">3</div><div class="lc-b"><div class="lc-t">Author a LOGIC edit <span class="lc-w">browser → our cloud</span></div><div class="lc-d">prompt → control-plane authoring → verifier-in-the-loop → ed25519 sign. The prompt stays in Postgres, never in the bundle.</div><div class="lc-hop"><code>submitPrompt → POST …/prompts → Registry</code></div></div></div><div class="lc"><div class="lc-n n-cdn">4</div><div class="lc-b"><div class="lc-t">Distribute <span class="lc-w">control plane → CDN</span></div><div class="lc-d">Registry writes the immutable bundle to the CDN and sets a short-TTL per-subject pointer (active|stale|disabled).</div><div class="lc-hop"><code>Registry → CDN + pointer</code></div></div></div><div class="lc"><div class="lc-n n-look">5</div><div class="lc-b"><div class="lc-t">Serve LOOK <span class="lc-w">runtime, client</span></div><div class="lc-d">ModLoader fetches the pointer + bundle, verifies the signature in the browser, applies overlay + tokens.</div><div class="lc-hop"><code>CDN → @invariance/client</code></div></div></div><div class="lc"><div class="lc-n n-dev">6</div><div class="lc-b"><div class="lc-t">Serve LOGIC <span class="lc-w">runtime · hot path</span></div><div class="lc-d">user request → developer&rsquo;s API server → fetch pointer (no-store) + bundle → verify → sandbox → response. No control-plane transit.</div><div class="lc-hop"><code>user → @invariance/server ↔ CDN → user</code></div></div></div><div class="lc"><div class="lc-n n-gov">7</div><div class="lc-b"><div class="lc-t">Telemetry <span class="lc-w">off the request path</span></div><div class="lc-d">client + server emit async events → control-plane Analytics → Console.</div><div class="lc-hop"><code>client/server → Analytics → Console</code></div></div></div><div class="lc"><div class="lc-n n-gov">8</div><div class="lc-b"><div class="lc-t">Govern <span class="lc-w">control plane</span></div><div class="lc-d">Console kill-switch flips the pointer to disabled; manifest republish marks mods stale (lazy migration); theme rollback.</div><div class="lc-hop"><code>Console → Registry → pointer</code></div></div></div></div>
-</section><section id="onboarding"><div class="sec-kicker">06</div><h2>Onboarding / scanner pipeline</h2>
-<p class="kicker-note"><span class="b b-gate">developer-time · runs once</span> &nbsp;<i>current design, not finalized · React+Tailwind this round</i></p>
-<p class="lead">The upstream step that turns a raw, un-wired multi-page app into a <b>governable</b> one: everything
-customizable is <i>named once</i> here, so later end-user changes edit a name&rsquo;s value, never the call sites.</p>
-<div class="flow"><div class="step s-det"><span class="st">Discover archetypes</span><span class="ss">router walk → patterns</span></div><span class="chev">&rsaquo;</span><div class="step s-llm"><span class="st">Per-archetype map</span><span class="ss">AST sections + LLM names/levels</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">Reconcile palette</span><span class="ss">clusters → role tokens (barrier)</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">Generate artifacts</span><span class="ss">tailwind.config · manifest · layout</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">Codemod</span><span class="ss">repoint classes · wrap m.slot</span></div><span class="chev">&rsaquo;</span><div class="step s-gate"><span class="st">Verify</span><span class="ss">build · verifyV2 · visual-QA = before</span></div><span class="chev">&rsaquo;</span><div class="step s-rev"><span class="st">Reviewable diff</span><span class="ss">branch/PR → dev edits → merge</span></div></div>
-<p class="note-line">Stages 2 &amp; 5 fan out (per-archetype / per-file); a failed verify feeds a bounded
-<span class="fail">repair loop</span> (re-segment / re-cluster / re-generate).</p>
-<h3>Output — three centralization layers</h3>
-<div class="tbl-wrap"><table class="cmp">
-<thead><tr><th>Layer</th><th>The "name" created</th><th>One change fans out via</th></tr></thead>
-<tbody>
-<tr><td class="look">Token</td><td><code>var(--inv-*)</code> role tokens</td><td>CSS cascade → every page, instantly</td></tr>
-<tr><td class="cdn">Archetype</td><td><code>designSurface</code>: route patterns + sections + levels</td><td>one template component → all its URLs</td></tr>
-<tr><td class="logic">Layout</td><td><code>LayoutSpec</code> grammar per archetype</td><td>archetype key → every page of that type</td></tr>
-</tbody></table></div>
-</section><section id="look"><div class="sec-kicker">07</div><h2>LOOK plane — design pipeline</h2>
-<p class="lead">All client-side and live. Entry: <code>runPipeline</code> (<code class="cite">packages/design/src/agent/pipeline.ts:114</code>),
-driven by the CustomizationPanel widget.</p>
-<div class="flow"><div class="step s-in"><span class="st">prompt + history</span></div><span class="chev">&rsaquo;</span><div class="step s-gate"><span class="st">Gatekeeper</span><span class="ss">level-gate (LLM classifies)</span></div><span class="chev">&rsaquo;</span><div class="step s-llm"><span class="st">Designer LLM</span><span class="ss">StyleSpec, no raw colors</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">Compiler</span><span class="ss">→ 38 role tokens (OKLCH)</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">Layout profile</span><span class="ss">vibe → grid/standard</span></div><span class="chev">&rsaquo;</span><div class="step s-gate"><span class="st">verifyV2</span><span class="ss">7 deterministic tests</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">persistAndApply</span></div><span class="chev">&rsaquo;</span><div class="step s-apply"><span class="st">apply :root</span><span class="ss">→ instant paint</span></div></div>
-<div class="grid grid-2" style="margin-top:14px">
-<div class="card c-gate"><div class="card-h"><span class="card-t">Where invariants are enforced</span></div><ul class="bul"><li><b>Compiler, not the LLM</b>: <code>allowed_modes</code>/<code>font_registry</code>/<code>locked_tokens</code> violations throw; locked tokens are written last and override every computed value (<code class="cite">compiler/compile.ts</code>).</li><li>Contrast solved by OKLCH search; the developer floor can only <i>raise</i> the target.</li><li><b>verifyV2</b> (7 tests): all 38 tokens present · locked byte-identical · contrast floor · chroma cap · fonts in registry · all <code>var(--inv-…)</code> resolve (<code class="cite">verify/compiled-tests.ts:391</code>).</li></ul></div><div class="card c-look"><div class="card-h"><span class="card-t">How it stays correct</span></div><ul class="bul"><li><b>Recompile-on-fail = Designer retry</b> (max 2) — there is no path that relaxes a constraint or applies an unverified spec.</li><li><b>Goes live</b> the instant <code>root.style.setProperty(key,value)</code> runs — pure CSS cascade, zero React re-render (<code class="cite">runtime/apply.ts:34</code>).</li><li><b>Live reconciliation</b>: when the dev tightens an invariant, the applied theme is re-verified and recompiled-or-dropped, no reload (<code class="cite">context/provider.tsx:162</code>).</li></ul></div></div>
-</section><section id="logic"><div class="sec-kicker">08</div><h2>BUSINESS-LOGIC plane — signed bundles</h2>
-<p class="lead">The novel half: authoring builds a verified, signed bundle (control plane); runtime executes it
-sandboxed, per request, on the customer&rsquo;s server (data plane).</p>
-<h3>Authoring &nbsp;<span class="sub-h">prompt → verified, signed bundle</span></h3>
-<p class="note-line">Entry: <code>POST …/subjects/:id/prompts</code> → <code>authorMod</code>
-(<code class="cite">apps/control-plane/src/modules/authoring/pipeline.ts:85</code>).</p>
-<div class="flow"><div class="step s-in"><span class="st">prompt ≤2000</span></div><span class="chev">&rsaquo;</span><div class="step s-llm"><span class="st">LLM draft</span><span class="ss">uiOps + hooks + capabilities</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">deriveRepairedWrites</span><span class="ss">acorn AST widens writes</span></div><span class="chev">&rsaquo;</span><div class="step s-gate"><span class="st">VERIFY GATE</span><span class="ss">deterministic · NO LLM</span></div><span class="chev">&rsaquo;</span><div class="step s-apply"><span class="st">SIGN</span><span class="ss">canonical JSON + ed25519</span></div><span class="chev">&rsaquo;</span><div class="step s-cdn"><span class="st">DISTRIBUTE</span><span class="ss">CDN @hash + pointer</span></div></div>
-<p class="note-line"><b>Verifier-in-the-loop</b> (retry ≤3): failed reasons become feedback. The verifier rejects writes
-to immutable fields, dangerous CSS/HTML, illegal hooks (no <code>eval</code>/<code>Function</code>/<code>globalThis</code>/<code>fetch</code>…),
-and over-budget hooks. The user&rsquo;s prompt is stored in <code>ModRecord</code> — <b>never</b> in the signed bundle (PII).</p>
-
-<h3>Runtime &nbsp;<span class="sub-h">real request → verified, sandboxed execution</span></h3>
-<p class="note-line">A real request — e.g. Nebula&rsquo;s <code>GET /api/shows</code> wrapped by <code>withInvariance</code>.</p>
-<div class="flow"><div class="step s-in"><span class="st">user request</span></div><span class="chev">&rsaquo;</span><div class="step s-gate"><span class="st">fetch pointer</span><span class="ss">cache:no-store · active only</span></div><span class="chev">&rsaquo;</span><div class="step s-gate"><span class="st">verifyBundle</span><span class="ss">sha256 + ed25519 + schema</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">QuickJS sandbox</span><span class="ss">budgets · no host bindings</span></div><span class="chev">&rsaquo;</span><div class="step s-det"><span class="st">capability + field checks</span><span class="ss">immutable multiset</span></div><span class="chev">&rsaquo;</span><div class="step s-apply"><span class="st">current = execution.result</span><span class="ss">→ response</span></div></div>
-<div class="grid grid-2" style="margin-top:14px">
-<div class="card c-gate"><div class="card-h"><span class="card-t">Defense in depth</span></div><ul class="bul"><li><b>Only <code>status==='active'</code> executes</b>; {code("verifyBundle")} re-checks hash + signature + schema before any hook runs ({cite("packages/schema/src/signing.ts:69")}).</li><li><b>Per-hook capability bounding</b>: <code>checkCapabilityWrites</code> discards any changed path not declared (<code class="cite">packages/server/src/enforce.ts:19</code>).</li><li><b>Immutable fields by multiset</b>: reorder OK, any add/remove/rewrite → return the ORIGINAL payload (all-or-nothing).</li></ul></div><div class="card c-logic"><div class="card-h"><span class="card-t">The apply line</span></div><ul class="bul"><li>Kept only when the hook succeeded <i>and</i> capability check passed <i>and</i> field-constraint check passed: <b><code>current = execution.result</code></b> (<code class="cite">packages/server/src/runtime.ts:226</code>).</li><li>Any exception anywhere → original payload. <b>Fail-open everywhere.</b></li><li>An already-verified bundle is cached by <code>contentHash</code> (immutable, so sound).</li></ul></div></div>
-</section><section id="distribution"><div class="sec-kicker">09</div><h2>Distribution model</h2>
-<p class="lead">Two-step, so a kill-switch or supersession propagates within the pointer TTL while bundles stay
-cacheable forever.</p>
-<div class="grid grid-2">
-<div class="card c-cdn"><div class="card-h"><span class="card-t">Mutable side — pointer</span></div><ul class="bul"><li>Short-TTL (~5s) per-subject pointer: "active modset = hash X".</li><li>Manifest publish marks active mods <b>stale</b> (lazy migration); kill-switch flips <b>disabled</b>/<b>active</b>; superseded mods cannot flip.</li><li>Runtime fetches it with <code>cache:'no-store'</code> — a stale cache here once silently no-op&rsquo;d all hooks.</li></ul></div><div class="card c-look"><div class="card-h"><span class="card-t">Immutable side — bundle</span></div><ul class="bul"><li>ed25519-signed envelope over canonical JSON (sorted keys at every depth); <code>contentHash = sha256(payload)</code>.</li><li>Served content-addressed with <code>cache-control: immutable</code>. New revisions supersede via the pointer.</li><li>Trust is in the signature → bundles can be mirrored into the customer&rsquo;s own CDN.</li></ul></div></div>
-<h3>Pointer status</h3>
-<div class="tbl-wrap"><table class="routes"><thead><tr><th>Status</th><th>Runtime behavior</th></tr></thead>
-<tbody><tr><td><span class="pill p-ok">active</span></td><td>executes — the live modset for this subject</td></tr><tr><td><span class="pill p-warn">stale</span></td><td>manifest changed; base behavior until the next client session revalidates</td></tr><tr><td><span class="pill p-warn">degraded</span></td><td>verification/migration downgraded it; base behavior, AI re-fix offered</td></tr><tr><td><span class="pill p-bad">disabled</span></td><td>kill switch flipped; base behavior (superseded mods cannot flip)</td></tr><tr><td><span class="pill p-muted">none</span></td><td>no mod for this subject; base app</td></tr></tbody></table></div>
-<div class="callout c-dev" style="margin-top:14px"><b>Developer release path:</b> new manifest version → registry marks
-affected bindings stale → next user session revalidates → pass / degrade-to-base / offer AI re-fix. The prod path touches
-only static CDN artifacts + a local signature check.</div>
-</section><section id="enforcement"><div class="sec-kicker">10</div><h2>Enforcement semantics</h2>
-<p class="lead">The <i>same</i> path / diff semantics run at verify-time (control plane) and run-time (data plane) —
-defense in depth. These are the rules both engines share.</p>
-<div class="grid grid-2">
-<div class="card c-logic"><div class="card-h"><span class="card-t">Paths & diffs</span></div><ul class="bul"><li><code>diffPaths</code> treats a pure array permutation as a write to the array <i>itself</i>, not its element fields — so "sort my list" mods are possible (<code class="cite">paths.ts:64</code>).</li><li>Immutable-field policies compare the <b>multiset</b> of values at the path: reordering is legal; rewriting/adding/hiding a protected value is not.</li></ul></div><div class="card c-gate"><div class="card-h"><span class="card-t">Write declarations</span></div><ul class="bul"><li>The verifier rejects declared writes targeting an immutable field (descendant-or-equal path) and whole-body writes on such endpoints — but allows strict-ancestor declarations (e.g. <code>shows</code>).</li><li><code>fields:undefined</code> = whole-body write (allowed unless the endpoint has immutable fields); <code>fields:[]</code> = explicitly rejected.</li><li><code>statusCode ≥ 400</code> responses are never transformed; GET endpoints reject request-phase hooks.</li></ul></div></div>
-<h3>The two "apply" moments</h3>
-<div class="grid grid-2">
-  <div class="apply-card c-look"><div class="ac-h">LOOK — goes live at</div>
-    <code class="big">root.style.setProperty(key, value)</code>
-    <div class="ac-f"><code class="cite">packages/design/src/runtime/apply.ts:34</code> · guarded by <code>verifyV2</code> · fail-open = base CSS</div></div>
-  <div class="apply-card c-logic"><div class="ac-h">BUSINESS-LOGIC — goes live at</div>
-    <code class="big">current = execution.result</code>
-    <div class="ac-f"><code class="cite">packages/server/src/runtime.ts:226</code> · guarded by verifyBundle + capability + multiset · fail-open = original payload</div></div>
-</div>
-</section><section id="invariants"><div class="sec-kicker">11</div><h2>Core invariants &amp; sharp edges</h2>
-<div class="grid grid-2">
-  <div><h3>System invariants</h3><ul class="bul big-bul"><li>Runtimes execute <b>only</b> signed, verified Mod Bundles (<code>verifyBundle</code> before anything).</li><li>Bundles are immutable; new revisions supersede via the registry pointer.</li><li>User prompts never go into bundles (PII) — they live control-plane-side.</li><li>Verification is deterministic — no LLM in the verify step.</li><li>Hooks run sandboxed with hard budgets, touching only declared endpoints/fields.</li><li>Any fetch/verify failure fails open to base app behavior. The developer's infra stores nothing durably.</li></ul></div>
-  <div><h3>Sharp edges the trace surfaced</h3><div class="edges"><div class="edge"><div class="edge-t">Signing-key durability</div><div class="edge-d">Without persisted <code>INVARIANCE_SIGNING_*</code>, keys regenerate on restart → every bundle fails verification → universal silent no-op. Open hand-off footgun.</div></div><div class="edge"><div class="edge-t">Auto-repair widens writes</div><div class="edge-d">The final <code>writes</code> set is partly acorn-inferred; safety rests on the verifier&rsquo;s immutable-field check running on the <i>repaired</i> bundle.</div></div><div class="edge"><div class="edge-t">Two look-plane verifiers</div><div class="edge-d">THEME/SLOT_F1 use <code>verifyV2</code> (7 tests); F2–F4 use the older v5 engine. Confirm overlap.</div></div><div class="edge"><div class="edge-t">Kill-switch latency</div><div class="edge-d">A disabled mod can keep executing until the cached pointer expires (~5s).</div></div><div class="edge"><div class="edge-t">One-shot drop warning</div><div class="edge-d">After warning once, a weak model is trusted to drop existing customizations (prevents non-convergence).</div></div></div></div>
-</div>
-</section><section id="poster"><div class="sec-kicker">12</div><h2>Appendix — the pipeline poster</h2>
-<p class="lead">The same look + business-logic pipelines as a single dense, zoomable diagram (scroll sideways).</p>
-<details open><summary>Show / hide the full pipeline poster</summary>
-<div class="poster-scroll"><svg xmlns="http://www.w3.org/2000/svg" width="1520" height="2241" viewBox="0 0 1520 2241" font-family="sans-serif">
+body{margin:0;background:radial-gradient(1200px 520px at 50% -200px,rgba(86,150,200,.10),transparent 70%),linear-gradient(var(--bg1),var(--bg0));
+color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+code{font-family:var(--mono);font-size:.85em;background:#1c2027;border:1px solid var(--bd);border-radius:5px;padding:.5px 5px;color:#cdd3db}
+header.top{position:sticky;top:0;z-index:40;backdrop-filter:blur(10px);background:rgba(10,11,13,.82);border-bottom:1px solid var(--bd)}
+.top-in{max-width:1380px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brand{font-weight:800;letter-spacing:.4px;font-size:14px;white-space:nowrap}.brand .d{color:var(--cp)}
+.seg{display:flex;gap:4px;flex-wrap:wrap}
+.seg button{font-size:12.5px;color:var(--mute);background:#141821;border:1px solid var(--bd);border-radius:8px;
+padding:6px 11px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:7px}
+.seg button:hover{color:var(--ink);background:#1b1f28}
+.seg button.on{color:#0a0b0d;font-weight:700;background:#cfd4dc;border-color:transparent}
+.seg button .sw{width:9px;height:9px;border-radius:50%;background:currentColor;opacity:.9}
+.seg button.on .sw{display:none}
+.spacer{flex:1}
+.ghost{font-size:12.5px;color:var(--mute);background:transparent;border:1px solid var(--bd);border-radius:8px;padding:6px 11px;cursor:pointer;font-family:inherit}
+.ghost:hover{color:var(--ink);border-color:#3a4150}
+.hero{max-width:1380px;margin:0 auto;padding:16px 20px 4px}
+.hero h1{font-size:23px;margin:0 0 4px;font-weight:850;letter-spacing:-.2px}
+.hero p{margin:0;color:var(--mute);font-size:14px;max-width:900px}
+.stage{max-width:1380px;margin:0 auto;padding:14px 20px 30px;display:flex;gap:16px;align-items:flex-start}
+.diagram{flex:1;min-width:0}
+.frame{background:#0c0e12;border:1px solid var(--bd);border-radius:14px;padding:6px;box-shadow:0 24px 80px rgba(0,0,0,.5)}
+svg#map{width:100%;height:auto;display:block;border-radius:10px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin:10px 4px 0;color:var(--faint);font-size:11.5px}
+.legend b{color:var(--mute);font-weight:600}.legend .k{display:inline-flex;align-items:center;gap:6px}
+.legend .dot{width:9px;height:9px;border-radius:3px;display:inline-block}
+/* svg node styles */
+.zone{fill-opacity:.05;stroke-opacity:.5}
+.zone-l{font:700 12px var(--sans);letter-spacing:.4px}.zone-s{font:500 10px var(--mono)}
+.mono-box{fill:#0f1217;stroke:#2b313b;stroke-dasharray:3 4}
+.bnd{stroke:#5a6473;stroke-width:1.4;stroke-dasharray:3 6}
+.bnd-l{font:700 10px var(--mono);fill:#8b93a1}
+.node{cursor:pointer}
+.node rect{fill:var(--panel);stroke:#39414e;stroke-width:1.4;transition:stroke .12s,fill .12s}
+.node:hover rect{fill:#1b1f28;stroke:#5b6473}
+.node .nt{font:800 13px var(--sans);fill:#eef0f3}
+.node .ns{font:500 10px var(--mono);fill:#8d94a1}
+.node .nd{}
+.node.actor rect{fill:#11151b;stroke-width:1.6;rx:20}
+.node.hero rect{stroke-width:1.8}
+.node.dim{opacity:.22}
+.node.hl rect{stroke-width:2.6;filter:drop-shadow(0 0 7px var(--hlc))}
+.edge{fill:none;stroke-width:2.6;stroke-linejoin:round;stroke-linecap:round}
+.edge.draw{stroke-dasharray:8 7;animation:dash 1s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-30}}
+.estep{font:800 11px var(--mono);fill:#0a0b0d}
+/* drawer */
+.drawer{width:392px;flex:none;background:var(--panel);border:1px solid var(--bd);border-radius:14px;
+padding:18px;position:sticky;top:70px;max-height:calc(100vh - 86px);overflow:auto}
+.dr-pitch h2{font-size:17px;margin:.1em 0 .5em;font-weight:850;line-height:1.25}
+.pitch-item{display:flex;gap:11px;padding:9px 0;border-top:1px solid var(--bd)}
+.pitch-item:first-of-type{border-top:none}
+.pi-bar{width:3px;border-radius:3px;flex:none}
+.pi-t{font-weight:800;font-size:13px}.pi-d{font-size:12px;color:var(--mute);margin-top:2px;line-height:1.45}
+.dr-foot{margin-top:12px;font-size:11.5px;color:var(--faint);border-top:1px solid var(--bd);padding-top:10px}
+.dr-eyebrow{font:700 11px var(--mono);letter-spacing:.5px;text-transform:uppercase}
+.dr-title{font-size:18px;font-weight:850;margin:3px 0 8px}
+.where{display:inline-block;font:600 10.5px var(--mono);padding:2px 9px;border-radius:20px;border:1px solid;margin-bottom:12px}
+.w-browser{color:var(--browser);border-color:#1c3a47}.w-dev{color:var(--dev);border-color:#1c4536}
+.w-cp{color:var(--cp);border-color:#4d3f15}.w-cdn{color:var(--cdn);border-color:#34406b}
+ul.db{margin:.2em 0;padding-left:1.05em;list-style:none}
+ul.db li{position:relative;margin:.5em 0;font-size:12.7px;color:var(--mute);line-height:1.5}
+ul.db li::before{content:"▹";position:absolute;left:-1em;color:var(--faint)}
+.files{margin-top:12px;display:flex;flex-direction:column;gap:5px}
+.files code{font-size:11px;color:var(--browser);background:#10222b;border-color:#1c3a47;display:inline-block}
+.why{margin-top:14px;border:1px solid var(--bd);border-left:3px solid var(--cp);border-radius:9px;padding:10px 12px;
+background:linear-gradient(90deg,rgba(242,181,69,.06),transparent)}
+.why .l{font:700 10px var(--mono);letter-spacing:.5px;color:var(--cp);text-transform:uppercase}
+.why .t{font-size:12.7px;color:#e7e2d4;margin-top:3px;line-height:1.5}
+.steps{counter-reset:s}
+.step{display:flex;gap:11px;padding:9px 0;border-top:1px solid var(--bd)}
+.step:first-child{border-top:none}
+.step .sn{counter-increment:s;flex:none;width:24px;height:24px;border-radius:50%;border:2px solid var(--sc);
+color:var(--sc);font:800 12px var(--sans);display:flex;align-items:center;justify-content:center}
+.step .sn::before{content:counter(s)}
+.step .sx{font-size:12.6px;color:var(--mute);line-height:1.5}
+.step .sx b{color:var(--ink)}
+.back{margin-top:14px}
+@media(max-width:1080px){.stage{flex-direction:column}.drawer{width:100%;position:relative;top:0;max-height:none}}
+/* modal */
+.modal{position:fixed;inset:0;z-index:60;background:rgba(5,6,8,.82);display:none;padding:30px}
+.modal.open{display:flex;flex-direction:column}
+.modal .mh{display:flex;justify-content:space-between;align-items:center;color:var(--mute);margin-bottom:10px}
+.modal .mbody{flex:1;overflow:auto;background:#0a0b0d;border:1px solid var(--bd);border-radius:12px}
+.modal svg{display:block;min-width:1400px;width:100%;height:auto}
+</style></head><body><header class="top"><div class="top-in"><span class="brand">INVARIANCE<span class="d"> ·</span> architecture</span><div class="seg"><button data-f="overview" class="on">Overview</button><button data-f="look"><span class="sw"></span>Author a look edit</button><button data-f="logic"><span class="sw"></span>Author a logic edit</button><button data-f="serve"><span class="sw"></span>Serve a request (hot path)</button><button data-f="govern"><span class="sw"></span>Govern &amp; kill-switch</button></div><div class="spacer"></div><button class="ghost" id="posterBtn">Pipeline poster ↗</button></div></header><div class="hero"><h1>How Invariance works — click to explore</h1><p>End users customize your live app by prompt — UI <i>and</i> business logic — while you stay in control through declared invariants. Pick a flow to watch it light up, or click any component to see what it does and why it matters.</p></div><div class="stage"><div class="diagram"><div class="frame"><svg id="map" viewBox="0 0 1280 600" xmlns="http://www.w3.org/2000/svg"></svg></div><div class="legend"><span class="k"><b>Zones:</b></span><span class="k"><span class="dot" style="background:#56c7f5"></span>end-user browser</span><span class="k"><span class="dot" style="background:#46d6a0"></span>developer infra</span><span class="k"><span class="dot" style="background:#f2b545"></span>control plane (ours)</span><span class="k"><span class="dot" style="background:#9aa6ff"></span>CDN (static)</span><span class="k" style="margin-left:auto">click a node for detail · prod traffic never transits the control plane</span></div></div><aside class="drawer" id="drawer"></aside></div><div class="modal" id="modal"><div class="mh"><span>Detailed pipeline poster — the same system as a single dense diagram (scroll)</span><button class="ghost" id="posterClose">Close ✕</button></div><div class="mbody"><svg xmlns="http://www.w3.org/2000/svg" width="1520" height="2241" viewBox="0 0 1520 2241" font-family="sans-serif">
 <defs><marker id="ah_6b7280" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6.5,3 L0,6 Z" fill="#6b7280"/></marker><marker id="ah_56c7f5" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6.5,3 L0,6 Z" fill="#56c7f5"/></marker><marker id="ah_f2b545" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6.5,3 L0,6 Z" fill="#f2b545"/></marker><marker id="ah_46d6a0" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6.5,3 L0,6 Z" fill="#46d6a0"/></marker><marker id="ah_ffd66b" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6.5,3 L0,6 Z" fill="#ffd66b"/></marker><marker id="ah_7fd4b0" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6.5,3 L0,6 Z" fill="#7fd4b0"/></marker><marker id="ah_9aa0ab" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6.5,3 L0,6 Z" fill="#9aa0ab"/></marker><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
   <stop offset="0" stop-color="#101216"/><stop offset="1" stop-color="#0a0b0d"/></linearGradient><radialGradient id="vig" cx="0.5" cy="0.12" r="0.9">
   <stop offset="0" stop-color="#1b2030" stop-opacity="0.55"/>
@@ -665,13 +476,98 @@ defense in depth. These are the rules both engines share.</p>
 <text x="780.0" y="2164.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#e9eaee">current = execution.result</text>
 <text x="780.0" y="2180.0" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="10.6" font-weight="400" fill="#9aa0ab">server/src/runtime.ts:226  ·  guarded by verifyBundle + capability + multiset</text>
 <text x="66.0" y="2205.0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif" font-size="10.8" font-weight="500" fill="#6b7280">Core invariants:  runtimes execute only signed+verified bundles  ·  bundles immutable (new revisions supersede via pointer)  ·  user prompts never enter bundles (PII)  ·  verification has no LLM  ·  fail-open everywhere.</text>
-</svg></div></details>
-</section></main><footer>Generated by <code>docs/diagrams/gen_page.py</code> — a single self-contained page (no external assets). Citations are real <code>file:line</code> references; the onboarding pipeline is current design, not yet finalized.</footer><script>
-const links=[...document.querySelectorAll('nav a')];
-const map=new Map(links.map(a=>[a.dataset.sec,a]));
-const obs=new IntersectionObserver((es)=>{
-  es.forEach(e=>{ if(e.isIntersecting){ links.forEach(l=>l.classList.remove('active'));
-    const a=map.get(e.target.id); if(a)a.classList.add('active'); }});
-},{rootMargin:'-45% 0px -50% 0px',threshold:0});
-document.querySelectorAll('section[id]').forEach(s=>obs.observe(s));
+</svg></div></div><script>
+const N={"enduser": [116, 40, 148, 40, "End user", "customizes by prompt", "actor"], "developer": [956, 40, 148, 40, "Developer", "declares invariants", "actor"], "webapp": [52, 124, 268, 58, "Customer Web App", "your product \u00b7 React + Tailwind", "browser"], "client": [52, 196, 268, 80, "@invariance/client", "ModLoader \u00b7 prompt widget \u00b7 overlay", "browser"], "design": [52, 292, 268, 90, "@invariance/design", "Look plane \u00b7 compiler \u00b7 verifyV2 \u00b7 apply", "browser"], "frontend": [388, 124, 268, 56, "Frontend host", "serves app + SDK bundles", "dev"], "apiserver": [388, 196, 268, 120, "API Server", "@invariance/server \u00b7 sandbox \u00b7 enforce", "dev"], "backend": [388, 336, 268, 56, "Customer backend / DB", "your real data", "dev"], "authoring": [844, 160, 176, 42, "Authoring", "LLM + verifier-in-loop", "cp"], "verification": [1036, 160, 176, 42, "Verification", "deterministic \u00b7 no LLM", "cp"], "registry": [844, 210, 176, 42, "Registry", "sign \u00b7 publish \u00b7 pointers", "cp"], "analytics": [1036, 210, 176, 42, "Analytics", "events \u2192 classification", "cp"], "designstore": [844, 260, 368, 42, "Design + Themes store", "look invariants \u00b7 history \u00b7 rollback", "cp"], "postgres": [828, 372, 188, 52, "Postgres", "durable source of truth", "cp"], "llm": [1040, 372, 188, 52, "LLM", "Ollama / Anthropic \u00b7 authoring only", "cp"], "console": [828, 440, 400, 58, "Console", "invariants \u00b7 kill switches \u00b7 guardrails", "cp"], "cdn": [684, 468, 116, 76, "CDN", "signed bundles @hash", "cdn"]}, ZONES=[{"x": 36, "y": 96, "w": 300, "h": 470, "label": "END-USER BROWSER", "sub": "runs developer-shipped code", "plane": "data", "color": "browser"}, {"x": 372, "y": 96, "w": 300, "h": 470, "label": "DEVELOPER INFRASTRUCTURE", "sub": "customer-owned \u00b7 stores nothing durably", "plane": "data", "color": "dev"}, {"x": 812, "y": 96, "w": 432, "h": 470, "label": "INVARIANCE CONTROL PLANE", "sub": "our infra \u00b7 authors \u00b7 verifies \u00b7 signs", "plane": "control", "color": "cp"}], MONO={"x": 828, "y": 116, "w": 400, "h": 236, "label": "control-plane monolith \u00b7 Hono + Postgres"}, FLOWS={"look": {"label": "Author a look edit", "color": "#56c7f5", "mk": "sky", "nodes": ["enduser", "design", "designstore"], "edges": [[[190, 80], [190, 88], [44, 88], [44, 337], [52, 337]], [[320, 337], [354, 337], [354, 88], [1028, 88], [1028, 260]]], "steps": [["enduser", "Open the in-app panel and type a vibe \u2014 \u201cmake it retro.\u201d"], ["design", "Gatekeeper level-gate (LLM only classifies) \u2192 Designer \u2192 StyleSpec \u2192 compiler \u2192 verifyV2 (7 tests). Apply \u2192 :root: instant paint, no reload."], ["designstore", "Theme persisted to the control-plane design-config / themes store (history + rollback)."]]}, "logic": {"label": "Author a logic edit", "color": "#f2b545", "mk": "amber", "nodes": ["enduser", "client", "authoring", "verification", "registry", "cdn", "llm"], "edges": [[[190, 80], [190, 88], [44, 88], [44, 236], [52, 236]], [[320, 236], [354, 236], [354, 92], [932, 92], [932, 160]], [[1020, 181], [1036, 181]], [[1124, 202], [1124, 206], [932, 206], [932, 210]], [[844, 231], [818, 231], [818, 506], [800, 506]]], "steps": [["enduser", "Type a logic/data prompt \u2014 \u201conly show kids titles.\u201d"], ["client", "Client submitPrompt() \u2192 POST \u2026/subjects/:id/prompts."], ["authoring", "LLM drafts uiOps + hooks + capabilities; under-declared writes auto-repaired (acorn AST)."], ["verification", "Deterministic verify gate \u2014 NO LLM. Verifier-in-the-loop (retry \u22643). Rejects immutable-field writes + illegal hooks."], ["registry", "Sign ed25519 over canonical JSON. The prompt is stored in Postgres \u2014 never in the bundle (PII)."], ["cdn", "Publish the immutable bundle @hash + set a short-TTL pointer = active."]]}, "serve": {"label": "Serve a request (hot path)", "color": "#46d6a0", "mk": "emer", "nodes": ["enduser", "apiserver", "cdn", "backend"], "edges": [[[190, 80], [190, 96], [354, 96], [354, 256], [388, 256]], [[656, 256], [742, 256], [742, 468]], [[522, 316], [522, 336]]], "dashed": [[[388, 236], [366, 236], [366, 100], [190, 100], [190, 80]]], "steps": [["enduser", "User hits your app \u2014 e.g. GET /api/shows."], ["apiserver", "withInvariance intercepts at your API seam."], ["cdn", "Fetch pointer (cache:no-store, active only) + signed bundle; verifyBundle locally (sha256 + ed25519 + schema)."], ["apiserver", "QuickJS-WASM sandbox runs hooks under CPU/mem budgets; capability + immutable-multiset checks. Else original payload."], ["enduser", "Transformed (or original \u2014 fail-open) response. No request ever transits Invariance."]]}, "govern": {"label": "Govern & kill-switch", "color": "#c9b27a", "mk": "gold", "nodes": ["developer", "console", "registry"], "edges": [[[1030, 80], [1030, 88], [1244, 88], [1244, 469], [1228, 469]], [[828, 469], [818, 469], [818, 231], [844, 231]]], "steps": [["developer", "Declare invariants and watch usage in the Console."], ["console", "Flip a kill switch, republish the manifest (lazy migration), or roll a theme back."], ["registry", "The pointer flips to disabled/stale within its short TTL \u2014 propagating without ever touching prod."]]}}, DATA={"enduser": {"t": "End user", "where": "browser", "wc": "browser", "b": ["Reshapes the app in natural language \u2014 both look and business logic.", "Sees look changes paint instantly; logic changes arrive as transformed API responses.", "Never sees a broken app: every failure path falls open to your base behavior."], "f": [], "why": "Customization becomes a feature your users drive \u2014 no bespoke settings UI to build."}, "developer": {"t": "Developer (you)", "where": "control plane", "wc": "cp", "b": ["Declare invariants once (immutable fields, locked tokens, contrast floors, allowed endpoints).", "Watch what users change; kill any mod instantly.", "The LLM can only propose within your guardrails \u2014 it is never in the gate."], "f": [], "why": "You ship user-customizability without giving up control of your product."}, "webapp": {"t": "Customer Web App", "where": "browser", "wc": "browser", "b": ["Your real product (React + Tailwind), shipped by you.", "Components read var(--inv-*) role tokens; customizable regions wrapped in &lt;m.slot&gt;.", "Wiring is one-time (the CLI scans + codemods it)."], "f": [], "why": "Onboarding names everything customizable once; later edits change a value, never your call sites."}, "client": {"t": "@invariance/client \u2014 Tier-0 SDK", "where": "browser", "wc": "browser", "b": ["ModLoader: fetch signed bundle \u2192 verify signature \u2192 cache per user + version.", "UI overlay engine: token theming \u00b7 scoped styles \u00b7 slot swaps.", "Prompt widget (submitPrompt) + async telemetry, off the request path."], "f": ["packages/client/src/core/loader.ts"], "why": "A thin drop-in. The browser only ever runs static, signature-verified artifacts."}, "design": {"t": "@invariance/design \u2014 Look plane", "where": "browser", "wc": "browser", "b": ["The whole look pipeline, client-side: CustomizationPanel + m.slots.", "Gatekeeper level-gate + Designer LLM \u2192 StyleSpec (no raw colors).", "compiler \u2192 role tokens \u00b7 verifyV2 (7-test gate) \u00b7 apply \u2192 root.style.setProperty(:root)."], "f": ["packages/design/src/agent/pipeline.ts:114", "packages/design/src/runtime/apply.ts:34"], "why": "Look edits are a value swap in the browser \u2014 safe to paint the instant they pass the gate."}, "frontend": {"t": "Frontend host", "where": "developer infra", "wc": "dev", "b": ["Serves your app plus the bundled Invariance client/design SDKs.", "Static hosting; holds no Invariance state."], "f": [], "why": "Nothing new to operate \u2014 it\u2019s still just your frontend."}, "apiserver": {"t": "API Server \u00b7 @invariance/server \u2014 Tier-1", "where": "developer infra", "wc": "dev", "b": ["withInvariance / Express middleware wraps your API seam; everything fails open.", "InvarianceRuntime: fetch pointer (cache:no-store) + verifyBundle before anything runs.", "QuickJS-WASM sandbox: hard CPU/mem budgets, no host bindings, JSON-only boundary.", "Enforce: capability writes + immutable fields by multiset (reorder OK, edits rejected)."], "f": ["packages/server/src/runtime.ts:226", "packages/server/src/enforce.ts:19", "packages/server/src/sandbox.ts:33"], "why": "Untrusted, user-authored logic runs at your seam \u2014 sandboxed, capability-scoped, and unable to break the request."}, "backend": {"t": "Customer backend / DB", "where": "developer infra", "wc": "dev", "b": ["Your real data and services \u2014 the payloads hooks transform on the way out.", "Completely untouched unless an active mod matches the endpoint."], "f": [], "why": "Mods transform responses at the edge; your core stays exactly as it is."}, "authoring": {"t": "Authoring", "where": "control plane", "wc": "cp", "b": ["prompt \u2192 LLM draft (uiOps + hooks + capabilities) \u2192 derive-writes (acorn) \u2192 verifier-in-the-loop.", "Agents: qwen2.5 via Ollama (default) or Anthropic (opt-in).", "Theme-ish prompts are routed to the design path instead."], "f": ["apps/control-plane/src/modules/authoring/pipeline.ts:85"], "why": "Generation is paired with the verifier in a repair loop \u2014 weak/cheap models still clear your invariants."}, "verification": {"t": "Verification", "where": "control plane", "wc": "cp", "b": ["Deterministic static analysis \u2014 literally \u201cno LLM anywhere.\u201d", "Rejects illegal hooks (no eval/Function/globalThis/process/require/fetch\u2026), dangerous CSS/HTML.", "Immutable-field write containment + budget caps; signs only on pass."], "f": ["apps/control-plane/src/modules/verification/index.ts:22"], "why": "What\u2019s enforced is enforced by code + crypto, not by a model\u2019s good intentions."}, "registry": {"t": "Registry", "where": "control plane", "wc": "cp", "b": ["Signs (ed25519 over canonical JSON) and publishes the bundle to the CDN.", "Per-subject pointers (active|stale|degraded|disabled|none); kill-switch; lazy migration.", "New revisions supersede via the pointer; superseded mods can\u2019t flip back on."], "f": ["packages/schema/src/signing.ts:42", "apps/control-plane/src/modules/registry.ts"], "why": "Two-step distribution: a kill-switch or rollback propagates in seconds while bundles stay cacheable forever."}, "analytics": {"t": "Analytics", "where": "control plane", "wc": "cp", "b": ["Ingests async events; classifies mods by surface touched + capabilities used.", "Feeds the Console\u2019s \u201cwhat are users changing, where, why.\u201d"], "f": [], "why": "You see how your product is being customized in aggregate."}, "designstore": {"t": "Design-config + Themes store", "where": "control plane", "wc": "cp", "b": ["Look invariants (design-config) the app reads per request and merges into live config.", "Theme version history + rollback."], "f": [], "why": "Look governance lives next to your data invariants \u2014 one surface, the Console."}, "postgres": {"t": "Postgres", "where": "control plane", "wc": "cp", "b": ["Durable source of truth: manifests, mod revisions, pointers, themes, events.", "User prompts (PII) live here \u2014 never in a published bundle.", "The developer\u2019s infra stores nothing durably; this is the system of record."], "f": [], "why": "Prompts (PII) stay control-plane-side; bundles are public-ish and contain none of them."}, "llm": {"t": "LLM \u2014 authoring brain", "where": "control plane", "wc": "cp", "b": ["qwen2.5 via Ollama (OpenAI-compatible, default, no key) or Anthropic (opt-in).", "Used only in authoring. Never in verification, never on the production request path."], "f": [], "why": "The model is a proposal engine. Pull the plug on it and your gates + prod path are unaffected."}, "console": {"t": "Console \u2014 developer dashboard", "where": "control plane", "wc": "cp", "b": ["The single invariants surface: data invariants (manifest policies) + look invariants.", "Mods + kill switches \u00b7 Guardrails (live enforcement tests) \u00b7 Themes/rollback \u00b7 analytics."], "f": [], "why": "One place to declare guardrails, test them live, and govern every user\u2019s mods."}, "cdn": {"t": "CDN \u2014 immutable signed bundles", "where": "shared / static", "wc": "cdn", "b": ["Content-addressed @hash, served with cache-control: immutable.", "Static \u2014 ours or mirrored into your own bucket. Trust comes from the signature, not the host.", "Both the browser (look) and your server (logic) read from here at runtime."], "f": [], "why": "The only thing on your prod path besides your own server \u2014 and it\u2019s just static, signed bytes."}}, PITCH={"head": "Let users make your app theirs \u2014 without losing control.", "items": [["Customization as a feature", "Users restyle the UI and rewire business logic by prompt. No bespoke settings screens, no forks.", "#56c7f5"], ["You define the guardrails", "Declare invariants \u2014 immutable fields, locked tokens, contrast floors, allowed endpoints. The LLM only proposes; deterministic checks + crypto enforce.", "#f2b545"], ["It can\u2019t break your app", "Every failure falls open to your base behavior. Bad mod, bad signature, control-plane down \u2192 users just see your original app.", "#46d6a0"], ["Zero runtime dependency on us", "Prod traffic is Browser \u2194 your server \u2194 CDN. We do authoring + distribution \u2014 never request serving.", "#9aa6ff"], ["Safe by construction", "Logic mods are ed25519-signed, content-addressed, verified locally, and sandboxed (QuickJS-WASM, CPU/mem budgets, no host access, capability-scoped).", "#b79bff"], ["Drop-in adoption", "Wrap your API seam (withInvariance), add the client SDK, publish a manifest. The CLI scans + wires it.", "#46d6a0"]], "foot": "Click any component to see what it does and why it matters \u00b7 pick a flow above to watch it light up."};
+const NS="http://www.w3.org/2000/svg";
+const map=document.getElementById("map");
+const ZC={browser:"#56c7f5",dev:"#46d6a0",cp:"#f2b545",cdn:"#9aa6ff",actor:"#aeb6c2"};
+function E(tag,at,parent){const e=document.createElementNS(NS,tag);for(const k in at)e.setAttribute(k,at[k]);if(parent)parent.appendChild(e);return e;}
+function gAnchor(id,side){const[a,b,w,h]=N[id];if(side=="r")return[a+w,b+h/2];if(side=="l")return[a,b+h/2];if(side=="t")return[a+w/2,b];return[a+w/2,b+h];}
+// layers
+const gZ=E("g",{},map),gMono=E("g",{},map),gNd=E("g",{},map),gEd=E("g",{},map);
+// zones
+for(const z of ZONES){
+ E("rect",{x:z.x,y:z.y,width:z.w,height:z.h,rx:14,class:"zone",fill:ZC[z.color],stroke:ZC[z.color]},gZ);
+ const t=E("text",{x:z.x+14,y:z.y+22,class:"zone-l",fill:ZC[z.color]},gZ);t.textContent=z.label;
+ const s=E("text",{x:z.x+14,y:z.y+37,class:"zone-s",fill:"#8b93a1"},gZ);s.textContent=z.sub;
+ const pl=z.plane=="control"?"CONTROL PLANE":"DATA PLANE";
+ const pw=pl.length*6+14;
+ E("rect",{x:z.x+z.w-pw-12,y:z.y+13,width:pw,height:17,rx:5,fill:"#0a0b0d",stroke:ZC[z.color],"stroke-width":1},gZ);
+ const pt=E("text",{x:z.x+z.w-pw/2-12,y:z.y+25,"text-anchor":"middle",class:"zone-s",fill:ZC[z.color]},gZ);pt.textContent=pl;
+}
+// monolith box + boundary
+E("rect",{x:MONO.x,y:MONO.y,width:MONO.w,height:MONO.h,rx:11,class:"mono-box"},gMono);
+const ml=E("text",{x:MONO.x+14,y:MONO.y+20,class:"zone-s",fill:"#9aa0ab"},gMono);ml.textContent=MONO.label;
+E("line",{x1:742,y1:84,x2:742,y2:566,class:"bnd"},gMono);
+E("rect",{x:742-92,y:74,width:184,height:18,rx:5,fill:"#0a0b0d",stroke:"#3a4150"},gMono);
+const bl=E("text",{x:742,y:86.5,"text-anchor":"middle",class:"bnd-l"},gMono);bl.textContent="data plane  ┊  control plane";
+// markers
+const defs=E("defs",{},map);
+for(const k in FLOWS){const f=FLOWS[k];const m=E("marker",{id:"mk_"+f.mk,markerWidth:9,markerHeight:9,refX:6.5,refY:3,orient:"auto",markerUnits:"userSpaceOnUse"},defs);E("path",{d:"M0,0 L6.5,3 L0,6 Z",fill:f.color},m);}
+// nodes
+const nodeEls={};
+for(const id in N){
+ const[x,y,w,h,t,s,zone]=N[id];
+ const g=E("g",{class:"node"+(zone=="actor"?" actor":"")+(id=="apiserver"?" hero":""),"data-id":id},gNd);
+ g.style.setProperty("--hlc",ZC[zone]);
+ E("rect",{x,y,width:w,height:h,rx:zone=="actor"?20:9},g);
+ E("rect",{x:x,y:y,width:4,height:h,rx:2,fill:ZC[zone],stroke:"none"},g);
+ if(zone=="actor"){E("circle",{cx:x+20,cy:y+15,r:4,fill:ZC[zone]},g);E("path",{d:`M${x+12},${y+30} a8,7 0 0 1 16,0`,fill:"none",stroke:ZC[zone],"stroke-width":1.6},g);}
+ const tx=zone=="actor"?x+38:x+16;
+ const nt=E("text",{x:tx,y:y+(s? (zone=="actor"?20:22):h/2+4),class:"nt"},g);nt.textContent=t;
+ if(s){const ns=E("text",{x:tx,y:y+(zone=="actor"?33:38),class:"ns"},g);ns.textContent=s;}
+ g.addEventListener("click",()=>openNode(id));
+ nodeEls[id]=g;
+}
+// ---- interactions ----
+const drawer=document.getElementById("drawer");
+let activeFlow=null;
+function clearEdges(){gEd.innerHTML="";}
+function setDim(keep){for(const id in nodeEls){nodeEls[id].classList.toggle("dim",keep&&!keep.has(id));nodeEls[id].classList.toggle("hl",!!(keep&&keep.has(id)));}}
+function poly(pts,color,mk,dashed){
+ const d="M"+pts.map(p=>p[0]+","+p[1]).join(" L");
+ E("path",{d,class:"edge"+(dashed?" draw":" draw"),stroke:color,"marker-end":"url(#mk_"+mk+")"},gEd);
+}
+function showPitch(){
+ activeFlow=null;document.querySelectorAll(".seg button").forEach(b=>{b.style.background="";b.classList.toggle("on",b.dataset.f=="overview");});
+ clearEdges();setDim(null);
+ let h='<div class="dr-pitch"><h2>'+PITCH.head+'</h2>';
+ for(const[t,d,c] of PITCH.items)h+='<div class="pitch-item"><div class="pi-bar" style="background:'+c+'"></div><div><div class="pi-t">'+t+'</div><div class="pi-d">'+d+'</div></div></div>';
+ h+='<div class="dr-foot">'+PITCH.foot+'</div></div>';
+ drawer.innerHTML=h;
+}
+function openNode(id){
+ const d=DATA[id];if(!d)return;
+ activeFlow=null;clearEdges();
+ document.querySelectorAll(".seg button").forEach(b=>{b.style.background="";b.classList.remove("on");});
+ for(const nid in nodeEls){nodeEls[nid].classList.remove("dim");nodeEls[nid].classList.toggle("hl",nid==id);}
+ let h='<div class="dr-eyebrow" style="color:'+ZC[d.wc]+'">component</div><div class="dr-title">'+d.t+'</div>';
+ h+='<span class="where w-'+d.wc+'">'+d.where+'</span><ul class="db">';
+ for(const b of d.b)h+="<li>"+b+"</li>";h+="</ul>";
+ if(d.f.length){h+='<div class="files">';for(const f of d.f)h+="<code>"+f+"</code>";h+="</div>";}
+ if(d.why)h+='<div class="why"><div class="l">why it matters</div><div class="t">'+d.why+'</div></div>';
+ h+='<div class="back"><button class="ghost" onclick="showPitch()">‹ back to overview</button></div>';
+ drawer.innerHTML=h;
+}
+function selectFlow(k){
+ const f=FLOWS[k];activeFlow=k;
+ document.querySelectorAll(".seg button").forEach(b=>{b.style.background="";b.classList.toggle("on",b.dataset.f==k);});
+ const onb=document.querySelector('.seg button[data-f="'+k+'"]');if(onb)onb.style.background=f.color;
+ clearEdges();const keep=new Set(f.nodes);setDim(keep);
+ (f.edges||[]).forEach(e=>poly(e,f.color,f.mk,false));
+ (f.dashed||[]).forEach(e=>poly(e,f.color,f.mk,true));
+ let h='<div class="dr-eyebrow" style="color:'+f.color+'">flow</div><div class="dr-title">'+f.label+'</div><div class="steps" style="--sc:'+f.color+'">';
+ for(const[nid,tx] of f.steps)h+='<div class="step"><div class="sn"></div><div class="sx"><b>'+N[nid][4]+'.</b> '+tx+'</div></div>';
+ h+='</div><div class="back"><button class="ghost" onclick="showPitch()">‹ back to overview</button></div>';
+ drawer.innerHTML=h;
+}
+// wire buttons
+document.querySelectorAll(".seg button").forEach(b=>{b.addEventListener("click",()=>{const f=b.dataset.f;f=="overview"?showPitch():selectFlow(f);});});
+document.querySelectorAll(".seg button").forEach(b=>{if(b.dataset.f!="overview"){b.querySelector(".sw").style.color=FLOWS[b.dataset.f].color;}});
+// poster modal
+const modal=document.getElementById("modal");
+document.getElementById("posterBtn").addEventListener("click",()=>modal.classList.add("open"));
+document.getElementById("posterClose").addEventListener("click",()=>modal.classList.remove("open"));
+modal.addEventListener("click",e=>{if(e.target==modal)modal.classList.remove("open");});
+showPitch();
 </script></body></html>
