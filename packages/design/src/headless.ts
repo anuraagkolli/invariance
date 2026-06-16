@@ -62,6 +62,8 @@ export { isSafeCssTokenValue } from '@invariance/design-schema'
 // Shared :root entry ordering (roles then slots), so the snippet's virtual
 // stylesheet matches the SDK/SSR token order exactly.
 export { themeToCssEntries } from './runtime/apply'
+export { applyMappedTheme } from './runtime/apply-mapped'
+export type { VariableRoleBinding, VariableRoleBindings } from './runtime/apply-mapped'
 
 // On-demand Google Fonts <link> injection for a registry pairing (idempotent,
 // SSR-guarded). The snippet reuses the SDK's own font loader so a pack/prompt that

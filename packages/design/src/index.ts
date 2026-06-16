@@ -92,6 +92,8 @@ export { isV2Theme } from './config/types'
 export { upgradeThemeJson } from './config/upgrade'
 export type { UpgradeResult } from './config/upgrade'
 export { applyAnyTheme, themeToCssEntries } from './runtime/apply'
+export { applyMappedTheme } from './runtime/apply-mapped'
+export type { VariableRoleBinding, VariableRoleBindings } from './runtime/apply-mapped'
 // Arms the global morph class right before a token write so the swap
 // transitions instead of snapping. persistAndApply calls it automatically;
 // exported for hosts that write tokens through their own path.
