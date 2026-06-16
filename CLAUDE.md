@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-Invariance lets end users of existing web apps customize them through natural-language prompts — UI (tokens, styles, slots) and business logic at the API seam — while developers stay in control via declared invariants. Full design: `docs/DESIGN.md`.
+Invariance lets a **multi-tenant platform** (a B2B SaaS vendor, a marketplace, a creator platform — any app with sub-brands under one roof) offer *governed, natural-language customization* of its product: its tenants reshape the look — and, in the deferred enterprise tier, business logic at the API seam — within invariants the platform declares. **Canonical product + system design: `docs/DESIGN-GOVERNED-CUSTOMIZATION.md`** (Tier-A governed theming is the MVP/wedge; the business-logic plane is deferred). The original v5 two-plane architecture — the as-built substrate we reuse — is `docs/DESIGN.md`.
 
-History note: everything before the git tag `v4-final` is the previous iteration (theme.json + CSS-variable architecture, scanner codemod). v5 is a ground-up rebuild; the v4 scanner and verification ideas may be ported where they fit.
+History note: this repo's earlier history (no longer tagged) is the previous iteration — v4: theme.json + CSS-variable architecture, scanner codemod. v5 is a ground-up rebuild on the signed-bundle architecture; the v4 scanner and verification ideas may be ported where they fit.
 
 ## Architecture (two planes)
 

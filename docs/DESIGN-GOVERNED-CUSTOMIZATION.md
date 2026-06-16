@@ -1,29 +1,32 @@
-# Invariance — Design: Governed Customization for B2B SaaS
+# Invariance — Design: Governed Customization for Multi-Tenant Platforms
 
 > **Status: the active design we are building toward.** This is the canonical
-> product + system design for Invariance's current direction. It supersedes the
-> framing in [`DESIGN.md`](./DESIGN.md) (the v5 two-plane system design) as the
-> *go-to-market* design, while **reusing most of that stack's machinery** — see
-> §12. Two companion docs go deeper:
-> - [`ONBOARDING-PIPELINE.md`](./ONBOARDING-PIPELINE.md) — the onboarding /
->   governed-theming pipeline in detail.
-> - [`INVARIANTS-PIPELINE.md`](./INVARIANTS-PIPELINE.md) — the live
->   prompt→verify→apply pipeline (look + logic) as built.
+> product + system design for Invariance's current direction — including the
+> onboarding / governed-theming pipeline (§9). It supersedes the framing in
+> [`DESIGN.md`](./DESIGN.md) (the v5 two-plane system design) as the *go-to-market*
+> design, while **reusing most of that stack's machinery** — see §12. Its companion
+> [`INVARIANTS-PIPELINE.md`](./INVARIANTS-PIPELINE.md) traces the live
+> prompt→verify→apply pipeline (look + logic) as built, with `file:line` citations.
 
 ---
 
 ## 1. Thesis — what it is, and why a company pays
 
-**One-liner.** Invariance lets a **B2B SaaS vendor** offer *governed,
-natural-language customization* of their product. The vendor declares the
-invariants — brand, accessibility, data integrity — and their customers reshape
-the product within those bounds.
+**One-liner.** Invariance lets a **platform** — a B2B SaaS vendor, a marketplace, a
+creator platform: any app with **sub-brands under one roof** — offer *governed,
+natural-language customization* of their product. The platform declares the
+invariants — brand, accessibility, data integrity — and its tenants (customer orgs,
+sellers, creators) reshape the product within those bounds. (B2B SaaS is the
+prototypical buyer and the build target; **§2 gives the full ICP axis** — it is
+broader than "B2B SaaS" and narrower than "any app.")
 
-**The problem we attack.** Every SaaS vendor carries a backlog of *"can we theme
-this per customer / match our enterprise client's brand / make X configurable"*
-requests. They reject most of them because building per-customer theming and
-settings UIs is expensive, and letting customers change things is risky. The work
-that does get done becomes professional-services cost and a maintenance tax.
+**The problem we attack.** Every multi-tenant platform — a SaaS vendor, a
+marketplace, a creator platform — carries a backlog of *"can we theme this per
+customer / match our enterprise client's brand / let sellers brand their store /
+make X configurable"* requests. They reject most of them because building
+per-sub-brand theming and settings UIs is expensive, and letting customers change
+things is risky. The work that does get done becomes professional-services cost and
+a maintenance tax.
 
 **The benefit (it lands on the vendor, not just the end user).** Invariance turns
 that backlog into a **self-serve, AI-driven, developer-governed capability** — no
@@ -40,35 +43,71 @@ guardrails make it safe.
 
 ---
 
-## 2. ICP & who customizes
+## 2. The customer — who buys, who customizes, and the ICP axis
 
-**The buyer / champion:** product + platform engineering leadership at a B2B SaaS
-vendor.
+**The buyer / champion:** product + platform engineering leadership at the
+**platform** — the company whose app it is and whose brand is on the line.
 
-**The ICP qualifier (a feature, not a bug).** Our non-invasive mechanism (§5)
-works cleanly only for apps that theme through **CSS variables / a design-token
-system** — Tailwind v4 (CSS vars by default), shadcn/ui, MUI/Chakra theme
-providers, any `--var`-based setup. Apps that bake raw hex into inline styles or
-Tailwind-v3 palette classes (`bg-blue-600` compiled to a literal) have no variable
-to redefine, and robust no-edit theming there is the fragile "accessibility
-overlay" trap we avoid. So our qualifying ICP is **"themes through
-tokens/variables"** — most modern SaaS — and onboarding *measures* this in the
+**The real ICP axis (this is the qualifying question — *not* "B2B vs B2C").** The
+value lands wherever:
+
+> the platform has **multiple sub-identities — tenants, sellers, creators, orgs —
+> that each want to look different, while the platform must keep brand, trust, and
+> safety gated.**
+
+Governance (our product) is only worth paying for when there is an owner with
+constraints to protect *and* sub-brands that want to diverge within them. That
+condition cuts across B2B and B2C — so the axis is structural ("are there
+sub-brands?"), not market-segment:
+
+| Platform | The "tenant" (sub-brand) | Why they pay | Fit |
+|---|---|---|---|
+| White-label / multi-tenant **SaaS** (helpdesk, BI, embedded chat widgets…) | each **customer org** | win/keep enterprise deals; kill per-customer theming + professional-services cost | **strong (the wedge)** |
+| **Marketplaces** (eBay, Etsy, Shopify) | each **seller / store** | seller differentiation + buyer trust → satisfaction, GMV, stickiness — without exposing raw CSS | **strong** |
+| **Creator platforms** (Substack, Patreon, Linktree) | each **creator** | creator brand expression → retention — within platform trust/safety bounds | **strong** |
+| **Single-brand consumer** app personalizing for one viewer (e.g. Netflix per-user accent) | the **individual user** | fuzzy ROI; the user pays the same regardless; the brand team is control-maximizing | **weak — same engine, no funded buyer** |
+
+**Why the platform pays when a single-brand consumer app wouldn't.** It is *not*
+technical fit — the mechanism (§5) is identical in every row. It is *acute, funded
+pain*. A multi-tenant platform already fields the *"can you brand this per customer
+/ let sellers theme their store / let creators style their page"* request, and
+today either says no, burns professional-services hours, or builds and maintains a
+bespoke theming + settings system per surface. We turn that backlog into a
+self-serve, governed, AI-driven capability. A single-brand app personalizing for
+individuals has no sub-brand to express and no funded line item — possible on the
+same machinery, but not the wedge.
+
+**The technical ICP qualifier (a feature, not a bug).** On top of the axis above,
+the non-invasive mechanism (§5) works cleanly only for apps that theme through
+**CSS variables / a design-token system** — Tailwind v4 (CSS vars by default),
+shadcn/ui, MUI/Chakra theme providers, any `--var`-based setup. Apps that bake raw
+hex into inline styles or Tailwind-v3 palette classes (`bg-blue-600` compiled to a
+literal) have no variable to redefine, and robust no-edit theming there is the
+fragile "accessibility overlay" trap we avoid. Onboarding *measures* this in the
 first two minutes via a coverage report (§9a).
 
 **Who actually types the prompts** — a north star with a safer beachhead:
 
-- **North star — tenant admins, self-serve.** A customer org's admin types
-  *"make it match our brand — navy + gold, rounded, calmer corners"* and gets a
-  governed per-tenant theme applied to all of that org's users, guaranteed
-  on-brand and accessible. This is the *"can you white-label / theme this per
-  customer"* request every SaaS vendor already fields — delivered safely and
-  instantly, without the vendor building a theming system.
-- **Landing beachhead — the vendor's own implementation / CS team.** The same
-  tool, used *internally* to stand up per-customer themes in minutes instead of a
-  services engagement. No customer-facing surface, immediate ROI (kills PS cost),
-  lowest trust barrier — a clean way to land before exposing prompts to tenants.
-- *(Individual end-user personalization rides the same machinery but is the
-  weaker, consumer-flavored case — not the wedge.)*
+- **North star — the sub-brand owner, self-serve.** A tenant admin / marketplace
+  seller / creator types *"make it match our brand — navy + gold, rounded, calmer
+  corners"* and gets a governed per-subject theme applied to all of that sub-brand's
+  surface, guaranteed on-brand and accessible. This is the *"can you white-label /
+  let us theme our space"* request the platform already fields — delivered safely and
+  instantly, without the platform building a theming system.
+- **Landing beachhead — the platform's own implementation / CS team.** The same
+  tool, used *internally* to stand up per-customer (or per-seller) themes in minutes
+  instead of a services engagement. No customer-facing surface, immediate ROI (kills
+  PS cost), lowest trust barrier — a clean way to land before exposing prompts to
+  sub-brand owners.
+- *(Individual end-user personalization on a single-brand app rides the same
+  machinery but is the weakest case — no sub-brand, no funded buyer — not the wedge.)*
+
+> **Terminology used throughout this doc.** **"vendor" / "platform"** = the buyer
+> (the company whose app + brand it is); **"tenant"** = a sub-brand under it (a
+> customer org, a marketplace seller, or a creator). The data model keys themes by
+> `subject` (§7/§8): `subject = tenant` for a SaaS, `subject = sellerId` for a
+> marketplace, `subject = creatorId` for a creator platform — **one engine, same
+> per-subject store.**
 
 ---
 
@@ -248,18 +287,43 @@ is the existing theme/StyleSpec model with `subject = tenant`.
 
 ## 9. The three core flows
 
-### 9a. Onboard (vendor, once — ~5 min) — detail in `ONBOARDING-PIPELINE.md`
+### 9a. Onboard (vendor, once — ~5 min)
+
+**The entire integration footprint** is one snippet in the app shell (or, for
+React/Next, a single root provider added once — it edits no existing component):
+
+```html
+<script src="https://cdn.invariance.dev/sdk.js"
+        data-app="acme-saas"
+        data-tenant="acme-corp"></script>   <!-- tenant id from the vendor's own auth -->
+```
 
 ```
 add snippet ─▶ CONNECT (scanner reads live --* vars, OKLCH engine classifies → roles)
             ─▶ coverage report ("82% of color surface drivable") ── confirms ICP fit
             ─▶ CONFIRM mapping + SET invariants (lock brand vars, contrast floor, modes)
-            ─▶ PUBLISH manifest + design-config (app-level)
+            ─▶ PUBLISH manifest + design-config (app-level, all tenants)
 ```
 
-The scanner reuses the deterministic color→role engine, pointed at the app's
-**declared variables** instead of observed JSX colors. It *proposes*; the vendor
-*confirms*. Nothing the LLM says is load-bearing for safety.
+**The reworked scanner — discover variables → classify into roles.** No JSX
+traversal, no section identification, no source rewriting (the retired AST-codemod
+that rewrote the repo is gone). Two discovery modes:
+
+- **Runtime (preferred, zero repo access).** The Connect snippet reads live custom
+  properties off the running app — `getComputedStyle(:root)` for every `--*`, plus
+  a stylesheet-rule walk for non-`:root` scopes. We see only the running result.
+- **Static (optional augment).** Point a scanner at the repo / built CSS + Tailwind
+  config to catch variables absent on first paint (`packages/cli` `scanRepo` + the
+  ts-morph pass).
+
+Each variable's *value* is normalized to OKLCH and assigned a role by the existing
+clustering engine (the same one the old scanner ran on JSX colors), producing the
+`variable→role` map (§7) + a baseline `StyleSpec` so a tenant's "current" theme is
+just their existing look. A **coverage report** ("we can drive 82% of your color
+surface through 14 variables; these 6 hardcode values") confirms ICP fit *before*
+commit. The scanner *proposes*; the vendor *confirms*. Nothing the LLM says is
+load-bearing for safety. *(Detailed task plan: the live Phase-1 scanner-rework
+plan under `docs/superpowers/plans/`.)*
 
 ### 9b. Customize (tenant admin or vendor CS) — reuses the live design pipeline
 

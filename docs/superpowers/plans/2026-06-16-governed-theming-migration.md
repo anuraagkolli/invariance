@@ -28,12 +28,62 @@ This migrates a *working* stack, not a greenfield. Principles:
 | Look-invariants (`DesignConfig`, `design-config.ts`) | `pageLevels`, `accentLock`, `chromaCap`, `contrastFloor`, `lockedSections` | **+ `variableRoleMap`, `allowedModes`** | additive schema |
 | Scanner (`packages/cli`) | regex `scanRepo` + AST color observe → infer `StyleSpec` + manifest | variable discovery → classify → `variableRoleMap` + coverage report | rework (reuse `cluster.ts`) |
 | Apply (`design/src/runtime/apply.ts`) | `setProperty` on `--inv-*` names | `setProperty` on the *vendor's* var names via the map | indirection added |
-| Enforcement (compiler/verifier) | locks/modes via `--inv-*` `locked_tokens` + `allowed_modes` (`config/derive-constraints.ts:16-17`); accent-only chroma exempt | + derive those from `variableRoleMap.locked` + `allowedModes` | **thin adapter (Phase 2b)** |
+| Enforcement (compiler/verifier) | verifier/compiler consume `locked_tokens` + `allowed_modes` in `--inv-*` space; the vendor-space→`--inv-*` translation lives in **`apps/nebula/src/lib/dev-config.ts → mergeInvarianceConfig:50-63`** (an app file), NOT `config/derive-constraints.ts` (which only re-reads the already-translated YAML block); accent-only chroma exempt | derive **value-pinned** `locked_tokens` + `allowed_modes` from `variableRoleMap.locked` + `allowedModes` via a **new package-level bridge** | **Phase 2b — more than a thin adapter (see corrected §Phase 2b + §Corrections)** |
 | Distribution (apply fetch) | design plane reads themes direct from control-plane `GET …/themes` | per-tenant pointer → CDN-cached immutable theme | **new (Phase 6)** |
 | Integration | hand-wired provider + `m.slot` (Nebula) | one snippet/provider, **no wrapping** | new SDK |
 | Console | invariants / themes / guardrails views | + connect/scan, mapping confirm, tenant theme browser | reframe/extend |
 | Reference app | Nebula (hand-wired, two-plane) | Tailwind-v4/shadcn sample (variable-themed) | new app, parallel |
 | Business-logic plane | active (Tier C) | parked/deferred | none (excluded from GTM) |
+
+## Corrections from the 2026-06-16 substrate code-trace
+
+An 11-reader code trace of the as-built substrate (cross-checked against source +
+the live pipeline docs) confirmed the reuse story but found five places where this
+roadmap's earlier assumptions were wrong or under-specified. Each is folded into the
+phase it affects below; summarized here so the corrections are not lost:
+
+1. **Phase 2b's bridge pointer was wrong.** `config/derive-constraints.ts` does NOT
+   know about `accentLock`/`chromaCap`/`contrastFloor` — it only re-reads the
+   *already-translated* `InvarianceConfig.frontend.design.constraints` (in `--inv-*`
+   space). The actual vendor-space→constraints translation lives in
+   `apps/nebula/src/lib/dev-config.ts → mergeInvarianceConfig` (lines 50-63), an **app
+   file**. There is **no package-level `DesignConfig → DesignConstraints` bridge today.**
+   Phase 2b must *create* one in `packages/design` (the Phase-5 reference app will not
+   use Nebula's `dev-config.ts`).
+2. **A lock needs a *value*, but `variableRoleMap[var].locked` is a boolean.**
+   `verifyV2`'s `lockedTokensUntouched` compares `theme.roles[token]` byte-identical to
+   `locked_tokens[token]` — it needs the target VALUE, and skips entirely when
+   `locked_tokens` is empty (so a value-less lock silently no-ops). The lock value must
+   be pinned from the tenant's *current* role-token value at derive time — a stateful
+   read neither bridge does today (both are pure config→config). This is the hardest
+   unstated dependency in Phase 2b. (The accent lock works today *only because*
+   `accentLock` carries a hex.)
+3. **An empty `allowedModes: []` is a live footgun.** `compileTheme` (`compile.ts:43`)
+   throws if `allowed_modes` is set and doesn't include the spec's mode, so `[]` would
+   make *every* compile/reconcile throw → every tenant drops to base. Phase 0 shipped the
+   permissive schema (`z.array(z.enum(...)).optional()`), so the footgun exists NOW;
+   Phase 2b owns normalizing empty→unset and de-duping.
+4. **Phase 2's SSR reuse is not free.** `ssr.ts` (`renderThemeCss`) filters keys with
+   `/^--inv-[a-z0-9-]+$/` and hardcodes `:root`, so it will *reject* vendor var names like
+   `--primary`. SSR no-flash for Tier-A vendor vars needs `ssr.ts` changes — not the
+   "Phase 6 reuses ssr unchanged" the earlier text implied. Also `VariableRoleSchema.scope`
+   is captured but the entire apply path ignores it (hardcoded `document.documentElement`
+   / `:root`).
+5. **Schema/data-model divergences from design doc §7 are intentional but real.** The
+   map+invariants live in `DesignConfig` (per-app, console-editable), not the manifest
+   "declared once"; `variableRoleMap`'s key and `role` are unconstrained `z.string()`
+   (no `--` regex, not validated against `ROLE_TOKENS`); `compiledTheme`/`seq` are not
+   named schema artifacts (`compiledTheme` = `theme.theme.roles` in `ThemeJsonV2`; `seq`
+   lives in the store layer). And the Console's `apps/console/src/api.ts` hand-mirror of
+   `DesignConfig` is drifted (missing both Phase-0 fields).
+
+Two smaller gotchas worth carrying: the theme store keys themes by **`userId`**
+(query/body), while mods/pointers/bundles key by `subjectId` (path) — `subject = tenant`
+means the SDK passes the tenant id as `userId` for the themes endpoints; and **three
+independent constraint-derivation paths** exist (`deriveConstraints` via
+`mergeInvarianceConfig` at load/reconcile; `designConstraintsFromManifest` in
+control-plane authoring; `verification/index.ts`'s `verifyRoleQuality`), so Phase 2b's
+"one lock model" goal must touch at least the first two, not only one.
 
 ## Phase map — each phase is a mergeable sub-plan
 
@@ -260,49 +310,128 @@ git commit -m "test(control-plane): subject=tenant theme isolation (native multi
 ### Phase 1 — Scanner rework (variable discovery → classification → coverage)
 
 - **Goal:** from a target app, produce a *proposed* `variableRoleMap` + baseline `StyleSpec` + a coverage report.
-- **Files:** Create `packages/cli/src/discover/vars.ts` (collect declared CSS custom properties — static from built CSS for MVP, with a runtime `getComputedStyle` reader as the preferred mode), `…/discover/classify.ts` (value → role via the existing OKLCH engine), `…/discover/coverage.ts`. Modify `packages/cli/src/infer-spec.ts` / the `init` flow to emit the proposed map. Also create a **minimal Tailwind-v4/shadcn sample fixture** (`apps/reference` seed or a `__fixtures__/` app) — just enough variable-themed surface to discover/classify/apply against. **Phase 5 hardens this same fixture into the full living-test reference app**, so Phases 1–3 have a real, runnable target *before* Phase 5 (otherwise their exit criteria reference an app that doesn't exist yet). **Reuse:** `clusterColors` (`packages/design/src/compiler/cluster.ts`) and `inferStyleSpec` (`packages/cli/src/infer-spec.ts:75`).
+- **Files:** Create `packages/cli/src/discover/{vars,classify,coverage,index}.ts` (`vars.ts` static custom-property extraction from CSS text for MVP, runtime `getComputedStyle` reader deferred; `classify.ts` value → role via the existing OKLCH engine; `coverage.ts` the ICP-fit report; `index.ts` the `discoverFromCss` orchestrator). The ONLY existing-code change is adding `export` to the private `kindFromName` in `packages/cli/src/infer-spec.ts:17` — Phase 1 builds a **pure library** (`discoverFromCss`), it does NOT wire a CLI command or modify the `init` flow (persisting the map to `design-config` + the confirm UI are **Phase 4**). Also create a **minimal Tailwind-v4/shadcn sample fixture** (`__fixtures__/shadcn-tokens/globals.css`) — just enough variable-themed surface to discover/classify/apply against. **Phase 5 hardens this same fixture into the full living-test reference app**, so Phases 1–3 have a real, runnable target *before* Phase 5. **Reuse:** `clusterColors` (`packages/design/src/compiler/cluster.ts`) and `inferStyleSpec` (`packages/cli/src/infer-spec.ts:75`).
 - **Approach:** classify each discovered variable's *value* with `clusterColors`/role heuristics (the same engine the old scanner used on JSX colors); emit `{ variableRoleMap, styleSpec, coverage }`.
+- **Detailed task-level plan:** `docs/superpowers/plans/2026-06-16-phase1-scanner-rework.md`
+  (fully task-detailed; the next plan to implement). Code-trace confirmed every
+  cross-package assumption holds (`clusterColors` keys `varToRole` by `${kind}:${hex}`;
+  `kindFromName` exists private at `infer-spec.ts:17-22`, needs only `export`;
+  `inferStyleSpec` reusable verbatim; `discover/` + `__fixtures__/` confirmed absent).
+- **Honesty caveat (carried into the detailed plan):** `kindFromName` is a name-keyword
+  heuristic; real shadcn vars (`--card`/`--muted`/`--secondary`/`--destructive`) fall
+  through to `'bg'`, so role correctness on a *real* shadcn theme is lower than the curated
+  fixture suggests. Coverage % stays honest; role correctness needs vendor edits (which the
+  design explicitly allows). The fixture is favorably constructed — say so in its comment.
 - **Exit:** point at a Tailwind-v4/shadcn sample → a proposed `variableRoleMap` + coverage % that a human would accept with light edits.
 
 ### Phase 2 — Applier indirection (role → vendor variable)
 
 - **Goal:** apply a compiled theme by writing the *vendor's* variable names via `variableRoleMap`, not `--inv-*`.
-- **Files:** Add `packages/design/src/runtime/apply-mapped.ts` (translate role→value through the map → `setProperty` on the vendor's var names); keep `apply.ts` for the identity/`--inv-*` path. **Reuse:** `compileTheme` output + `themeToCssEntries`.
-- **Exit:** a compiled theme redefines `--primary` etc. on the Phase 1 sample fixture and repaints with no source edits; missing-map / fetch-failure injects nothing (fail-open) — both asserted.
+- **Files:** Add `packages/design/src/runtime/apply-mapped.ts`. Iterate the SAME
+  `themeToCssEntries(theme)` list (role tokens), and for each `[roleToken, value]` write
+  `setProperty(vendorVar, value)` on the configured scope. **Do NOT mutate
+  `applyThemeJsonV2`** — it writes `--inv-*` verbatim and is shared by the headless/Trial
+  snippet and Nebula; add a parallel mapped path, keep `apply.ts` for the identity case.
+  **Reuse:** `compileTheme` output + `themeToCssEntries` + `isSafeCssTokenValue`.
+- **Map must be inverted at apply time.** `variableRoleMap` is keyed vendor-var → `{role}`
+  (one entry per vendor var); the apply path iterates role tokens. `apply-mapped.ts` owns
+  building the inverse `role → [vendorVar...]` index, handling **many-to-one** (two vendor
+  vars on one role → both get the value) and **role-with-no-vendor-var** (skip that token).
+  Map the bare role name → `--inv-` token (same convention as Phase 2b).
+- **Keep the value security boundary.** Every injected value must still pass
+  `CssTokenValueSchema` / `isSafeCssTokenValue` (the stored-theme CSS-injection gate) —
+  route mapped writes through it exactly as the `--inv-*` path does. Do NOT lift
+  `packages/client/overlay.ts`'s permissive arbitrary-token-name handling; Tier A writes
+  ONLY vars present in `variableRoleMap`.
+- **Scope (MVP decision):** `VariableRoleSchema.scope` is recorded but the as-built apply
+  path hardcodes `:root`/`document.documentElement`. MVP honors `:root` only and records
+  scope for later; non-`:root` scoped application is deferred (note it, don't silently drop).
+- **SSR caveat (do not assume free reuse):** `ssr.ts`'s `renderThemeCss` filters keys with
+  `/^--inv-[a-z0-9-]+$/` and hardcodes the `:root{}` wrapper, so it will **reject** vendor
+  names like `--primary`. SSR no-flash for mapped vendor vars therefore needs `ssr.ts`
+  changes (a vendor-var key regex + scope-aware selector) — that work is **Phase 6**, not a
+  freebie here. Phase 2 is client-apply only.
+- **Exit:** a compiled theme redefines `--primary` etc. on the Phase 1 sample fixture and repaints with no source edits; missing-map / fetch-failure / role-with-no-vendor-var injects nothing for that token (fail-open); a value failing `isSafeCssTokenValue` is dropped — all asserted.
 
 ### Phase 2b — Invariant enforcement wiring (make `locked` + `allowedModes` bind)
 
-- **Why a phase (don't skip):** the compiler + verifier already *consume*
-  `locked_tokens` + `allowed_modes`, but only in `--inv-*` role-token space
-  (`packages/design/src/config/derive-constraints.ts:16-17`, `compiler/compile.ts:57`,
-  `verify/compiled-tests.ts:86-126`). The new `variableRoleMap[var].locked` /
+> **Code-trace correction (2026-06-16): this is NOT a thin adapter, and the file
+> pointer in earlier drafts was wrong.** The enforcement *primitives* are reused
+> unchanged, but the *translation into them* is net-new, non-trivial, and lives
+> somewhere the plan previously mis-named. Read the four sub-problems below before
+> sizing this phase.
+
+- **Why a phase (don't skip):** the compiler + verifier already *consume* `locked_tokens`
+  + `allowed_modes`, but only in `--inv-*` role-token space (`compiler/compile.ts:43,57,80`,
+  `verify/compiled-tests.ts:86-131`). The new `variableRoleMap[var].locked` /
   `DesignConfig.allowedModes` fields are in vendor-variable / config space and are **not
-  yet fed into those constraints** — so without this phase a "locked" brand variable is
-  silently unenforced and a disallowed mode passes. This is the gap the "reuse the
-  verifier unchanged" framing hides: the enforcement *primitives* are reused unchanged,
-  but the *translation into them* is new.
-- **Goal:** derive the compiler's `locked_tokens` + `allowed_modes` from the new fields
-  so a locked vendor variable actually pins (verifier re-checks byte-identical) and
-  disallowed modes are rejected.
-- **Files:** extend the DesignConfig→`DesignConstraints` bridge (the role-token-space
-  analogue is `config/derive-constraints.ts`; find/extend wherever `accentLock` /
-  `chromaCap` / `contrastFloor` become constraints today). For each `variableRoleMap`
-  entry with `locked: true`, resolve vendor-var → role → its `--inv-*` token and pin the
-  tenant's current value into `locked_tokens`; map `allowedModes → allowed_modes`.
-  **Reuse:** the `locked_tokens` / `allowed_modes` enforcement in `compile.ts` +
-  `compiled-tests.ts` **unchanged** — this phase only populates them.
-- **Reconcile the legacy lock:** route `accentLock` through the same `locked_tokens`
-  path as the generalized per-variable lock (accent becomes one special case, not a
-  parallel mechanism), so there is one lock model, not three.
-- **Settle `allowedModes` semantics here:** decide + enforce what an empty array
-  and duplicates mean (Phase 0 left the field as a bare `z.array(z.enum(...))`,
-  deliberately unenforced). Convention to confirm: *unset = unrestricted*, so an
-  empty array should be rejected (or normalized) rather than silently meaning "no
-  modes"; this is the phase that consumes the field, so it owns that rule.
+  yet fed into those constraints** — so today a "locked" brand variable is silently
+  unenforced and a disallowed mode passes. Confirmed by reading the source: nothing in the
+  verify path or the authoring pipeline reads `DesignConfig.variableRoleMap` or
+  `DesignConfig.allowedModes`; `DesignConfig` is only ever read/written by the
+  `/design-config` routes.
+
+- **WHERE the bridge actually lives (corrected).** `config/derive-constraints.ts` does
+  NOT translate `accentLock`/`chromaCap`/`contrastFloor` — it only reads the
+  *already-translated* `config.frontend.design.constraints` block (already `--inv-*`
+  keyed). The real vendor-space translation is in **`apps/nebula/src/lib/dev-config.ts →
+  mergeInvarianceConfig` (lines 50-63)**: `accentLock → locked_tokens['--inv-accent']`,
+  `chromaCap → accent_chroma_max`, `contrastFloor → contrast '>= n'`. That is an **app
+  file**, and `DevConfigOverlay` there has no `variableRoleMap`/`allowedModes` fields.
+  **There is no package-level `DesignConfig → DesignConstraints` bridge.** Phase 2b
+  **creates one** in `packages/design` (e.g. `packages/design/src/config/from-design-config.ts`)
+  so it is reusable by the Phase-5 reference app + the Phase-3 SDK, NOT just Nebula.
+
+- **Goal:** a package-level function that takes the vendor `DesignConfig` **and the
+  tenant's current compiled role values** and returns the `DesignConstraints` additions
+  (`locked_tokens`, `allowed_modes`, `accent_chroma_max`, `contrast`), so a locked vendor
+  variable actually pins (verifier re-checks byte-identical) and disallowed modes are
+  rejected — with `compile.ts` + `compiled-tests.ts` enforcement **unchanged**.
+
+- **The four sub-problems (each needs a test):**
+  1. **Lock value resolution (the hard one).** `locked_tokens[token]` needs a *value*;
+     `variableRoleMap[var].locked` is a boolean. For each entry with `locked: true`,
+     resolve `'--inv-' + entry.role` and pin **the tenant's current value of that role
+     token** (read from the live `ThemeJsonV2.theme.roles`). So the bridge takes
+     `currentRoles: Record<RoleToken,string>` as a second argument. If no value is
+     available, the lock MUST be omitted (do not emit a key with no value — `verifyV2`
+     skips empty `locked_tokens` and the lock silently no-ops). *Confirm intent:* "locked
+     = never change from its current value" vs "= a declared brand hex"; the design doc
+     frames it as "our brand hue never changes," which the current-value pin satisfies.
+  2. **Role-name → token mapping + validation.** `variableRoleMap.role` is a bare string
+     (`'accent'`, `'surface-0'`); the compiler/verifier use `'--inv-accent'`. Map by
+     prepending `--inv-` AND validate the result is in `ROLE_TOKENS` (reject/warn on a
+     typo'd role — an unmatched key is a silent no-op). Note `radius-md` (design doc §7
+     example) is NOT a role token; the real ones are `--inv-radius-base` / `--inv-radius-lg`.
+  3. **`allowedModes` semantics.** Map `allowedModes → allowed_modes`, and **normalize
+     empty→unset** (per §Corrections #3: an empty array currently throws on every
+     compile). De-dupe. Convention: *unset/empty = unrestricted*.
+  4. **Keep the accent exemption key exact.** `accentChromaWithinCap`
+     (`compiled-tests.ts:338`) exempts a locked accent *only* when
+     `locked_tokens['--inv-accent']` is present (exact key). A tenant who locks accent via
+     `variableRoleMap` MUST still produce that exact key, or a vivid locked accent
+     verify-fails → recompiles → reproduces → fails (the unrecoverable loop the source
+     comment warns about).
+
+- **Reconcile the legacy lock (one lock model, not three).** Route `accentLock` through
+  the same generalized path (accent = a `variableRoleMap` entry `{role:'accent',
+  locked:true}` producing `locked_tokens['--inv-accent']`), so there is one lock model.
+  Touch BOTH constraint-derivation paths that matter (per §Corrections): the load/reconcile
+  path (the new package bridge, consumed where `mergeInvarianceConfig` is today) AND the
+  control-plane authoring path (`design-author.ts`'s `designConstraintsFromManifest`,
+  which today carries only `contrast` + `accent_chroma_max`) — otherwise locks bind at
+  load but not at authoring, and the exit criteria below won't hold.
+
+- **Docs to correct when this lands (maintenance contract):** the "enforcement maps
+  directly onto existing machinery" wording in `docs/DESIGN-GOVERNED-CUSTOMIZATION.md`
+  §10 and `docs/INVARIANTS-PIPELINE.md` §2 overclaims — both omit the
+  vendor-space→`--inv-*` translation gap. Update (don't append) when Phase 2b ships.
+
 - **Exit:** a tenant prompt that would change a `locked: true` variable is
-  rejected-or-recompiled with the locked value surviving byte-identical; a prompt
-  requesting a disallowed mode is rejected — both asserted **through the existing
-  verifier, with no verifier edits**.
+  rejected-or-recompiled with the locked value surviving byte-identical; a disallowed-mode
+  prompt is rejected; an empty `allowedModes` is treated as unrestricted (not "all fail") —
+  all asserted **through the existing `verifyV2`/`compileTheme`, with no verifier edits**,
+  and at BOTH authoring time and load/reconcile time.
 
 ### Phase 3 — SDK (drop-in)
 
@@ -314,25 +443,103 @@ git commit -m "test(control-plane): subject=tenant theme isolation (native multi
   fetch behind a **swappable resolver** so Phase 6's CDN distribution is a transport
   change, not an API change. The as-built design plane reads direct today, so the MVP
   inherits this honestly — but it is a *known gap*, not the target state.
-- **Files:** Create `packages/sdk/*` (script-tag bundle + React provider) reusing `packages/client` patterns and the Phase 2 applier. Tenant resolver pluggable (`data-tenant` / `getTenant()`).
+- **Files:** Create `packages/sdk/*` (script-tag bundle + React provider). Tenant resolver pluggable (`data-tenant` / `getTenant()`).
+- **What to reuse from where (corrected — don't lift the wrong package):**
+  - From `packages/design` (the real apply/SSR/reconcile engine): the **`headless.ts`**
+    barrel is the closest existing template — it already exports the exact react-free set an
+    SDK needs (`prepareStoredTheme`, `reconcileStoredTheme`, `themeToCssEntries`,
+    `ensureFontsLoaded`, `compileTheme`) — plus `storage/api.ts` (`createApiStorage` =
+    the per-tenant theme fetch) and the Phase-2 `apply-mapped.ts`. Compose these.
+  - From `packages/client` lift only the **shape**, NOT the code: the fail-open `load()`
+    skeleton (every failure → base), the `vanilla.ts` `document.currentScript.dataset`
+    bootstrap (keep its `script instanceof HTMLScriptElement` guard; must not run under
+    SSR), the core/React provider-subpath split, and `telemetry.ts` (reusable as-is).
+    **Do NOT reuse `client/overlay.ts`** (it applies arbitrary token names from a mod
+    bundle — wrong model) and **do NOT reuse the pointer/`bundles/:hash`/`signing-key`
+    two-step** (that's Tier-C bundle distribution; Tier-A's CDN model is Phase 6).
+- **Replicate the `cache:'no-store'` lesson.** When the SDK fetches the tenant theme from
+  the control plane inside a Next host, it MUST set `cache:'no-store'` on that GET — the
+  single hardest-won detail from `packages/server/src/runtime.ts` (a Next Data Cache served
+  a stale signing key and silently no-op'd everything). Same failure mode applies to a
+  cached stale theme/pointer.
+- **Naming collision:** there are already two `InvarianceProvider`/`useInvariance` symbols
+  (`@invariance/design` and `@invariance/client/react`). This new SDK provider is a third —
+  give it a distinct name (or re-export the design one) to avoid three same-named symbols.
+- **Subject keying:** pass the tenant id as **`userId`** to the themes endpoints
+  (`GET/PUT /v1/apps/:appId/themes?userId=<tenant>`) — themes key by `userId`, not the
+  `subjectId` used by Tier-C pointer/bundle calls (see §Corrections).
 - **Exit:** drop the snippet into the Phase 1 sample fixture → per-tenant theme applies; control-plane down → base app (fail-open) — asserted.
 
 ### Phase 4 — Governance dashboard (Console reframe)
 
 - **Goal:** Connect/scan + coverage report, `variableRoleMap` confirm/edit, invariant editor (locked vars, contrast floor, allowed modes, chroma cap), per-tenant theme browser, kill-switch.
-- **Files:** New `apps/console` views; **reuse** `GET/PUT /v1/apps/:appId/design-config` + the themes endpoints + `summarizeStyleSpec`. Extend the existing Invariants/Themes views rather than replace. **Sync the hand-mirrored config type:** `apps/console/src/api.ts` keeps a hand-maintained `DesignConfig` interface that Phase 0 left drifted (no `variableRoleMap` / `allowedModes`); update it here when the console first reads those fields (harmless until then — TS structural typing tolerates the extra JSON).
-- **Exit:** a vendor onboards + governs end-to-end in the UI; edits persist to `design-config`.
+- **Files:** New `apps/console` views; **reuse** `GET/PUT /v1/apps/:appId/design-config` +
+  the themes endpoints + `summarizeStyleSpec`. Extend the existing Invariants/Themes views
+  rather than replace. Mostly additive — the only genuinely-new screen is connect/scan +
+  coverage.
+- **Fix the drifted config type by importing, not re-mirroring.** `apps/console/src/api.ts`
+  hand-maintains a `DesignConfig` interface missing `variableRoleMap`/`allowedModes` (Phase
+  0 drift). The console already depends on `@invariance/schema` (browser-safe barrel) — so
+  **import the canonical `DesignConfig`/`VariableRoleMap` types from there** and delete the
+  local mirror, eliminating future drift (not just patching this one gap). Confirm the
+  schema barrel stays node-free (it omits `./signing` by design).
+- **`LockControls` is a migration, not a relabel.** It edits `{accentLock (one hex),
+  lockedSections (m.slot names), chromaCap, contrastFloor, pageLevels}`. Tier A's model is
+  a **per-variable lock table** driven by `variableRoleMap[var].locked` + an `allowedModes`
+  (light/dark) toggle. `lockedSections`/`pageLevels` are Tier-B/layout and out of Tier-A
+  scope. Build the variable-level lock editor; keep contrast floor + chroma cap controls.
+- **Decide the Tier-C surface fate.** Guardrails (`guardrails.ts`, `GuardrailsView`),
+  Dashboard, `SubjectView`, and the whole mods model (`api.mods/overview/kill/restore/
+  postBundle`) are Tier-C (signed bundles / hooks / sandbox) and **not load-bearing for the
+  Tier-A dashboard**. For the MVP, hide them behind a Tier-C flag rather than delete
+  (parked, not removed). The "tenant theme browser" maps to the existing **Themes view**
+  (subject=tenant relabel), NOT the mods Dashboard.
+- **Resolve the scanner→design-config data path (currently a gap).** Phase 1 produces
+  `discoverFromCss` as a pure library object; there is **no defined path** to get its
+  proposed `variableRoleMap`+coverage INTO the `design-config` the Console edits. Phase 4
+  must pick one: (a) the Console triggers a scan (runtime discovery in the connect snippet),
+  or (b) it imports CLI scanner output. Decide + build this — the connect/scan screen
+  depends on it.
+- **Exit:** a vendor onboards (connect → coverage → confirm map → set invariants) + governs end-to-end in the UI; edits persist to `design-config` via the canonical typed payload (no field silently dropped).
 
 ### Phase 5 — Reference app (living integration test)
 
 - **Goal:** a Tailwind-v4 / shadcn sample app, variable-themed, as the e2e test (the Nebula analog) scoped to the ICP.
 - **Files:** Create `apps/reference/*`; wire only the SDK snippet (no `m.slot`, no route wrapping).
+- **Use genuinely vendor-native var names (critical — don't make discovery circular).**
+  The app's `:root` must declare shadcn-style names (`--background`, `--foreground`,
+  `--primary`, `--card`, `--border`, `--ring`, `--radius`), NOT Invariance's `--inv-*`
+  layer. Seeding `--inv-*` (copying Nebula's `globals.css`) would make Phase 1 discovery
+  trivially circular and fail to prove the non-invasive value prop. The whole point is to
+  discover/classify/redefine the app's OWN names.
+- **Start clean; don't inherit Nebula's Tier-C wiring.** Do NOT copy Nebula's
+  `next.config.js` (its `quickjs-emscripten` externalize block is Tier-C sandbox config the
+  reference app has no use for) or add a `@invariance/server` dep. Reuse only the SSR
+  no-flash head-injection pattern from `apps/nebula/src/app/layout.tsx`. Mimic Streamline's
+  two-user switcher (`apps/demo/src/App.tsx`) to demo per-tenant theme isolation.
+  (Note: `apps/demo`/Streamline is a Tier-C `@invariance/client` app, NOT a design-plane
+  analog — the real "Nebula analog" is Nebula.)
 - **Exit:** `"match our brand: navy + gold"` prompt → governed, accessible, per-tenant theme end-to-end; the contrast floor + locked brand var hold.
 
 ### Phase 6 — Hardening
 
 - **Goal:** **per-tenant CDN distribution** (short-TTL pointer → immutable CDN-cached theme JSON) so the apply path stops transiting the control plane and delivers the §6/§8/§11 *"no production request transits Invariance"* promise — this closes the Phase 3 MVP gap; SSR no-flash (`<head>` injection / cookie mirror); lazy revalidation on invariant change (reuse the existing reconcile path); kill-switch; analytics of what tenants change.
-- **Exit:** the apply fetch hits a CDN pointer/bundle, not the control plane (control-plane outage no longer touches the apply path); flash-free first paint; tightening an invariant recompiles-or-drops tenant themes on next load; kill-switch reverts a tenant to base within the pointer TTL.
+- **What's already built (reuse, don't rebuild):** `reconcileStoredTheme`
+  (`runtime/reconcile-theme.ts`) already does recompile-keep-vibe-or-drop on invariant
+  change — the lazy-revalidation requirement is done; just wire the SDK/reference app to
+  it. `mirrorThemeCookie` + `themeFromCookieHeader` + `renderThemeCss` give the cookie/SSR
+  scaffolding.
+- **SSR no-flash needs `ssr.ts` changes for Tier-A (the Phase-2 caveat lands here).**
+  `renderThemeCss` filters `/^--inv-[a-z0-9-]+$/` and hardcodes `:root{}` → it rejects
+  vendor names. Add a vendor-var key path + scope-aware selector so SSR emits the mapped
+  vendor vars. Also: `cookie-mirror.ts` skips above `MAX_COOKIE_BYTES=3800`; a full theme
+  (38 roles + slots + styleSpec) can exceed it → mirror only the compiled token block (not
+  styleSpec), or move to a server-side store keyed by a tenant cookie id.
+- **Signing-key durability is a prerequisite for content-addressed distribution.**
+  `keys.ts` generates a per-process keypair unless `INVARIANCE_SIGNING_*` is set; a restart
+  invalidates everything previously signed. Persist the key before any durable Tier-A CDN
+  distribution (already flagged in CLAUDE.md / MEMORY.md).
+- **Exit:** the apply fetch hits a CDN pointer/bundle, not the control plane (control-plane outage no longer touches the apply path); flash-free first paint (vendor vars, not `--inv-*`); tightening an invariant recompiles-or-drops tenant themes on next load; kill-switch reverts a tenant to base within the pointer TTL.
 
 ---
 
@@ -341,3 +548,13 @@ git commit -m "test(control-plane): subject=tenant theme isolation (native multi
 - **Spec coverage:** Phases 0, 1, 2, **2b**, 3–6 cover every Tier-A element of `DESIGN-GOVERNED-CUSTOMIZATION.md` §13 (schema, scanner, applier, **invariant enforcement wiring**, SDK, dashboard, reference app, hardening incl. **CDN distribution**). §10's enforcement guarantees (locked vars, allowed modes) bind via Phase 2b — not by assuming the verifier already sees the new fields; the §6/§11 *no-prod-transit* promise lands in Phase 6, with Phase 3 flagging the interim direct-fetch gap. Tier B/C are explicitly deferred there and here.
 - **Placeholders:** Phase 0 tasks carry real test + impl code and exact commands. Phases 1–6 are *scoped sub-plans* (goal/files/approach/exit), not placeholder tasks — they get task-level detail when started, per the scope check.
 - **Type consistency:** `VariableRoleSchema` / `VariableRoleMapSchema` / `DesignConfig.variableRoleMap` are used consistently across Phase 0 (schema) and referenced identically in Phases 1–4.
+- **Code-trace corrections (2026-06-16):** the five findings + two gotchas from the
+  substrate code trace are captured once in **§Corrections** and folded into the phases
+  they affect — Phase 2b (bridge location + lock-value + role↔token mapping + empty-modes +
+  accent-key + three constraint paths), Phase 2 (map inversion + value-safety + SSR/scope
+  caveat), Phase 3 (design-vs-client reuse + `no-store` + naming collision + `userId`
+  keying), Phase 4 (`api.ts` import-not-mirror + LockControls migration + Tier-C surface
+  fate + scanner→design-config data path), Phase 5 (vendor-native var names), Phase 6
+  (`ssr.ts` vendor-var path + cookie size + key durability). The "reuse the verifier
+  unchanged" framing is now qualified: enforcement *primitives* are reused unchanged; the
+  *translation into them* (Phase 2b) is net-new.

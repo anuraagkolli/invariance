@@ -13,7 +13,29 @@
 ## Scope & MVP boundaries (read first)
 
 - **Static discovery only.** MVP reads custom properties from **CSS text** (deterministic, testable, no browser). A runtime `getComputedStyle` reader is the *preferred* eventual mode but is **deferred** — out of scope here.
-- **Hex color values only.** Classification handles hex (`#rgb`/`#rrggbb`) color values, reusing the cluster engine's normalization so lookups hit. Non-hex color formats (`rgb()`/`hsl()`/`oklch()`) and non-color values (lengths like `--radius: 0.5rem`) are **not classified** — they are reported honestly in coverage (`unclassified` / `nonColor`), never silently dropped. Broadening to `oklch()`/`hsl()` is a fast-follow, noted in the coverage report so the gap is visible.
+- **Hex color values only.** Classification handles hex (`#rgb`/`#rrggbb`) color values, reusing the cluster engine's normalization so lookups hit. Non-hex color formats (`rgb()`/`hsl()`/`oklch()`) and non-color values (lengths like `--radius: 0.5rem`) are **not classified** — they are reported honestly in coverage, never silently dropped. Broadening to `oklch()`/`hsl()` is a fast-follow, noted in the coverage report so the gap is visible.
+- **CAVEAT — the real ICP ships `oklch()`, and the bucket choice matters (read this).**
+  shadcn/Tailwind-v4 (our literal ICP target) declares its tokens in **`oklch()`/`hsl()`**,
+  not hex. With naïve hex-only classification, every such var fails `normalizeHex` and (if
+  bucketed as `nonColor`) is excluded from the coverage denominator — so a real shadcn app
+  would report a *misleadingly high or 0%* coverage that reads as "not a color / not
+  themeable" when the truth is "themeable once we parse `oklch`." That defeats Phase 1's
+  entire purpose (the coverage report is the ICP-fit gate). **Required fix:** distinguish a
+  value that *looks like a color but is an unparsed format* (`oklch(`/`hsl(`/`rgb(`/`color(`/
+  named) from a genuinely non-color value (lengths, etc.). A color-but-unparsed value MUST
+  count as **`unclassified`** (in the coverage denominator → honestly lowers coverage and
+  reads as "add `oklch` parsing"), and **`nonColor`** is reserved for genuine non-colors
+  (lengths) excluded from the denominator. This adds a `looksLikeColor(value)` guard in
+  `classify.ts` and a test asserting an `oklch()` var lands in `unclassified`, not
+  `nonColor`. (The hex fixture is unaffected; `--radius` stays `nonColor`.)
+- **Role-correctness honesty — coverage is honest, role *labels* are not load-bearing.**
+  `kindFromName` is a name-keyword heuristic tuned for the old scanner; real shadcn names
+  `--card`/`--muted`/`--secondary`/`--destructive`/`--popover`/`--accent` all fall through
+  to `'bg'`, so a chromatic one mis-pools into the accent candidate and neutrals compete for
+  surface roles. Coverage % stays honest (a var is classified-or-not), but the *role label*
+  on each var will need vendor edits in the Phase-4 confirm step — which the design
+  explicitly allows ("the engine proposes; the vendor confirms"). Phase 1 must NOT pretend
+  role labels are authoritative; the fixture below is favorably constructed to land cleanly.
 - **`:root` is the canonical theme.** A variable declared in multiple scopes (e.g. `:root` and `.dark`) is classified once from its `:root` value (or first-seen scope if no `:root`); other scopes are mode variants of the *same* role. The role is mode-independent; the map records `scope`.
 - **No persistence / no UI.** This phase produces the proposal *object*. Persisting it to `design-config` and the confirm UI are Phase 4. Wiring `locked`/`allowedModes` enforcement is Phase 2b. This phase emits `locked: false` for every entry (the vendor locks during confirm).
 
@@ -183,6 +205,7 @@ const VARS: DiscoveredVar[] = [
   { name: "--primary-foreground", value: "#FFFFFF", scope: ":root" },
   { name: "--border", value: "#E5E5E5", scope: ":root" },
   { name: "--radius", value: "0.5rem", scope: ":root" },
+  { name: "--ring", value: "oklch(0.55 0.12 250)", scope: ":root" }, // unparsed color format
   { name: "--background", value: "#0A0A0A", scope: ".dark" }, // mode variant — ignored
 ];
 
@@ -204,6 +227,14 @@ describe("classifyVars", () => {
     const r = classifyVars(VARS);
     expect(r.nonColor).toContain("--radius");
     expect(r.unclassified).not.toContain("--radius");
+  });
+
+  it("reports an unparsed color format (oklch) as unclassified, not nonColor", () => {
+    // Real shadcn/Tailwind-v4 ships oklch(); it's a drivable color we can't parse
+    // yet, so it belongs in the coverage denominator (unclassified), not excluded.
+    const r = classifyVars(VARS);
+    expect(r.unclassified).toContain("--ring");
+    expect(r.nonColor).not.toContain("--ring");
   });
 
   it("classifies from the :root value, not the .dark variant", () => {
@@ -248,14 +279,35 @@ export function normalizeHex(value: string): string | undefined {
   return `#${hex.toUpperCase()}`;
 }
 
+/**
+ * Does this value LOOK like a color we just can't parse yet? Used to keep the
+ * coverage report honest for the real ICP: shadcn/Tailwind-v4 ship oklch()/hsl()
+ * tokens, which fail normalizeHex. Such a value is a color-surface var we *could*
+ * drive once oklch/hsl parsing lands — so it must count as `unclassified` (an
+ * honest gap in the coverage denominator), NOT `nonColor` (a genuine non-color
+ * like a length, excluded from the denominator). Returns false for lengths
+ * (`0.5rem`), numbers, keywords like `none`/`inherit`, etc.
+ */
+const COLOR_FN = /^(oklch|oklab|lch|lab|hsla?|rgba?|color|hwb|color-mix)\s*\(/i;
+const NAMED_COLORS = new Set([
+  "transparent", "currentcolor", "white", "black", "red", "green", "blue",
+]); // small allowlist; broaden with the oklch/hsl fast-follow.
+export function looksLikeColor(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  if (v.startsWith("#")) return true; // a malformed/8-digit hex normalizeHex rejected
+  if (COLOR_FN.test(v)) return true;
+  return NAMED_COLORS.has(v);
+}
+
 export interface ClassifyResult {
   /** Vendor var name -> { role, scope, locked:false }. The genuinely new artifact. */
   variableRoleMap: VariableRoleMap;
   /** Color observations, for inferStyleSpec (the baseline theme). */
   observations: ColorObservation[];
-  /** Hex-color vars that won no role (kept honest in coverage). */
+  /** Color vars we can't drive yet: won no role, OR a color format we don't parse
+   *  yet (oklch()/hsl()/rgb()/named). Counted in the coverage denominator (honest gap). */
   unclassified: string[];
-  /** Vars whose value is not a hex color (lengths, or formats not yet parsed). */
+  /** Genuinely non-color values (lengths like 0.5rem, keywords) — excluded from coverage. */
   nonColor: string[];
 }
 
@@ -279,12 +331,16 @@ export function classifyVars(vars: DiscoveredVar[]): ClassifyResult {
 
   const observations: ColorObservation[] = [];
   const colorVars: Array<{ name: string; kind: ColorObservation["kind"]; hex: string; scope: string }> = [];
+  const unclassified: string[] = [];
   const nonColor: string[] = [];
 
   for (const v of canonical.values()) {
     const hex = normalizeHex(v.value);
     if (!hex) {
-      nonColor.push(v.name);
+      // A color we can't parse yet (oklch/hsl/rgb/named) is an honest coverage gap
+      // (unclassified, in the denominator); only genuine non-colors (lengths) are nonColor.
+      if (looksLikeColor(v.value)) unclassified.push(v.name);
+      else nonColor.push(v.name);
       continue;
     }
     const kind = kindFromName(v.name);
@@ -295,7 +351,6 @@ export function classifyVars(vars: DiscoveredVar[]): ClassifyResult {
   const { varToRole } = clusterColors(observations);
 
   const variableRoleMap: VariableRoleMap = {};
-  const unclassified: string[] = [];
   for (const cv of colorVars) {
     const token = varToRole.get(`${cv.kind}:${cv.hex}`);
     if (!token) {
@@ -446,7 +501,11 @@ git commit -m "feat(cli): buildCoverage — color-surface coverage report for on
 /* __fixtures__/shadcn-tokens/globals.css
    Minimal shadcn / Tailwind-v4 token layer — the shared discovery target for
    Phases 1-3. Phase 5 promotes this into the full apps/reference app.
-   Hex values (MVP); real shadcn uses oklch()/hsl() (a discovery fast-follow). */
+   FAVORABLY CONSTRUCTED ON PURPOSE so roles land deterministically: hex values
+   (real shadcn ships oklch()/hsl() — a discovery fast-follow → those land in
+   `unclassified`, lowering coverage honestly) and canonical names that kindFromName
+   buckets correctly (real names like --card/--muted/--secondary fall through to 'bg'
+   and need vendor edits at confirm). It is a clean baseline, NOT a worst case. */
 :root {
   --background: #FFFFFF;
   --foreground: #0A0A0A;
@@ -567,13 +626,14 @@ git commit -m "feat(cli): discoverFromCss orchestrator + shared shadcn-tokens fi
 
 ## Phase 1 exit criteria
 
-Point the discovery pipeline at the shadcn/Tailwind-v4-style fixture and get back a proposed `variableRoleMap` (vendor var → role), a baseline `StyleSpec`, and a coverage report whose number a human would accept with light edits (≈80% on the fixture, with the one unreadable token and the non-color length honestly reported as gaps). `pnpm -F @invariance/cli test` green; no existing CLI behavior changed (only `kindFromName` newly exported).
+Point the discovery pipeline at the shadcn/Tailwind-v4-style fixture and get back a proposed `variableRoleMap` (vendor var → role), a baseline `StyleSpec`, and a coverage report whose number a human would accept with light edits (≈80% on the *favorable* hex fixture, with the one unreadable token honestly in `unclassified` and the non-color length in `nonColor`). An unparsed color format (`oklch()`) is asserted to land in `unclassified` (in the denominator), not `nonColor` — so a real shadcn app (which ships `oklch()` + non-canonical names) honestly reports *lower* coverage that reads as "add oklch parsing," not "not themeable." `pnpm -F @invariance/cli test` green; no existing CLI behavior changed (only `kindFromName` newly exported).
 
 ---
 
 ## Self-review (writing-plans checklist)
 
-- **Spec coverage (roadmap Phase 1):** "discover live vars → classify → proposed `variableRoleMap` + `StyleSpec` + coverage" — Tasks 1.1 (discover), 1.2 (classify → map), 1.3 (coverage), 1.4 (orchestrator + StyleSpec via `inferStyleSpec` + the shared fixture the roadmap moved into Phase 1). Reuse of `clusterColors` + `inferStyleSpec` is explicit (Tasks 1.2, 1.4). The runtime `getComputedStyle` reader and non-hex color formats are explicitly deferred and reported, not silently skipped.
+- **Spec coverage (roadmap Phase 1):** "discover live vars → classify → proposed `variableRoleMap` + `StyleSpec` + coverage" — Tasks 1.1 (discover), 1.2 (classify → map), 1.3 (coverage), 1.4 (orchestrator + StyleSpec via `inferStyleSpec` + the shared fixture the roadmap moved into Phase 1). Reuse of `clusterColors` + `inferStyleSpec` is explicit (Tasks 1.2, 1.4). The runtime `getComputedStyle` reader and non-hex color *parsing* are explicitly deferred; non-hex *colors* are bucketed as `unclassified` (honest coverage gap), non-colors as `nonColor` — neither is silently skipped.
+- **Honesty caveats (added 2026-06-16 from the substrate code-trace):** (a) `kindFromName` is a name-keyword heuristic — coverage % is honest but role *labels* on non-canonical shadcn names need vendor edits at confirm (the design allows this); (b) real shadcn ships `oklch()`, so `classify.ts`'s `looksLikeColor` guard keeps such vars in the coverage denominator rather than dismissing them as non-colors; (c) the fixture is favorably constructed (clean baseline, not worst case) — its comment says so. None of these are load-bearing for safety (the engine proposes; the vendor confirms; the verifier gates).
 - **Placeholder scan:** every code/step is concrete — real module code, real test code, exact commands, exact commits. No TBDs.
-- **Type consistency:** `DiscoveredVar` (1.1) is consumed unchanged by `classifyVars` (1.2) and `discoverFromCss` (1.4); `ClassifyResult` (1.2) is consumed by `buildCoverage` (1.3) and the orchestrator (1.4); `CoverageReport` (1.3) is surfaced in `DiscoverResult` (1.4). `variableRoleMap` entries are built as `{ role, scope, locked }` to match the Phase-0 `VariableRoleSchema`. `kindFromName` is exported in 1.2 and imported by `classify.ts`; `normalizeHex` is defined in 1.2 and re-exported in 1.4.
+- **Type consistency:** `DiscoveredVar` (1.1) is consumed unchanged by `classifyVars` (1.2) and `discoverFromCss` (1.4); `ClassifyResult` (1.2) is consumed by `buildCoverage` (1.3) and the orchestrator (1.4); `CoverageReport` (1.3) is surfaced in `DiscoverResult` (1.4). `variableRoleMap` entries are built as `{ role, scope, locked }` to match the Phase-0 `VariableRoleSchema`. `kindFromName` is exported in 1.2 and imported by `classify.ts`; `normalizeHex` + `looksLikeColor` are defined in 1.2 (`normalizeHex` re-exported in 1.4); `unclassified` is declared once at the top of `classifyVars` and fed by both the non-hex-color branch and the won-no-role branch.
 - **Determinism caveat:** the fixture values are chosen so `clusterColors` assigns roles deterministically (white surface-0, dark readable text, single chromatic accent). If the engine's heuristics change, Task 1.2/1.4 assertions are the canary — update the fixture, not the engine.

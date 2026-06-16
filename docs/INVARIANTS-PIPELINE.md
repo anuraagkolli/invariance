@@ -21,7 +21,8 @@ checks pass at `server/runtime.ts:226`).*
 > below (`m.slot`, F1–F4) are a deeper, **deferred** tier, not part of the current
 > onboarding wedge. How an app reaches the onboarded state — the **onboarding /
 > governed-theming pipeline** — is documented in
-> [`ONBOARDING-PIPELINE.md`](./ONBOARDING-PIPELINE.md). *(Current design, not finalized.)*
+> [`DESIGN-GOVERNED-CUSTOMIZATION.md`](./DESIGN-GOVERNED-CUSTOMIZATION.md) (§5 the
+> core mechanism, §9 the onboarding flow). *(Current design, not finalized.)*
 
 ## 1. The key insight: two planes, two "apply" moments
 

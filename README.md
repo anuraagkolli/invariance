@@ -1,18 +1,26 @@
 # Invariance
 
-A platform that lets end users of existing web apps customize them — UI and
-business logic — through natural-language prompts, while developers stay in
+A platform that lets **multi-tenant platforms** — a B2B SaaS vendor, a
+marketplace, a creator platform: any app with sub-brands under one roof — offer
+*governed, natural-language customization* of their product. The platform's
+tenants reshape the look (and, in the deferred enterprise tier, business logic
+at the API seam) through plain-language prompts, while the platform stays in
 control via declared invariants.
 
 Developers integrate an SDK and publish an **App Manifest** (design tokens,
-components, API endpoint schemas, policies). End users describe changes in
-plain language; the control plane generates a **Mod Bundle** (declarative UI
-ops + sandboxed API-seam hooks + a capability manifest), verifies it against
-the manifest's invariants, signs it, and distributes it as an immutable CDN
-artifact. Runtimes in the developer's infrastructure execute only verified,
-signed bundles and fall back to base behavior on any failure.
+components, API endpoint schemas, policies). Tenants describe changes in plain
+language; the control plane generates the customization — a per-tenant theme, or
+a **Mod Bundle** (declarative UI ops + sandboxed API-seam hooks + a capability
+manifest) — verifies it against the manifest's invariants, signs it (bundles
+only), and distributes it as an immutable CDN artifact. Runtimes in the
+developer's infrastructure execute only verified (and, for bundles, signed)
+artifacts and fall back to base behavior on any failure.
 
-Full system design: [docs/DESIGN.md](docs/DESIGN.md).
+**Canonical product + system design:**
+[docs/DESIGN-GOVERNED-CUSTOMIZATION.md](docs/DESIGN-GOVERNED-CUSTOMIZATION.md) —
+Tier-A governed theming is the current MVP/wedge; the business-logic plane is
+deferred. The original v5 two-plane architecture (the as-built substrate) is
+[docs/DESIGN.md](docs/DESIGN.md).
 
 ## Layout
 
@@ -24,6 +32,9 @@ packages/client   Client SDK: mod loader, UI override engine, prompt widget, tel
 packages/server   Server SDK: Express/Next middleware, QuickJS-on-WASM sandbox,
                   runtime capability + policy enforcement
 packages/cli      `invariance` bin: init, manifest publish, local dev control plane
+packages/design   Design plane (@invariance/design): OKLCH role engine, theme
+                  compiler + verifier, runtime variable apply, prompt pipeline
+packages/design-schema  Design contracts: role tokens, StyleSpec, design-config
 apps/control-plane  Authoring (qwen2.5 via Ollama by default, Anthropic opt-in;
                   verifier in the loop), deterministic verification, registry +
                   lazy migration, analytics
@@ -39,40 +50,16 @@ apps/nebula       Nebula — Next.js + Tailwind showcase demo; design-plane
 **Fastest path (Nebula showcase stack):** `pnpm demo` brings the whole stack up in
 the right order (control plane :4400 → seed → Nebula :4321 → Console :4600) and
 prints the URLs; `pnpm demo:stop` tears it down. See
-[docs/DEMO-RUNBOOK.md](docs/DEMO-RUNBOOK.md) for the scripted walkthrough. The rest
-of this section is the manual equivalent.
+[docs/DEMO-RUNBOOK.md](docs/DEMO-RUNBOOK.md) for the scripted walkthrough,
+prerequisites, the surface/URL table, and manual bring-up if you need it.
 
-```sh
-pnpm install
-
-# 1. Control plane — pick one authoring backend:
-#    a) any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio, OpenRouter).
-#       Large context matters: the app manifest is embedded in the prompt, so
-#       run Ollama with OLLAMA_CONTEXT_LENGTH=16384 or it truncates silently.
-INVARIANCE_LLM_BASE_URL=http://localhost:11434/v1 \
-INVARIANCE_LLM_MODEL=qwen2.5 \
-INVARIANCE_AUTHORING_MAX_ATTEMPTS=5 \
-pnpm -F @invariance/control-plane dev
-#    (pull it first: `ollama pull qwen2.5`; a bigger model improves authoring quality)
-#    b) Anthropic API:
-ANTHROPIC_API_KEY=sk-... pnpm -F @invariance/control-plane dev
-#    Storage: in-memory by default; set DATABASE_URL (Postgres/Neon) for a
-#    durable registry. Pair it with INVARIANCE_SIGNING_* keys so bundles
-#    survive restarts.
-
-# 2. Demo API (Express + Invariance middleware) and web app
-pnpm -F @invariance/demo seed       # publish manifest + a seeded mod
-pnpm -F @invariance/demo dev:api
-pnpm -F @invariance/demo dev:web    # http://localhost:4501
-
-# 3. Developer console
-pnpm -F @invariance/console dev     # http://localhost:4600
-
-# Nebula showcase demo (Next.js + Tailwind) — design-plane customization, with
-# its API governed by the platform's invariants:
-pnpm -F @invariance/nebula seed      # publish the nebula manifest to the control plane
-pnpm -F @invariance/nebula dev       # http://localhost:4321  (needs Ollama for free-form prompts)
-```
+**Authoring backend (for free-form prompts).** The control plane needs one
+OpenAI-compatible LLM endpoint — Ollama / vLLM / LM Studio / OpenRouter
+(`INVARIANCE_LLM_BASE_URL` + `INVARIANCE_LLM_MODEL`; default `qwen2.5` — pull it
+first, and run Ollama with `OLLAMA_CONTEXT_LENGTH=16384` since the manifest is
+embedded in the prompt) — or Anthropic (`ANTHROPIC_API_KEY`). Storage is
+in-memory by default; set `DATABASE_URL` (+ persistent `INVARIANCE_SIGNING_*`
+keys) for a durable registry.
 
 The console (`pnpm -F @invariance/console dev`, :4600) now defaults to appId
 "nebula": its Guardrails view tests Nebula's invariants live, the Themes view
@@ -93,6 +80,6 @@ pnpm test        # turbo run test (vitest)
 pnpm typecheck   # turbo run typecheck
 ```
 
-> Note: this repo's history before the `v4-final` tag is the previous
-> iteration (Invariance v4, theme.json/CSS-variable architecture). v5 is a
+> Note: this repo's earlier history (no longer tagged) is the previous
+> iteration — Invariance v4 (theme.json / CSS-variable architecture). v5 is a
 > ground-up rebuild on the signed-bundle architecture.
