@@ -58,6 +58,9 @@ export function classifyVars(vars: DiscoveredVar[]): ClassifyResult {
 
   const observations: ColorObservation[] = [];
   const colorVars: Array<{ name: string; kind: ColorObservation["kind"]; hex: string; scope: string }> = [];
+  // NOTE: `unclassified` is NOT in source order — it interleaves non-hex-color vars
+  // (first pass) with won-no-role color vars (after clustering); consumers treat it
+  // as a set/count, not an ordered list.
   const unclassified: string[] = [];
   const nonColor: string[] = [];
 

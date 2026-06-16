@@ -35,4 +35,19 @@ describe("buildCoverage", () => {
   it("reports 0 coverage (not NaN) when there are no color vars", () => {
     expect(buildCoverage({ variableRoleMap: {}, observations: [], unclassified: [], nonColor: ["--radius"] }).coverage).toBe(0);
   });
+
+  it("lists every var under a shared role in byRole", () => {
+    const r = buildCoverage({
+      variableRoleMap: {
+        "--bg": { role: "surface-0", scope: ":root", locked: false },
+        "--card-bg": { role: "surface-0", scope: ":root", locked: false },
+        "--primary": { role: "accent", scope: ":root", locked: false },
+      },
+      observations: [],
+      unclassified: [],
+      nonColor: [],
+    });
+    expect(r.byRole["surface-0"]).toEqual(["--bg", "--card-bg"]);
+    expect(r.byRole["accent"]).toEqual(["--primary"]);
+  });
 });

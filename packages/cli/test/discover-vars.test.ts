@@ -31,4 +31,10 @@ describe("discoverVars", () => {
   it("returns [] for CSS with no custom properties", () => {
     expect(discoverVars(".btn { color: red; }")).toEqual([]);
   });
+
+  it("discovers custom properties whose names contain underscores", () => {
+    expect(discoverVars(":root { --foo_bar: #fff; }")).toEqual([
+      { name: "--foo_bar", value: "#fff", scope: ":root" },
+    ]);
+  });
 });

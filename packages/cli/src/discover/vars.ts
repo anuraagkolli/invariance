@@ -27,7 +27,7 @@ export function discoverVars(css: string): DiscoveredVar[] {
   const RULE = /([^{}]+)\{([^{}]*)\}/g;
   // Match `--name: value;` declarations inside a block.
   // MVP limitation: `([^;]+);` stops at the first `;`, so custom-property values containing a semicolon are not yet handled.
-  const DECL = /(--[A-Za-z0-9-]+)\s*:\s*([^;]+);/g;
+  const DECL = /(--[A-Za-z0-9_-]+)\s*:\s*([^;]+);/g;
 
   const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
   const out: DiscoveredVar[] = [];
