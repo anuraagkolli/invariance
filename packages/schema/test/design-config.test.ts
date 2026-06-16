@@ -48,4 +48,20 @@ describe("DesignConfig variableRoleMap", () => {
       DesignConfigSchema.parse({ variableRoleMap: { "--x": { scope: ":root" } } }),
     ).toThrow();
   });
+
+  it("carries an explicit lock value and keeps it optional (back-compat)", () => {
+    const cfg = DesignConfigSchema.parse({
+      variableRoleMap: {
+        "--primary": { role: "accent", scope: ":root", locked: true, value: "#4F46E5" },
+        "--background": { role: "surface-0" }, // no value — still valid
+      },
+    });
+    expect(cfg.variableRoleMap!["--primary"]).toEqual({
+      role: "accent", scope: ":root", locked: true, value: "#4F46E5",
+    });
+    // unset value must not appear (so existing { role, scope, locked } shapes are unchanged)
+    expect(cfg.variableRoleMap!["--background"]).toEqual({
+      role: "surface-0", scope: ":root", locked: false,
+    });
+  });
 });

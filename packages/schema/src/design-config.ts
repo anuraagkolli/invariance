@@ -7,6 +7,10 @@ export const VariableRoleSchema = z.object({
   scope: z.string().min(1).default(":root"),
   /** Brand-locked: customization may never change this variable. */
   locked: z.boolean().default(false),
+  /** Explicit brand value pinned when locked:true (e.g. "#4F46E5"). The verifier
+   *  compares byte-identical; set by the vendor (pre-filled from the discovered
+   *  base at onboarding). Absent ⇒ this variable contributes no lock. */
+  value: z.string().min(1).optional(),
 });
 export type VariableRole = z.infer<typeof VariableRoleSchema>;
 
