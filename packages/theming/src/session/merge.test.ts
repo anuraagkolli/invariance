@@ -22,6 +22,22 @@ describe("canonicalize", () => {
   it("the empty spec canonicalizes to itself (single representation of app default)", () => {
     expect(canonicalize({} as StyleSpec)).toEqual({});
   });
+
+  // Direct-canonicalize null tests (Plan 05 path — no mergeDelta intermediary)
+  it("null color leaf is stripped; empty group is removed → {}", () => {
+    const out = canonicalize({ colors: { primary: null } } as unknown as StyleSpec);
+    expect(out).toEqual({});
+  });
+  it("null scalar is stripped → {}", () => {
+    const out = canonicalize({ radius: null } as unknown as StyleSpec);
+    expect(out).toEqual({});
+  });
+  it("mixed: null accent dropped, valid primary kept", () => {
+    const out = canonicalize({
+      colors: { primary: ok(0.3, 0.1, 250), accent: null },
+    } as unknown as StyleSpec);
+    expect(out).toEqual({ colors: { primary: ok(0.3, 0.1, 250) } });
+  });
 });
 
 describe("mergeDelta", () => {

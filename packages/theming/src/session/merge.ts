@@ -11,13 +11,20 @@ export function canonicalize(spec: StyleSpec): StyleSpec {
   const out: Record<string, unknown> = {};
   for (const g of GROUPS) {
     const group = (spec as Record<string, unknown>)[g] as Record<string, unknown> | undefined;
-    if (group && Object.keys(group).length > 0) {
-      out[g] = { ...group };
+    if (group) {
+      // Strip null (and undefined) leaves so the null-free invariant holds for direct callers too.
+      const stripped: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(group)) {
+        if (v !== null && v !== undefined) stripped[k] = v;
+      }
+      if (Object.keys(stripped).length > 0) {
+        out[g] = stripped;
+      }
     }
   }
   for (const s of SCALARS) {
     const v = (spec as Record<string, unknown>)[s];
-    if (v !== undefined) {
+    if (v !== undefined && v !== null) {
       out[s] = v;
     }
   }
