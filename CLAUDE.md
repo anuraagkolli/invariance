@@ -2,9 +2,11 @@
 
 ## Project Overview
 
-Invariance lets a **multi-tenant platform** (a B2B SaaS vendor, a marketplace, a creator platform — any app with sub-brands under one roof) offer *governed, natural-language customization* of its product: its tenants reshape the look — and, in the deferred enterprise tier, business logic at the API seam — within invariants the platform declares. **Canonical product + system design: `docs/DESIGN-GOVERNED-CUSTOMIZATION.md`** (Tier-A governed theming is the MVP/wedge; the business-logic plane is deferred). The original v5 two-plane architecture — the as-built substrate we reuse — is `docs/DESIGN.md`.
+Invariance lets a **multi-tenant platform** (a B2B SaaS company, a marketplace, a creator platform — any app with sub-brands under one roof) offer *governed, natural-language customization* of its product: its tenants reshape the look — and, in the deferred enterprise tier, business logic at the API seam — within invariants the platform declares. **Canonical end-to-end design: `docs/DESIGN.md`** (Tier-A governed theming is the MVP/wedge; the business-logic plane is deferred Tier C). The locked pipeline contracts live in `docs/superpowers/specs/2026-06-17-governed-theming-pipeline-design.md`; the implementation suite (7 plans) is indexed at `docs/superpowers/plans/2026-06-18-theming-00-suite-index.md`.
 
 History note: this repo's earlier history (no longer tagged) is the previous iteration — v4: theme.json + CSS-variable architecture, scanner codemod. v5 is a ground-up rebuild on the signed-bundle architecture; the v4 scanner and verification ideas may be ported where they fit.
+
+**Domain vocabulary:** read `CONTEXT.md` (repo root) for the project's ubiquitous language — the canonical term for each concept and the aliases to avoid. Use these terms exactly; the key gotcha is that "plane" names two different axes (Control/Data plane = whose infra; Design/Business-logic plane = what's customized).
 
 ## Architecture (two planes)
 
@@ -115,10 +117,12 @@ Then two design-plane fixes/features (both verified live):
 `qwen2.5:latest` — `pnpm demo` pins it; persist `INVARIANCE_SIGNING_*` keys for durable stores) —
 only matters for hand-off; deprioritized (demo runs live on this machine).
 
-Phases (exit criteria in `docs/DESIGN.md`): 1 foundations/schema ✅ · 2 Tier-0
-vertical slice ✅ · 3 authoring+verification v0 ✅ · 4 Tier-1 hooks/sandbox ✅ ·
-5 versioning+lazy migration ✅ · 6 analytics+console ✅. Implementation notes
-for 4–6 live in `docs/HANDOFF-PHASES-4-6.md`.
+As-built two-plane stack (the prior substrate — still runnable, superseded as the
+GTM by Tier-A theming): build phases 1–6 all shipped (foundations/schema, Tier-0
+vertical slice, authoring+verification v0, Tier-1 hooks/sandbox, versioning+lazy
+migration, analytics+console). The Tier-A governed-theming build is **greenfield in
+`@invariance/theming`** — see the plan suite
+(`docs/superpowers/plans/2026-06-18-theming-00-suite-index.md`).
 
 Enforcement semantics worth knowing (shared by verifier and server runtime):
 - `diffPaths` treats a pure array permutation as a write to the array itself,

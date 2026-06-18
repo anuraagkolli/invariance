@@ -16,11 +16,12 @@ only), and distributes it as an immutable CDN artifact. Runtimes in the
 developer's infrastructure execute only verified (and, for bundles, signed)
 artifacts and fall back to base behavior on any failure.
 
-**Canonical product + system design:**
-[docs/DESIGN-GOVERNED-CUSTOMIZATION.md](docs/DESIGN-GOVERNED-CUSTOMIZATION.md) —
-Tier-A governed theming is the current MVP/wedge; the business-logic plane is
-deferred. The original v5 two-plane architecture (the as-built substrate) is
-[docs/DESIGN.md](docs/DESIGN.md).
+**Canonical end-to-end design:** [docs/DESIGN.md](docs/DESIGN.md) — Tier-A governed
+theming is the current MVP/wedge; the business-logic plane (Tier C) is deferred.
+Depth: the locked pipeline contracts in
+[docs/superpowers/specs/2026-06-17-governed-theming-pipeline-design.md](docs/superpowers/specs/2026-06-17-governed-theming-pipeline-design.md)
+and the 7-plan implementation suite indexed at
+[docs/superpowers/plans/2026-06-18-theming-00-suite-index.md](docs/superpowers/plans/2026-06-18-theming-00-suite-index.md).
 
 ## Layout
 

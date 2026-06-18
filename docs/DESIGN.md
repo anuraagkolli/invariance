@@ -1,93 +1,320 @@
-# Invariance — System Design & v1 Repo Plan
+# Invariance — End-to-End Design
 
-Repo: `~/Documents/projects/invariance`
+> **Status: canonical.** The one doc to read to understand the whole system. It is an
+> *overview* — it summarizes and links into the depth, it does not restate it.
+>
+> **Depth lives in three places:**
+> - Locked pipeline contracts + laws → [`superpowers/specs/2026-06-17-governed-theming-pipeline-design.md`](superpowers/specs/2026-06-17-governed-theming-pipeline-design.md)
+> - Every cross-module type/signature + package map → [`superpowers/plans/2026-06-18-theming-00-interface-ledger.md`](superpowers/plans/2026-06-18-theming-00-interface-ledger.md)
+> - 69 TDD tasks across 7 plans → [`superpowers/plans/2026-06-18-theming-00-suite-index.md`](superpowers/plans/2026-06-18-theming-00-suite-index.md)
+>
+> Ubiquitous language (use these terms exactly): [`../CONTEXT.md`](../CONTEXT.md).
 
-> **Superseded framing — read this first.** This is the original v5 *system
-> design* (the architecture skeleton: schema / client / server / control-plane /
-> console / cli). It remains an accurate map of the **as-built substrate we
-> reuse**, but its **product framing is superseded** by
-> [`DESIGN-GOVERNED-CUSTOMIZATION.md`](./DESIGN-GOVERNED-CUSTOMIZATION.md) (the
-> active design): the GTM is now **governed customization for multi-tenant
-> platforms** (sub-brands under one roof — SaaS tenants, marketplace sellers,
-> creators), not consumer scale; **design-plane theming is the MVP**, with the
-> API-seam hooks plane
-> (Tier 1 below) **deferred**; and onboarding is **non-invasive** (SDK +
-> `variable→role` map, never edits source), not the AST `init` codemod described
-> below. Treat the architecture here as substrate; treat the new doc as canon.
+---
 
-## Locked decisions (from discussion)
-- **v1 scope:** Tier 0 (client-side UI overlay) + Tier 1 (API-seam hooks via server middleware). Tier 2 (in-code declared extension points) deferred.
-- **Stacks:** React gets the first-class client SDK; framework-agnostic script-tag build as fallback. Server SDK ships Express + Next.js adapters.
-- **Scale target:** millions of individual end users (consumer). Same machinery serves org-level (B2B2B) customers with eager verification turned up.
-- **Hosting split:** control plane (authoring, verification, registry, signing, analytics, dev console) in our infra; data plane (SDK runtimes) entirely in the customer's infra. No production request transits our systems — mod bundles are static signed artifacts on CDN.
-- **Mod format:** signed, constrained artifacts — declarative UI override ops + sandboxed hook modules + a capability manifest — never arbitrary diffs.
-- **Migration model:** lazy. Mods bind to versioned contracts; re-validated at next session after a developer release; incompatible mods degrade to base behavior with a one-click AI re-fix.
+## 1. What we're building
 
-## System architecture
+Invariance lets a **multi-tenant platform** — a B2B SaaS company, a marketplace, a creator
+platform: any app with **sub-brands under one roof** — offer *governed, natural-language
+customization* of its product. The platform declares the **invariants** (brand, accessibility);
+its **tenants** reshape the look within them, by prompt.
 
-### 1. `packages/schema` — shared contracts (the keystone package)
-Zod schemas + TS types used by every other component:
-- **App Manifest:** design tokens, component inventory, API endpoint schemas, developer invariants/policies, manifest version. Published by the customer's build via CLI.
-- **Mod Bundle:** UI override operations (token overrides, style/layout patches, component slot swaps), hook modules (source for sandboxed request/response transforms), **capability manifest** ("reads endpoint X, writes field Y"), bindings to manifest versions.
-- **Signing:** ed25519-signed bundle envelope; runtimes execute only verified-and-signed bundles.
+**We sell the guardrails, not the prompt:** *"say yes to per-tenant customization without the
+risk."* The platform stops building N bespoke settings UIs, kills professional-services theming
+cost, and if anything ever fails the app falls open to its own base design.
 
-### 2. `packages/client` — client SDK (Tier 0)
-- React provider + vanilla/script-tag build (shared core).
-- Mod loader: fetch signed bundle from CDN, verify signature, cache per user+version.
-- UI override engine: design-token theming, scoped style/layout patching, component slot overrides (React build only).
-- Prompt widget: end-user "customize" UI → sends prompt to control-plane authoring API.
-- Async telemetry emitter (off the request path).
+**ICP qualifier:** the platform has sub-brands that want to look different *and* a brand/trust
+owner who must keep them in bounds — and the app themes through **CSS variables / design tokens**
+(Tailwind v4, shadcn/ui, MUI/Chakra theme providers). No variables to redefine → not a fit.
 
-### 3. `packages/server` — server SDK (Tier 1)
-- Middleware adapters (Express, Next.js) wrapping the customer's API seam.
-- Hook executor: QuickJS-compiled-to-WASM sandbox (portable across Node/edge), hard CPU/memory/time budgets per hook.
-- Capability enforcement: a hook can only touch the endpoints/fields its verified capability manifest declares.
-- Per-mod kill switch via flag updates from the registry.
+**v1 wedge:** the **B2B SaaS platform** (sub-brand = customer org) is the beachhead; the mechanism
+generalizes unchanged to marketplaces (sub-brand = seller) and creator platforms (sub-brand =
+creator). The engine is identical across all three — only the funded buyer differs.
 
-### 4. `apps/control-plane` — modular monolith (Node/TS, Postgres)
-Deliberately one deployable with internal module boundaries (authoring / verification / registry / analytics) — split into services later if needed.
-- **Authoring:** prompt + app manifest → candidate mod via Claude API, with the verifier in the generation loop (generate → verify → repair).
-- **Verification:** static analysis of hook source, capability extraction, contract checks against endpoint schemas, policy engine evaluating developer invariants → sign on pass.
-- **Registry:** per-user mod versions, manifest-version bindings, bundle publishing to CDN, lazy-revalidation endpoint, kill-switch flag distribution.
-- **Analytics:** event ingestion + mod classification (by surface touched + capabilities used) + aggregate queries. Postgres for v1; ClickHouse later.
+**Scope: Tier A (governed theming) only.** This is the MVP and the entire subject of this design.
 
-### 5. `apps/console` — developer dashboard (Next.js)
-Manifest viewer, invariant/policy editor, per-user mod browser with kill switches, analytics views ("what are users changing, where, why").
+| Tier | What a tenant changes | Status |
+|---|---|---|
+| **A — Governed theming** | colors, typography, density, radius, light/dark | **this doc** |
+| B — Governed layout / slots | rearrange/swap declared regions | deferred |
+| C — Governed logic | API request/response at the seam (signed, sandboxed) | deferred (the as-built business-logic plane) |
 
-### 6. `packages/cli`
-- `init`: **(superseded — see [`DESIGN-GOVERNED-CUSTOMIZATION.md`](./DESIGN-GOVERNED-CUSTOMIZATION.md) §9)** onboarding is now *non-invasive*: connect + scan the app's design **variables**, propose a `variable→role` map + baseline theme, emit the manifest/design-config — never edits source. (Originally specced as an AST codemod that rewrote the repo; that approach is retired.)
-- `manifest publish`: push manifest version at build time.
-- `dev`: local authoring/verification loop against a local control plane.
+---
 
-### 7. `apps/demo`
-Small consumer-style app (media-browsing flavor) integrated end to end. Doubles as the living integration test for every phase.
+## 2. The two rules everything rests on
 
-### Key flows
-- **Authoring:** user prompt → authoring → verification → signed bundle → registry/CDN → client loads → overlay + hooks active.
-- **Developer release:** new manifest version → registry marks affected bindings stale → next user session revalidates → pass / degrade-to-base / offer AI re-fix.
-- **Analytics:** telemetry + capability manifests → classification → developer dashboard.
+**Rule 1 — No production request transits Invariance.** This forces two planes:
 
-## Repo layout (new repo, pnpm workspaces + Turborepo, TypeScript throughout)
+- **Control plane** (our infra): all the *thinking* — scan, the LLM pipeline, verification,
+  publishing. Allowed to be slow.
+- **Data plane** (the platform's infra): what end users hit every page load — fast, and unable to
+  take the platform's app down. **Fails open to base design everywhere.**
+
+**Rule 2 — The LLM is in the loop, never in the gate. The StyleSpec is the wall between them.**
+Both non-deterministic stages (Gatekeeper, Designer) sit *before* the StyleSpec. Everything to the
+right of the wall is deterministic code that never sees raw model text again. A hallucinated or
+adversarial proposal can only ever be **rejected**, never published.
+
+> **The payoff (drives everything):** the entire valuable half — merge → compile → verify →
+> publish — is testable with **zero LLM** by hand-writing StyleSpecs. The model's blast radius is
+> bounded by construction.
+
+---
+
+## 3. Actors & the core mechanism
+
+**Three actors, never overlapping** — and the multi-tenant hierarchy:
+
 ```
-/packages/schema      /packages/client      /packages/server      /packages/cli
-/apps/control-plane   /apps/console         /apps/demo
+Invariance ── app/Platform (owns the manifest, declared once)
+                 └── Tenant (owns a theme, prompts via its brand admin)   ← subject = tenant
+                        └── End users (just load the page)
 ```
 
-## Build phases
-1. **Foundations:** scaffold monorepo (pnpm, Turborepo, tsconfig, vitest, CI); implement `schema` (manifest, mod bundle, signing) with tests.
-2. **Tier 0 vertical slice:** client SDK overlay engine + demo app + stub registry serving a hand-written signed bundle. *Exit criteria: a hardcoded mod restyles the demo app.*
-3. **Authoring + verification v0:** prompt → Claude-generated UI mod → static verification + signing → live in demo. *Exit criteria: type a prompt, the app changes.*
-4. **Tier 1:** server middleware + QuickJS sandbox + capability enforcement; extend authoring/verification to hooks. *Exit criteria: a prompt rewires a demo workflow at the API seam.*
-5. **Versioning + lazy migration:** manifest versioning, staleness marking, degrade-to-base, AI re-fix path. *Exit criteria: ship a breaking demo-app change; mods degrade gracefully and re-fix.*
-6. **Analytics v0 + console:** ingestion, classification, dashboard with kill switches.
+- **Platform engineer** sets it up once (onboarding). **Tenant admin** customizes by prompt,
+  within invariants. **End user** only loads the page.
+- The manifest is **per-app**; the live theme pointer is **per-tenant** (`subject = tenant`).
 
-## Risks to watch
-- **Sandbox is a security boundary:** the Tier 1 hook executor gets its own adversarial test suite (escape attempts, capability bypass, resource exhaustion) from day one.
-- **Authoring quality:** verifier-in-the-loop generation is mandatory; raw one-shot generation will not clear invariants reliably.
-- **LLM cost at consumer scale:** per-developer metering/quotas built in from phase 3, not retrofitted.
+**The mechanism, in one sentence:**
 
-## Distribution model (clarified)
-- Source of truth for all mod versions/history lives in the control-plane registry (our infra). The developer's infra stores nothing durably.
-- Distribution is two-step: a short-TTL mutable pointer per user ("active modset = hash X") + immutable content-addressed signed bundles on CDN. Kill switches, rollbacks, and lazy-migration downgrades propagate via the pointer.
-- Prod path touches only static CDN artifacts + local signature check; control-plane downtime never breaks the customer app; any fetch/verify failure fails open to base behavior.
-- Post-v1 option: enterprise bundle mirroring into the customer's own CDN/bucket (signatures make trust independent of who hosts the bytes).
+> We don't theme by editing anything; we **redefine the CSS variables the app already uses.**
+
+```
+Platform component (untouched):   class="bg-[var(--primary)]"
+App's own :root:                  --primary: #4f46e5;
+Invariance injects (per tenant):  --primary: #1e3a8a;   ← redefinition wins via the cascade
+Result:                           the button is navy — zero source edits
+```
+
+**Fail-open by construction:** if Invariance does nothing (control plane down, fetch fails, theme
+rejected) → *no variables are redefined* → the app renders its own defaults. There is no broken
+state to fall into. Themes are declarative CSS values — no code executes, so **no signing is
+needed** (signing is reserved for the deferred Tier C).
+
+---
+
+## 4. System architecture
+
+```
+        DATA PLANE (Platform infra)                CONTROL PLANE (Invariance infra)
+        ───────────────────────────                ────────────────────────────────
+   ┌──────────────────────────┐                ┌───────────────────────────────────────┐
+   │ Platform's app + SDK      │ ── scan ─────▶ │ SCANNER  (onboard, once)              │
+   │  • resolve tenant         │ ◀─ manifest ── │   ScanPayload → coverage → manifest   │
+   │  • prompt widget          │ ── prompt ───▶ ├───────────────────────────────────────┤
+   │  • inject mapped vars     │                │ AUTHORING  (the customize pipeline)   │
+   │  • read pointer→artifact  │                │   Gatekeeper→Designer ═wall═ merge →  │
+   │    from CDN (no transit)  │                │   compile → VERIFY → publish theme    │
+   └──────────────────────────┘                ├───────────────────────────────────────┤
+         │  serves base +                       │ GOVERNANCE / REGISTRY                 │
+         ▼  governed theme       ┌────────────┐ │   manifest · per-tenant theme store   │
+   ┌──────────────┐              │ Platform   │ │   + rollback + audit · artifact blob  │
+   │  End users   │              │ eng / CS   │◀▶  · pointer + kill-switch              │
+   └──────────────┘              │ (governs)  │ ├───────────────────────────────────────┤
+                                 └────────────┘ │ CONSOLE  (governance dashboard)       │
+   apply: SDK reads pointer→artifact from CDN   │   connect+coverage · map confirm ·    │
+   — no production request transits Invariance  │   invariant editor · tenant browser   │
+                                                └───────────────────────────────────────┘
+```
+
+Distribution is two-step and CDN-friendly: a tiny short-TTL **pointer** (`tenant → hash`) names an
+immutable **content-addressed artifact**. Control-plane downtime degrades to the last-cached (or
+base) theme — never an outage for the platform's app.
+
+---
+
+## 5. The three flows
+
+### 5a. Onboard (Platform engineer, once)
+
+The SDK runs on the live app and emits a **ScanPayload** (every `--*` variable, its declarations
+per mode, how each is *consumed*, and any unreadable cross-origin sheets). The control-plane
+**Scanner** classifies each variable into a **role** (OKLCH classification), infers its **format
+contract** (how to re-serialize it — the bug-prone part), and produces a **coverage report** +, on
+confirmation, the per-app **AppManifest**.
+
+```
+add SDK snippet ─▶ scan live --* vars ─▶ classify → roles + infer emit format
+               ─▶ coverage report ("82% of color surface drivable") ── confirms ICP fit
+               ─▶ confirm var→role map + set invariants (locks, contrast tier, modes)
+               ─▶ publish AppManifest (per-app, governs all tenants)
+```
+
+For a **shadcn app the manifest is known in advance** — a prebuilt `SHADCN_CAN` skips scan-and-
+confirm. This is the near-zero-touch path and **the v1 demo path**, so the demo never rides on
+general CSSOM inference being perfect.
+
+### 5b. Customize (Tenant admin, per change) — **the pipeline**
+
+```
+          LLM — in the loop                  ║          deterministic — the gate
+                                             ║
+ prompt ─▶ Gatekeeper ─▶ Designer ─▶ raw JSON ║ parseSpec ─▶ merge ─▶ compile ─▶ VERIFY ─▶ publish
+           classify     sparse       ════════╫═  THE WALL    fold     role        re-checks   only on
+           (cheap LLM)  StyleSpec    parse-don't  (closed   onto      VALUES +    final out,  explicit
+                        (quality)    -validate    schema)   draft     contrast    trusts      publish
+                                                                      repair      nothing
+```
+
+- **Gatekeeper** (cheap LLM, *not* the gate): one classification —
+  `in_scope_styling | out_of_scope | targets_locked_invariant | abuse_or_injection`. Tuned for UX,
+  not paranoia (the verifier still holds).
+- **Designer** (quality LLM): the one creative call. Emits a **sparse StyleSpec** (only fields it
+  means to touch) as raw JSON. Fed the invariants as a **constraint envelope** so it proposes
+  in-bounds — a UX/cost optimization only, never enforcement.
+- **The wall** (`parseSpec`): parse-don't-validate against a **closed** schema. Colors parse to
+  OKLCH and clamp to the chroma cap; fonts are an allowlist index, never free text; a locked seed
+  is rejected here. A dangerous string never advances.
+- **Merge → compile → verify** run **every turn** to produce a live preview. **Publish** flips the
+  pointer **only on the explicit action.** Compile + verify are pure (golden-file-able).
+
+Three outcomes per turn: **diff** (preview the candidate; acknowledging commits it to the draft and
+unlocks publish) · **no-change** ("heard you, nothing moved") · **rejected** (draft untouched —
+never a half-applied state). A session accumulates acknowledged deltas into one draft; one publish
+ships it.
+
+### 5c. Apply (End user, every page load) — data plane, fail-open
+
+```
+request cookie (resolved mode) ─▶ read tenant pointer ─▶ fetch artifact by hash
+   ─▶ pick the mode's var set ─▶ inline <style> in <head> (SSR) or blocking-script inject
+   ─▶ ANY failure (pointer miss · disabled · missing/mismatched artifact · unsafe value · no CSP nonce)
+      → inject nothing → base design renders
+```
+
+Dark vars emit **under the app's own dark selector** (specificity parity) and the `<style>` is
+appended at the **end of `<head>`** so source order wins. `"system"` is resolved to a concrete mode
+*before* SSR, so the server render is deterministic and flash-free.
+
+---
+
+## 6. The pipeline spine (the contracts at a glance)
+
+Five **wall-grade contracts** are the boundaries everything deterministic compiles against; the
+compiler and verifier are their pure *consumers*. (Signatures: the interface ledger. Laws: the
+spec.)
+
+| Contract | What it is | Home |
+|---|---|---|
+| **Role graph** (`iv-roles-1`) | seeds (input axes) → 27 output roles, their derivations, and the contrast pairs to check. Version-stable. | `@invariance/theming/roles` |
+| **StyleSpec + merge/diff/session** | the wall schema (sparse, closed, parsed) + the pure delta-merge, three-state diff, and session state machine | `…/spec`, `…/session` |
+| **ScanPayload** | the onboarding boundary: every `--*` var (per-mode declarations, how it's consumed, opaque sheets) the in-browser scan emits and the Scanner folds into a manifest | `…/scan` schema · `scan-sdk` (client) + Scanner (control-plane) |
+| **AppManifest** | per-app contract: var↔role map + emit format, modes, `base`, `defaultSeeds`, invariants. `superRefine` is its first verification layer (incl. *base-passes-tier*, a hard publish gate) | `…/manifest` |
+| **Artifact + applier + pointer** | immutable content-addressed `ThemeArtifact`; one pure `renderStyleText` + two sinks (`styleTag` server / `applyTheme` client); `Pointer` (`tenant → hash`) | `…/artifact` |
+
+The **compiler** (`compile(draft, manifest) → CandidateTheme`; `…/compile` + the ramp `…/profile`)
+and **verifier** (`verify(theme, manifest) → Verdict`; `…/verify`) are the pure *consumers* of these
+boundaries — deterministic code that compiles against the contracts and never sees raw model text.
+The compiler treats `base` as the canvas (a seed repaints only its derivation closure, transitively,
+then contrast-repairs and serializes per the format contract); the verifier is **the gate** — it
+re-parses every emitted string and trusts nothing, not even the compiler.
+
+**The three-way cut** — the factoring that keeps the graph stable while policy moves per-app:
+
+- **Role graph** carries *relationships and kinds* (version-stable → correctness).
+- **Ramp profile** carries *numbers* (L-ladders, step magnitudes, nudges → eyes-on, golden-filed).
+- **Manifest** carries *policy* (contrast tier, chroma cap, locks, modes → per-app).
+
+Required contrast = `requiredContrast(manifest.tier, pair.category)` — every remaining degree of
+freedom on the contrast path is a *number* (tunable), not a *relationship* (fixed), and the gate
+catches any number that violates a relationship.
+
+**Two graph subtleties that prevent real bugs:** color derivations are **mode-polarized** (dark ≠
+inverted light — each mode has its own anchor-L and step ladder); and a **lock** projects two ways
+— a *seed* lock is wall-rejected (freezes its whole derivation closure), a *derived-role* lock is
+pinned to base by the compiler post-expansion.
+
+---
+
+## 7. Governance & invariant model
+
+What the platform declares once (per-app, in the manifest), and the guarantee each gives:
+
+| Invariant | Guarantee to the platform | Enforced by |
+|---|---|---|
+| **var → role map** | "customization drives exactly these variables" | applier indirection |
+| **Locks** (seed or role) | "our brand/surfaces never change" | wall rejects re-seed · compiler pins to base · verifier re-checks byte-identical |
+| **Contrast tier** (AA/AAA) | "every tenant theme is WCAG-accessible" | compiler may only *raise*; verifier re-checks the emitted triple |
+| **Allowed modes** | "light only / dark only / both" | compiler + verifier reject disallowed modes |
+| **Chroma cap** | "no garish, illegible themes" | clamped at the wall; verifier rejects over-cap |
+
+Enforcement is **deterministic, every time**. The audit trail (prompt, StyleSpec, verifier report,
+actor, stamped versions) is the governance product — and a **functional read path**: reset and
+drift-recompile read the stored StyleSpec.
+
+---
+
+## 8. Where the code lives & build order
+
+The pure deterministic core is a **new, plane-agnostic package `@invariance/theming`**, imported by
+both planes (build the applier once, share it). Control-plane stages live in `apps/control-plane`;
+the in-browser scan SDK + applier re-export live in `packages/client`; the SSR adapter is wired at
+the host.
+
+```
+packages/theming/src/{roles,manifest,spec,session,profile,compile,verify,artifact,scan}  # plane-agnostic core (scan = shared ScanPayload schema)
+apps/control-plane/src/theming/{scan, publish, authoring}                                # control-plane stages (Scanner, publisher, session/LLM)
+packages/client/src/theming/{scan-sdk, applier re-export}                                # data-plane SDK (in-browser scan + applier)
+apps/<host>/                                                                             # Next.js SSR delivery adapter
+```
+
+**Build order — `01 → 02 → 03 → 04 → 05 → 07`, with `06` runnable any time after `01`:**
+
+```
+01 determinism core (roles, manifest, StyleSpec wall, merge, diff)  ── creates @invariance/theming
+ ├─ 02 compiler (ramp profile + compile, golden-filed)
+ │   └─ 03 verifier (re-parse, trust nothing + adversarial suite)
+ │       └─ 04 artifact + applier + pointer (cascade-win, nonce, cold-start)
+ │           └─ 05 publish + storage + session (+ MockAgent zero-LLM e2e)
+ │               └─ 07 LLM stages (qwen) + Next.js SSR delivery
+ └─ 06 scan + Scanner (ScanPayload → manifest, the "can" path)  ── needs 01 only
+```
+
+**Milestones:** after **03** the entire valuable half is provable with zero LLM · after **05** a
+full authoring session runs end-to-end via MockAgent · after **07** real prompts produce verified
+themes and end users get SSR-themed, fail-open pages.
+
+> **Greenfield, by design.** `@invariance/theming` is built clean against these contracts, *not* by
+> reusing the existing `packages/design`. Reuse-first would let the old code's assumptions
+> (subject=user not tenant, always-emit-hex, `--inv-*` role space) leak into the new design through
+> the back door. Mapping proven algorithms (OKLCH math, contrast solving) onto the new package is a
+> later, opportunistic step — the contracts come first. The old design plane + Nebula stay runnable
+> until the Tier-A reference app supersedes them.
+
+---
+
+## 9. Trust & failure model
+
+- **Fail-open everywhere.** Any failure (fetch, parse, verify, control-plane down, missing CSP
+  nonce) → no variables redefined → base app. The platform's product cannot be broken by us.
+- **No code execution in Tier A.** Themes are declarative values; there is no sandbox to escape.
+- **Client re-verification / drift.** When the platform tightens an invariant, tenant themes
+  re-verify on next load and recompile-from-StyleSpec or drop to base — no mass rebuild, no broken
+  tenants.
+- **Tenant isolation.** A tenant only fetches its own pointer; the artifact carries no tenant id
+  (the tenant→hash binding is the pointer's job), so two tenants on the same hash can't observe each
+  other.
+- **PII.** Prompts live control-plane-side only, never in a distributed artifact.
+
+---
+
+## 10. Deferred / out of scope (named, not forgotten)
+
+`chart-*` / `sidebar-*` roles (categorical, hue-rotation) → a later `vocabVersion` · `color-mix`
+consumption → Platform confirmation for now · cross-origin preview of the platform's *real* app →
+postMessage protocol (preview themes a same-origin reference gallery) · `density` output roles →
+MUI/Chakra adapters · sub-AA base themes · **Tier B** (layout/slots) and **Tier C** (the
+business-logic plane).
+
+---
+
+## 11. Map of the docs
+
+| To understand… | Read |
+|---|---|
+| the whole system (this) | `docs/DESIGN.md` |
+| every law, contract rationale, edge case | `docs/superpowers/specs/2026-06-17-governed-theming-pipeline-design.md` |
+| exact type/function names + package homes | `docs/superpowers/plans/2026-06-18-theming-00-interface-ledger.md` |
+| the 7 plans / 69 tasks + dependency DAG | `docs/superpowers/plans/2026-06-18-theming-00-suite-index.md` |
+| the ubiquitous language | `CONTEXT.md` |
+| how to run the demo / deploy | `docs/DEMO-RUNBOOK.md`, `docs/DEPLOY.md` |

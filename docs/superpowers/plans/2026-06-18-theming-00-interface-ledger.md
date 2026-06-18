@@ -35,6 +35,7 @@ packages/theming/   (@invariance/theming)  — pure, plane-agnostic deterministi
   src/compile/index.ts      → @invariance/theming/compile     (Plan 02)
   src/verify/index.ts       → @invariance/theming/verify      (Plan 03)
   src/artifact/index.ts     → @invariance/theming/artifact    (Plan 04)
+  src/scan/index.ts         → @invariance/theming/scan        (Plan 06; shared ScanPayload schema — both planes import it)
   src/index.ts              → @invariance/theming             (barrel re-export of all of the above)
 
 apps/control-plane/src/theming/

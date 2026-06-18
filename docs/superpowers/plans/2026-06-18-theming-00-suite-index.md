@@ -19,7 +19,7 @@ scan SDK and data-plane applier re-export live in `packages/client`; the SSR del
 at the host. If you'd package it differently, it's a path find-replace — flag it before execution.
 
 ```
-packages/theming/src/{roles,manifest,spec,session,profile,compile,verify,artifact}   # plane-agnostic core
+packages/theming/src/{roles,manifest,spec,session,profile,compile,verify,artifact,scan}   # plane-agnostic core (scan = shared ScanPayload schema)
 apps/control-plane/src/theming/{scan,publish,authoring}                              # control-plane stages
 packages/client/src/theming/{scan-sdk, …}                                            # data-plane SDK + applier re-export
 ```
