@@ -274,6 +274,22 @@ apps/<host>/                                                                    
 full authoring session runs end-to-end via MockAgent · after **07** real prompts produce verified
 themes and end users get SSR-themed, fail-open pages.
 
+**Build scope — the 7 plans are the *engine*, not the whole product.** They deliver the
+verifiable core (pipeline wall→compile→verify→publish, scan→manifest, applier, SSR delivery
+adapter) — MockAgent-proven after 05, real-LLM + SSR after 07. The human-facing surfaces in
+§4–§5 are **additional plans, not yet written** (build them *after* 01–07; they consume an
+already-proven-safe core):
+
+- **Governance Console UI** — connect + coverage report, var→role map confirm/edit, invariant
+  editor, per-tenant theme browser, kill-switch.
+- **Prompt widget** — the in-app UI the tenant admin types into; mounts the customize loop.
+- **Drop-in SDK package** — the `<script>`/React provider (tenant resolution, theme fetch,
+  applier + widget mount) — the §4 "app + SDK" box, packaged.
+- **Preview surface** — the same-origin shadcn reference gallery the session renders candidates
+  into (the renderer is built in 04; the gallery host is not).
+- **Reference app** — a Tailwind-v4/shadcn sample wired with the SDK as the living e2e (Plan 07
+  builds the *adapter*; it assumes a host app exists).
+
 > **Greenfield, by design.** `@invariance/theming` is built clean against these contracts, *not* by
 > reusing the existing `packages/design`. Reuse-first would let the old code's assumptions
 > (subject=user not tenant, always-emit-hex, `--inv-*` role space) leak into the new design through
