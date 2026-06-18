@@ -1,0 +1,76 @@
+// packages/theming/src/session/merge.test.ts
+import { describe, it, expect } from "vitest";
+import { mergeDelta, canonicalize } from "./merge.js";
+import type { StyleSpec } from "../spec/style-spec.js";
+
+// Typed Oklch leaves (post-wall shape). We build StyleSpecs directly to keep this unit pure.
+const ok = (l: number, c: number, h: number) => ({ l, c, h });
+
+describe("canonicalize", () => {
+  it("drops an empty colors group", () => {
+    const out = canonicalize({ colors: {} } as unknown as StyleSpec);
+    expect(out).toEqual({});
+  });
+  it("drops an empty typography group", () => {
+    const out = canonicalize({ typography: {} } as unknown as StyleSpec);
+    expect(out).toEqual({});
+  });
+  it("keeps non-empty groups and scalars", () => {
+    const spec = { colors: { primary: ok(0.3, 0.1, 250) }, radius: 8 } as unknown as StyleSpec;
+    expect(canonicalize(spec)).toEqual(spec);
+  });
+  it("the empty spec canonicalizes to itself (single representation of app default)", () => {
+    expect(canonicalize({} as StyleSpec)).toEqual({});
+  });
+});
+
+describe("mergeDelta", () => {
+  it("structural: a colors delta keeps untouched siblings", () => {
+    const draft = { colors: { primary: ok(0.3, 0.1, 250), neutral: ok(1, 0, 0) } } as unknown as StyleSpec;
+    const delta = { colors: { accent: ok(0.6, 0.2, 30) } } as unknown as StyleSpec;
+    const out = mergeDelta(draft, delta);
+    expect(out).toEqual({
+      colors: { primary: ok(0.3, 0.1, 250), neutral: ok(1, 0, 0), accent: ok(0.6, 0.2, 30) },
+    });
+  });
+
+  it("sentinel: null at a color leaf deletes that key; draft stays null-free", () => {
+    const draft = { colors: { primary: ok(0.3, 0.1, 250), accent: ok(0.6, 0.2, 30) } } as unknown as StyleSpec;
+    const delta = { colors: { accent: null } } as unknown as StyleSpec;
+    const out = mergeDelta(draft, delta);
+    expect(out).toEqual({ colors: { primary: ok(0.3, 0.1, 250) } });
+  });
+
+  it("sentinel: deleting the last color leaf drops the whole colors group (canonical)", () => {
+    const draft = { colors: { primary: ok(0.3, 0.1, 250) } } as unknown as StyleSpec;
+    const delta = { colors: { primary: null } } as unknown as StyleSpec;
+    expect(mergeDelta(draft, delta)).toEqual({});
+  });
+
+  it("scalar: a radius delta shallow-sets; null deletes it", () => {
+    expect(mergeDelta({ radius: 8 } as StyleSpec, { radius: 12 } as StyleSpec)).toEqual({ radius: 12 });
+    expect(mergeDelta({ radius: 8 } as StyleSpec, { radius: null } as unknown as StyleSpec)).toEqual({});
+  });
+
+  it("typography recurses one level like colors", () => {
+    const draft = { typography: { body: "a", mono: "b" } } as unknown as StyleSpec;
+    const delta = { typography: { mono: null, display: "c" } } as unknown as StyleSpec;
+    expect(mergeDelta(draft, delta)).toEqual({ typography: { body: "a", display: "c" } });
+  });
+
+  it("does not mutate its inputs (pure)", () => {
+    const draft = { colors: { primary: ok(0.3, 0.1, 250) } } as unknown as StyleSpec;
+    const delta = { colors: { accent: ok(0.6, 0.2, 30) } } as unknown as StyleSpec;
+    const draftCopy = structuredClone(draft);
+    mergeDelta(draft, delta);
+    expect(draft).toEqual(draftCopy);
+  });
+
+  it("merge result is always null-free", () => {
+    const out = mergeDelta(
+      { colors: { primary: ok(0.3, 0.1, 250) } } as unknown as StyleSpec,
+      { colors: { primary: null }, radius: null, mode: null } as unknown as StyleSpec,
+    );
+    expect(JSON.stringify(out)).not.toContain("null");
+  });
+});
