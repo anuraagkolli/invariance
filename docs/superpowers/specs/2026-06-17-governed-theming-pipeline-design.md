@@ -84,8 +84,11 @@ design renders.
 
 ## 2. The wall-grade spine (locked contracts)
 
-Six contracts are *wall-grade* — the compiler, verifier, and scanner all compile against them, so
-each is pinned with the same rigor. The remaining work (ramp-profile numbers, pipeline/session
+Five contracts are *wall-grade* — the boundaries everything deterministic compiles against: the
+**role graph** (§3), the **StyleSpec wall + delta-merge/session** (§4.1–4.4), the **scan payload**
+(§5), the **manifest** (§6), and the **artifact/applier/pointer** (§7). The **compiler** (§4.5) and
+**verifier** (§4.6) are the pure *consumers* of these, not separate boundaries. Each is pinned with
+the same rigor. The remaining work (ramp-profile numbers, pipeline/session
 orchestration, failure-UX templates, storage interfaces, the Next.js delivery adapter) is **assembly
 and eyes-on tuning with no new boundaries to cross**.
 
@@ -135,7 +138,7 @@ Designer can hear "more compact") with zero output roles in the shadcn instance 
 spacing; we do not invent spacing tokens). Versioning the axis, not its current expansion, keeps the
 wall stable when a later MUI/Chakra adapter has density-drivable vars.
 
-**`roles` — the v1 shadcn instance (~27 core roles):**
+**`roles` — the v1 shadcn instance (27 core roles):**
 
 | Group | Roles | Derivation |
 |---|---|---|
@@ -164,8 +167,13 @@ accessibility semantics, not mechanical pairing:
 - `ui`: `(ring, background)`, `(ring, card)`, `(ring, popover)` — a focusable control can sit on any
   of the base surfaces, so `ring` is checked against the **set** (WCAG 2.2 focus visibility). Ring on
   `muted`/`secondary` is documented out of scope for v1.
-- **`border` is intentionally *not* checked** — it is decorative, and forcing 3:1 would wreck the
-  subtle-border look every shadcn app has.
+- **`border` and `input` are intentionally *not* checked** — both treated as decorative. Forcing
+  3:1 on `border` would wreck the subtle-border look every shadcn app has. `input` is exempt under
+  the **explicit assumption** that an input is identified by more than its resting border (label,
+  placeholder, layout) and that its **focus** state — the one WCAG 2.2 most cares about — is covered
+  by the `ring` `ui`-pairs. If a vendor's inputs are distinguished *only* by their resting border,
+  `(input, background)` should be added as a `ui` pair for that app (a per-app extension, not the v1
+  default).
 
 ### 3.1 The three graph laws
 
@@ -194,9 +202,13 @@ accessibility semantics, not mechanical pairing:
    legible). Strategy sets the *initial placement*; the repair loop is the monotonic safety net
    beneath it.
 
-**Lock projection (graph-driven):** a lock targets an *output* role. If that role's derivation is
-`{kind:"seed", seed:S}`, the lock projects back to **rejecting any StyleSpec that sets seed `S`**
-(at the wall). If it is *derived*, the compiler **pins it to base post-expansion**.
+**Lock projection (graph-driven):** a lock targets either a **seed** or an **output role**. A
+**seed lock** (including the seed-only `neutral`) **wall-rejects any StyleSpec that sets that seed**,
+which freezes its *entire derivation closure* at base — the single primitive for "freeze my surfaces"
+(lock `neutral`) or "freeze my brand and everything derived from it" (lock `primary`). A lock on a
+**derived output role** is *not* rejected at the wall; the compiler **pins that one token to base
+post-expansion**, even if its seed moves. (A seed-named output role like `primary` resolves as a seed
+lock, since the role *is* the seed.)
 
 ---
 
@@ -238,11 +250,11 @@ const StyleSpec = z.object({
   the turn is rejected — the dangerous string never advances.
 - **Fonts are an allowlist index, never a free string** — the LLM cannot make the app load an
   arbitrary external font (perf, licensing, tracking).
-- **Lock projection at parse time:** a lock wall-rejects a delta **only when the locked role's own
-  derivation is `{kind:"seed"}`** (e.g. locked `primary` ⇒ reject any spec that sets `primary`). A
-  locked *derived* role is **never** rejected at the wall — the compiler pins it to base
-  post-expansion (§3.1, §4.5), so a legal seed change that happens to feed it stays legal. (The lock
-  projects from var→role space.)
+- **Lock projection at parse time:** a **seed lock** (any `SeedId`, including the seed-only
+  `neutral`) wall-rejects a delta that sets that seed — freezing its whole closure at base (the
+  "freeze my surfaces" / "freeze my brand" primitive). A **derived-role lock** is **never** rejected
+  at the wall; the compiler pins that token to base post-expansion (§3.1, §4.5), so a legal seed
+  change that happens to feed it stays legal. (The lock projects from var→role space.)
 - **Sentinel-as-typed-removal:** `null` is a legal *delta* value meaning "delete this key → revert
   this role to app default." It is the single recognized removal verb, keeping the wall a single
   closed schema (vs. a second op-algebra). `null` is a JSON primitive — trivially safe to parse, no
@@ -351,7 +363,8 @@ serialized output** and **trusts nothing upstream — not the LLM, not even the 
 
 - contrast ≥ `f(manifest.tier, pair.category)` for every `contrastPair`, in every allowed mode (a
   gamut clamp that pushed a foreground under floor is caught *here*, on the emitted triple);
-- every locked variable is byte-identical to base;
+- every locked variable equals its base — precisely `emit(base[mode][role]) == emittedVar` (base is
+  role-keyed), for both pinned derived-role locks and seed-frozen closures;
 - no color exceeds the chroma cap;
 - emitted modes ⊆ `manifest.modes.allowed`;
 - `isSafeCssTokenValue` on every value — implemented as **parse-then-reserialize**, not a regex, so a
@@ -395,6 +408,11 @@ ScanPayload = {
 - **Raw-consumption carve-out:** for `raw` consumption (`var(--x)` with no wrapping) there is no
   imposed obligation, so **held format dictates** the emit shape. Consumption only dictates when it
   *wraps*.
+- **`color-mix` has no single emit space, so it gets explicit teeth:** the channel space of a
+  `color-mix(...)` site depends on its arguments, so a var consumed that way has no well-defined
+  `emit.space`. For v1 it is **treated as low-confidence → routed to vendor confirmation** (never a
+  guessed emit), exactly like an opaque sheet. The shadcn "can" path uses no `color-mix`, so it is
+  unaffected; broader support is deferred.
 - **`opaqueSheets` has teeth:** because consumption could hide inside an unreadable sheet, a non-empty
   `opaqueSheets` **mechanically downgrades every var's consumption inference to "needs vendor
   confirmation"** (manifest `confidence:"inferred"`) unless corroborated by held format — never a
@@ -437,7 +455,7 @@ AppManifest = {
   invariants: {
     contrastTier: "AA" | "AAA"                           // → f(tier, pair.category)
     chromaCap: number
-    locks: RoleId[]                                      // base[mode][role] IS the pin; projected via graph seed/derived
+    locks: (SeedId | RoleId)[]                           // seed-lock ⇒ wall-reject re-seed (freezes closure); derived-role lock ⇒ pin to base[mode][role]
     allowedFonts: Array<{ id: FontStackId; stack: string }>
   }
 }
@@ -475,8 +493,10 @@ field validators cannot see):
   **customization-attributable by construction** (an invariant, not a runtime discrimination that can
   be wrong). Sub-AA base themes → a future dual-classification refinement; the shadcn "can" base meets
   AA, so v1 does not need it.
-- **Locked roles have complete base values:** ∀ `r ∈ locks`, ∀ `mode ∈ allowed`, `base[mode][r]`
-  exists — else the pin is dangling.
+- **Locks resolve, and derived-role pins have complete base:** every `locks` entry is either a
+  `SeedId ∈ vocab.seeds` (a seed lock) or a derived output role; for each **derived-role** lock, ∀
+  `mode ∈ allowed`, `base[mode][role]` exists — else the pin is dangling. (Seed locks need no
+  per-role base entry; they freeze by preventing the re-seed.)
 - **Per-mode selector presence:** every allowed mode has its selector recorded — a manifest allowing
   `dark` with no dark selector cannot emit a cascade-winning dark block (the invisible-override bug
   promoted to a validation failure, caught at manifest time, not first paint).
