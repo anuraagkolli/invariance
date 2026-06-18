@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { compile, type CandidateTheme } from "../src/compile/index.js";
-import { SHADCN_CAN } from "../src/manifest/index.js";
+import { SHADCN_CAN, AppManifest } from "../src/manifest/index.js";
 import { requiredContrast, ivRoles1, getRoleGraph } from "../src/roles/index.js";
 import { toOklch, contrast, emitValue } from "../src/compile/oklch.js";
 import type { StyleSpec } from "../src/spec/index.js";
@@ -28,6 +28,9 @@ function reconstructBase(raw: string, emit: EmitContract): string {
 // Re-serialize a base[mode][role] color value through the SAME emit contract the compiler uses, so
 // the base-as-canvas property is checked against the byte-exact value the compiler must reproduce.
 // NOTE: reconstructs the bare triple first (Contract #1) before passing to toOklch.
+// NOTE: After Fix 1, untouched/locked roles are emitted as LITERAL base strings — no round-trip.
+// This helper is retained for re-derived roles, but the primary empty-draft test now uses
+// literal base strings directly.
 function emitBaseColor(varName: string): string {
   const def = can.variables[varName]!;
   const role = def.role;
@@ -37,19 +40,25 @@ function emitBaseColor(varName: string): string {
 }
 
 describe("compile — empty draft is the exact base canvas", () => {
-  it("emits every COLOR base[light][role] verbatim through its emit contract for an empty draft", () => {
+  it("emits every COLOR base[light][role] as its LITERAL base string for an empty draft (byte-identical, no round-trip)", () => {
     const out: CandidateTheme = compile({}, can);
     const graph = getRoleGraph(can.vocabVersion);
-    // For an empty draft the affected closure is empty, so every color var must equal its base value
-    // re-serialized through the same emit contract (no ramp approximation — the canvas is base).
+    // Fix 1: for an empty draft the affected closure is empty (no seeds in draft), so every color
+    // var must be the LITERAL stored base string — not a round-tripped re-serialization.
+    // This is the byte-identity guarantee the Plan 03 verifier requires.
     for (const [varName, def] of Object.entries(can.variables)) {
       if (graph.roles[def.role]?.kind !== "color") continue;
-      if (can.base.light[def.role] === undefined) continue;
-      expect(out.light[varName]).toBe(emitBaseColor(varName));
+      const baseLiteral = can.base.light[def.role];
+      if (baseLiteral === undefined) continue;
+      // Assert byte-identity to the stored base literal (NOT a compiler-vs-itself round-trip).
+      expect(out.light[varName], `${varName} (role: ${def.role}) must be literal base`).toBe(baseLiteral);
     }
-    // background specifically (the surface-anchor) lands on its serialized base.
+    // background specifically (the surface-anchor) is byte-identical to its stored base.
     const bgVar = roleVar("background");
-    expect(out.light[bgVar]).toBe(emitBaseColor(bgVar));
+    expect(out.light[bgVar]).toBe(can.base.light["background"]);
+    // destructive is hue-wrapping: base is "0 72.2% 50.6%", NOT "360 72.2% 50.6%".
+    const destructiveVar = roleVar("destructive");
+    expect(out.light[destructiveVar]).toBe(can.base.light["destructive"]);
   });
 
   it("stamps vocab + profile versions in meta", () => {
@@ -67,6 +76,8 @@ describe("compile — empty draft is the exact base canvas", () => {
   it("emits a dark block when the manifest allows dark — dark is its OWN ladder, not inverted light", () => {
     // Build a minimal manifest that allows dark, with a dark base that passes AA.
     // We use SHADCN_CAN as the light base and supply a dark base from the iv-profile-1 dark ladder.
+    // Fix 3: ring lightness lifted to 65% so all three ui pairs (ring vs background/card/popover)
+    // clear the 3.0 floor: ring@65% vs bg@9% ≈7.0, vs card@12% ≈6.5 — both well above 3.0.
     const darkCan = {
       ...can,
       modes: {
@@ -97,7 +108,8 @@ describe("compile — empty draft is the exact base canvas", () => {
           "muted-fg":       "240 5% 64.9%",
           border:           "240 3.7% 22%",
           input:            "240 3.7% 22%",
-          ring:             "240 5.9% 20%",
+          // ring at 65% lightness: all three ui pairs clear 3.0 (ring@65 vs bg@9 ≈7.0, vs card@12 ≈6.5)
+          ring:             "240 5% 65%",
         },
       },
       // Locks must have base[dark] entries — card is locked and we provided dark.card above
@@ -106,6 +118,10 @@ describe("compile — empty draft is the exact base canvas", () => {
         locks: ["card"] as string[],
       },
     };
+
+    // Fix 3: assert the darkCan fixture is itself a valid AppManifest (refBasePassesTier passes).
+    expect(AppManifest.safeParse(darkCan).success, "darkCan must be a valid AppManifest").toBe(true);
+
     const draft: StyleSpec = { colors: { neutral: toOklch("oklch(0.45 0.02 250)") } };
     const out = compile(draft, darkCan);
 
@@ -154,8 +170,22 @@ describe("compile — locked roles are written last, verbatim from base", () => 
     const draft: StyleSpec = { colors: { neutral: toOklch("oklch(0.4 0.02 250)") } };
     const out = compile(draft, locked);
     const cardVar = roleVar("card");
-    const baseOut = compile({}, locked);
-    expect(out.light[cardVar]).toBe(baseOut.light[cardVar]); // pinned verbatim
+    // Fix 1: locked role must be the LITERAL base string (byte-identical), not a round-trip.
+    expect(out.light[cardVar]).toBe(can.base.light["card"]); // byte-identical to stored base literal
+  });
+
+  it("locking a hue-wrapping role (destructive) emits the LITERAL base string — no 360° drift", () => {
+    // destructive base is "0 72.2% 50.6%" — round-tripping through toOklch→emitValue yields
+    // "360 72.2% 50.6%" (hue wraps). Fix 1 ensures the literal is copied instead.
+    // This is exactly the Plan 03 verifier property: emitted === base[role] by literal string equality.
+    const locked = { ...can, invariants: { ...can.invariants, locks: ["destructive"] } };
+    const draft: StyleSpec = { colors: { primary: toOklch("oklch(0.55 0.2 20)") } };
+    const out = compile(draft, locked);
+    const destructiveVar = roleVar("destructive");
+    const baseLiteral = can.base.light["destructive"]!;
+    // Must be byte-identical to the stored base (e.g. "0 72.2% 50.6%"), NOT "360 72.2% 50.6%".
+    expect(out.light[destructiveVar]).toBe(baseLiteral);
+    expect(out.light[destructiveVar]).not.toContain("360");
   });
 });
 

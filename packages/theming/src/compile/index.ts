@@ -62,12 +62,13 @@ function roleEmitMap(manifest: AppManifest): Map<RoleId, EmitContract> {
   return map;
 }
 
-/** Compile one mode: expand the affected closure (base verbatim elsewhere), repair, return OKLCH per role. */
+/** Compile one mode: expand the affected closure (base verbatim elsewhere), repair, return OKLCH per role.
+ * Also returns the affected set so serializeMode can apply the verbatim rule without recomputing it. */
 function compileMode(
   mode: Mode,
   draft: StyleSpec,
   manifest: AppManifest,
-): Record<RoleId, Oklch> {
+): { values: Record<RoleId, Oklch>; affected: Set<RoleId> } {
   const graph = getRoleGraph(manifest.vocabVersion);
   const profile = getRampProfile(manifest.profileVersion);
   const modeProfile = mode === "light" ? profile.light : profile.dark;
@@ -127,7 +128,7 @@ function compileMode(
   // Job 2: contrast repair (fg moves, bg held, seeds fixed; ring multi-pair; root-pair best-effort).
   ctx.resolved = values;
   const { values: repaired } = repairContrast(values, ctx);
-  return repaired;
+  return { values: repaired, affected };
 }
 
 /** A dimension base value (e.g. "0.5rem" or "8px" or "8") parsed to px in .l. */
@@ -139,64 +140,68 @@ function dimOklch(raw: string): Oklch {
 }
 
 /** Serialize one mode's resolved OKLCH values to VarName→string per each var's emit contract.
- * Locked derived roles are written LAST, copying serialized base verbatim. */
+ *
+ * Verbatim rule (§4.5 + Plan 03 literal equality):
+ *   - VERBATIM (role NOT in the re-derive set — untouched OR locked): emit the LITERAL
+ *     `base[mode][role]` string with NO round-trip through toOklch/emitValue.
+ *     This guarantees byte-identical output vs the stored base so the Plan 03 verifier's
+ *     `emitted === base[role]` literal check always passes.
+ *   - RE-DERIVED (role ∈ the affected closure AND not locked): compute via emitValue as usual.
+ *
+ * The affected set is the closure of seeded-in-draft roles, minus locks (which are excluded
+ * from the closure in compileMode). We reconstruct it here by comparing the OKLCH values
+ * returned from compileMode against the parsed base canvas — but that round-trip is fragile.
+ * Instead, we accept the affected closure as a parameter so both steps share the same set.
+ */
 function serializeMode(
   mode: Mode,
   values: Record<RoleId, Oklch>,
+  affected: Set<RoleId>,
   manifest: AppManifest,
 ): Record<VarName, string> {
   const baseMode = mode === "light" ? manifest.base.light : (manifest.base.dark ?? manifest.base.light);
   const graph = getRoleGraph(manifest.vocabVersion);
-  const locks = new Set(manifest.invariants.locks);
   const out: Record<VarName, string> = {};
 
   for (const [varName, def] of Object.entries(manifest.variables)) {
     const role = def.role;
+    const baseVal = baseMode[role];
+
     if (graph.roles[role]?.kind === "typography") {
       // typography is a font-stack pick resolved outside OKLCH; emit base verbatim for v1.
-      const baseVal = baseMode[role];
       if (baseVal !== undefined) out[varName] = baseVal;
       continue;
     }
-    const v = values[role];
-    if (v === undefined) continue;
-    out[varName] = emitValue(v, def.emit, manifest.invariants.chromaCap);
-  }
 
-  // Locked derived roles written last, verbatim from serialized base.
-  // Contract #4: locked roles are written LAST so they overwrite any derived value.
-  // Contract #1: reconstruct before toOklch for the locked role's base value.
-  for (const [varName, def] of Object.entries(manifest.variables)) {
-    if (locks.has(def.role)) {
-      const baseVal = baseMode[def.role];
-      if (baseVal !== undefined) {
-        const kind = graph.roles[def.role]?.kind;
-        if (kind === "typography") {
-          out[varName] = baseVal;
-        } else if (kind === "dimension") {
-          const parsed = dimOklch(baseVal);
-          out[varName] = emitValue(parsed, def.emit, manifest.invariants.chromaCap);
-        } else {
-          // color: reconstruct bare-triple before toOklch (Contract #1)
-          const parseable = toParseableBase(baseVal, def.emit);
-          const parsed = toOklch(parseable);
-          out[varName] = emitValue(parsed, def.emit, manifest.invariants.chromaCap);
-        }
-      }
+    if (!affected.has(role)) {
+      // VERBATIM: role not in the re-derive set (untouched or locked).
+      // Emit the LITERAL base string — no round-trip, byte-identical to stored base.
+      if (baseVal !== undefined) out[varName] = baseVal;
+      continue;
+    }
+
+    // RE-DERIVED: role is in the affected closure (and not locked — locks are excluded from
+    // affected by compileMode). Compute via emitValue with the resolved OKLCH value.
+    const v = values[role];
+    if (v !== undefined) {
+      out[varName] = emitValue(v, def.emit, manifest.invariants.chromaCap);
     }
   }
+
   return out;
 }
 
 /** compile(draft, manifest) → CandidateTheme. Pure: same inputs → byte-identical output. */
 export function compile(draft: StyleSpec, manifest: AppManifest): CandidateTheme {
-  const light = serializeMode("light", compileMode("light", draft, manifest), manifest);
+  const lightResult = compileMode("light", draft, manifest);
+  const light = serializeMode("light", lightResult.values, lightResult.affected, manifest);
   const result: CandidateTheme = {
     light,
     meta: { vocabVersion: manifest.vocabVersion, profileVersion: manifest.profileVersion },
   };
   if (manifest.modes.allowed.includes("dark")) {
-    result.dark = serializeMode("dark", compileMode("dark", draft, manifest), manifest);
+    const darkResult = compileMode("dark", draft, manifest);
+    result.dark = serializeMode("dark", darkResult.values, darkResult.affected, manifest);
   }
   return result;
 }

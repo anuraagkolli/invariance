@@ -95,7 +95,10 @@ export function emitValue(color: Oklch, emit: EmitContract, chromaCap: number): 
       // hsl rides sRGB: gamut-map (only if out of gamut), read back as hsl, pin s/h when achromatic.
       const g = gamutMapSrgb(capped);
       const hsl = toHsl(g);
-      const h = fmt(achromatic ? 0 : hsl.h ?? 0, emit.precision);
+      // Normalize hue into [0,360): culori may return 360 for a red (hue=0°), which would produce
+      // "360 72.2% 50.6%" instead of "0 72.2% 50.6%", breaking literal equality with the stored base.
+      const rawH = achromatic ? 0 : (hsl.h ?? 0);
+      const h = fmt(((rawH % 360) + 360) % 360, emit.precision);
       const s = fmt(achromatic ? 0 : (hsl.s ?? 0) * 100, emit.precision);
       const l = fmt((hsl.l ?? 0) * 100, emit.precision);
       if (emit.shape === "function") return formatHsl(g);
