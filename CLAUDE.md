@@ -8,6 +8,15 @@ History note: this repo's earlier history (no longer tagged) is the previous ite
 
 **Domain vocabulary:** read `CONTEXT.md` (repo root) for the project's ubiquitous language — the canonical term for each concept and the aliases to avoid. Use these terms exactly; the key gotcha is that "plane" names two different axes (Control/Data plane = whose infra; Design/Business-logic plane = what's customized).
 
+## Build boundary — legacy stack vs the new Tier-A engine (read before writing code)
+
+Mid-pivot: the **Tier-A theming engine is being rebuilt greenfield** in a new, isolated package **`@invariance/theming`** (imports only zod + culori; the 7-plan suite under `docs/superpowers/plans/2026-06-18-theming-0x`). **Build all Tier-A work there.** Do NOT build on or extend, for Tier-A:
+
+- **Legacy live-demo stack (keep runnable — `pnpm demo` needs it — do not extend):** `packages/{design,design-schema,client,server}`, `apps/{control-plane,console,demo,nebula}`. Retired only once the Tier-A reference app (a later plan) supersedes Nebula.
+- **Abandoned reuse-based Tier-A code (superseded by `@invariance/theming`; parked, not deleted):** `packages/cli/src/discover/`, `packages/design/src/runtime/apply-mapped.ts`, `packages/design/src/config/design-config-constraints.ts`, `DesignConfig.variableRoleMap`/`allowedModes` (`packages/schema/src/design-config.ts`), and Nebula's `apps/nebula/src/lib/dev-config.ts` (`mergeInvarianceConfig`). Earlier `--inv-*`/subject=user reuse approach; the greenfield engine replaces it. Some is wired into the live demo — retire with the legacy stack, not piecemeal.
+
+The new engine deliberately imports none of the above (greenfield — `docs/DESIGN.md` §8).
+
 ## Architecture (two planes)
 
 - **Control plane (our infra):** authoring (prompt → mod via an LLM — **qwen2.5 via Ollama by default, Anthropic opt-in** — with the verifier in the generation loop), verification (static analysis → capability extraction → contract checks → policy engine), registry (per-user mod revisions, CDN publishing, kill-switch flags), analytics. Modular monolith in `apps/control-plane`.

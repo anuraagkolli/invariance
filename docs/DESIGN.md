@@ -295,7 +295,10 @@ already-proven-safe core):
 > (subject=user not tenant, always-emit-hex, `--inv-*` role space) leak into the new design through
 > the back door. Mapping proven algorithms (OKLCH math, contrast solving) onto the new package is a
 > later, opportunistic step — the contracts come first. The old design plane + Nebula stay runnable
-> until the Tier-A reference app supersedes them.
+> until the Tier-A reference app supersedes them. An earlier *reuse-based* Tier-A attempt is also
+> parked in the legacy stack (`cli/discover`, `apply-mapped.ts`, the `design-config-constraints`
+> bridge, `DesignConfig.variableRoleMap`) — superseded by this engine, not reused, and retired later
+> with the rest of the legacy stack rather than piecemeal. (CLAUDE.md "Build boundary" has the map.)
 
 ---
 
