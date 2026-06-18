@@ -1,8 +1,11 @@
 // packages/theming/src/manifest/schema.ts
 import { z } from "zod";
-import { wcagContrast } from "culori";
+import { wcagContrast, converter } from "culori";
 import { getRoleGraph, classifySeedOrDerived } from "../roles/graph.js";
 import { requiredContrast } from "../roles/contrast.js";
+
+// Culori parser used to check parseability before wcagContrast (which throws on unparseable input).
+const _toOklch = converter("oklch");
 
 // The format-contract emit struct (§5/§6). Space includes the literal null member.
 export type Shape = "triple" | "function" | "raw" | "number";
@@ -135,17 +138,81 @@ export const AppManifest = z
 
     // refBasePassesTier — THE §3 gate, blocking. ∀ contrastPair, ∀ allowed mode:
     // ratio(base[mode][fg], base[mode][bg]) ≥ requiredContrast(tier, category).
+    //
+    // base is stored emit-verbatim (§5 contract). For the shadcn path that is a bare HSL
+    // triple like "0 0% 100%", which culori cannot parse directly. We reconstruct a
+    // parseable color string from each variable's emit contract before calling wcagContrast.
+    //
+    // Build a role → emit lookup by inverting m.variables.
+    const roleEmit = new Map<string, { shape: Shape; space: Space }>();
+    for (const v of Object.values(m.variables)) {
+      if (!roleEmit.has(v.role)) {
+        roleEmit.set(v.role, { shape: v.emit.shape, space: v.emit.space });
+      }
+    }
+
+    // Reconstruct a raw base value into a culori-parseable CSS color string.
+    // Strategy: try the value as-is first (handles hex, named, function-form values that culori can
+    // parse directly). If that fails, reconstruct using the variable's emit contract. This is the
+    // conservative safe path — it handles both well-formed hex test fixtures and real shadcn-emitted
+    // bare HSL triples ("0 0% 100%") without breaking pre-existing fixtures.
+    function toParseableColor(raw: string, role: string): string {
+      // Fast path: culori can already parse it (hex, named color, or CSS function like "hsl(...)").
+      try {
+        if (_toOklch(raw) !== undefined) {
+          return raw;
+        }
+      } catch {
+        // fall through to reconstruction
+      }
+      // Slow path: reconstruct via emit contract.
+      const emit = roleEmit.get(role);
+      if (!emit) {
+        // No emit info and raw is not parseable — return raw and let the caller handle the failure.
+        return raw;
+      }
+      const { shape, space } = emit;
+      if (shape === "triple" && space !== null) {
+        // e.g. "0 0% 100%" → "hsl(0 0% 100%)"
+        return `${space}(${raw})`;
+      }
+      // shape === "raw" | "function": already should be parseable (handled by fast path above).
+      // shape === "number": not a color; shouldn't appear in contrastPairs — return raw as guard.
+      return raw;
+    }
+
     for (const mode of m.modes.allowed) {
       const baseForMode = mode === "dark" ? m.base.dark : m.base.light;
       if (!baseForMode) continue; // a missing dark base is surfaced elsewhere; skip the contrast pass
       for (const pair of graph.contrastPairs) {
-        const fg = baseForMode[pair.fg];
-        const bg = baseForMode[pair.bg];
-        if (fg === undefined || bg === undefined) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["base", mode], message: `base[${mode}] missing ${fg === undefined ? pair.fg : pair.bg} for contrast pair` });
+        const fgRaw = baseForMode[pair.fg];
+        const bgRaw = baseForMode[pair.bg];
+        if (fgRaw === undefined || bgRaw === undefined) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["base", mode], message: `base[${mode}] missing ${fgRaw === undefined ? pair.fg : pair.bg} for contrast pair` });
           continue;
         }
-        const ratio = wcagContrast(fg, bg);
+        const fgColor = toParseableColor(fgRaw, pair.fg);
+        const bgColor = toParseableColor(bgRaw, pair.bg);
+        let ratio: number;
+        try {
+          ratio = wcagContrast(fgColor, bgColor);
+          // culori returns NaN or a non-finite number when a value cannot be parsed
+          if (!isFinite(ratio)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["base", mode, pair.fg],
+              message: `base ${mode} (${pair.fg} on ${pair.bg}) could not parse color values for contrast check`,
+            });
+            continue;
+          }
+        } catch {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["base", mode, pair.fg],
+            message: `base ${mode} (${pair.fg} on ${pair.bg}) could not parse color values for contrast check`,
+          });
+          continue;
+        }
         const floor = requiredContrast(m.invariants.contrastTier, pair.category);
         if (!(ratio >= floor)) {
           ctx.addIssue({
