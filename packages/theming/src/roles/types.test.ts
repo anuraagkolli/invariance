@@ -43,6 +43,6 @@ describe("roles/types", () => {
       roles: { primary: { kind: "color", derivation: { kind: "seed", seed: "primary" } } },
       contrastPairs: [{ fg: "foreground", bg: "background", category: "text" }],
     };
-    expectTypeOf(graph.contrastPairs[0]).toMatchTypeOf<ContrastPair>();
+    expectTypeOf(graph.contrastPairs[0]!).toMatchTypeOf<ContrastPair>();
   });
 });
