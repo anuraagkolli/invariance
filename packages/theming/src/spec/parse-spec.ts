@@ -75,6 +75,14 @@ export function parseSpec(json: unknown, manifest: AppManifest): ParseResult {
       failures.push({ code: "seed_locked", path: axis, message: `seed "${axis}" is locked` });
     }
   }
+  // typography seeds (display/body/mono) are lockable seeds; a lock rejects setting them.
+  if (spec.typography) {
+    for (const pick of ["display", "body", "mono"] as const) {
+      if (spec.typography[pick] !== undefined && seedLocks.has(pick)) {
+        failures.push({ code: "seed_locked", path: `typography.${pick}`, message: `seed "${pick}" is locked` });
+      }
+    }
+  }
 
   // 3) Font allowlist membership (a non-null typography leaf must be an allowed font id).
   const allowedFontIds = new Set(manifest.invariants.allowedFonts.map((f) => f.id));

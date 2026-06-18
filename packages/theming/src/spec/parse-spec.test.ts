@@ -87,4 +87,23 @@ describe("parseSpec — the wall", () => {
     const r = parseSpec({ typography: { body: null } }, SHADCN_CAN);
     expect(r.ok).toBe(true);
   });
+
+  it("seed-lock projection: locked typography seed is rejected with seed_locked", () => {
+    const m = structuredClone(SHADCN_CAN);
+    m.invariants.locks = ["body"]; // typography seed lock
+    // Use an ALLOWED font id so the failure is specifically seed_locked, not font_not_allowed
+    const r = parseSpec({ typography: { body: "sans" } }, m);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.failures.some((f) => f.code === "seed_locked")).toBe(true);
+      expect(r.failures.some((f) => f.path === "typography.body")).toBe(true);
+    }
+  });
+
+  it("seed-lock projection: unlocked typography seed with allowed font passes", () => {
+    const m = structuredClone(SHADCN_CAN);
+    m.invariants.locks = []; // no locks
+    const r = parseSpec({ typography: { body: "sans" } }, m);
+    expect(r.ok).toBe(true);
+  });
 });
