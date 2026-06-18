@@ -73,7 +73,8 @@ export function deriveRole(role: RoleId, ctx: DeriveCtx): Oklch {
     }
 
     case "pick":
-      // typography picks are not OKLCH — handled outside the OKLCH path; return a sentinel.
+      // typography picks are not OKLCH — handled outside the OKLCH path; this branch throws
+      // because a caller that reaches here has a code path bug (pick roles have no OKLCH value).
       throw new Error(`pick derivation has no OKLCH value: ${role}`);
 
     case "foreground-of": {

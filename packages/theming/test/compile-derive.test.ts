@@ -73,6 +73,8 @@ describe("deriveRole — foreground-of", () => {
     c.resolved["background"] = deriveRole("background", c);
     const fg = deriveRole("foreground", c);
     expect(contrast(fg, c.resolved["background"]!)).toBeGreaterThanOrEqual(requiredContrast("AA", "text"));
+    // light-bg maximize: foreground runs toward the DARK extreme (L=0).
+    expect(fg.l).toBe(0);
   });
 
   it("minimum-legible (muted-fg) stops at the large-text floor, not the extreme", () => {
@@ -87,6 +89,38 @@ describe("deriveRole — foreground-of", () => {
     c.resolved["background"] = deriveRole("background", c);
     const maxFg = deriveRole("foreground", c); // foreground-of(background, maximize-contrast)
     expect(contrast(maxFg, c.resolved["muted"]!)).toBeGreaterThan(ratio);
+  });
+
+  it("maximize-contrast on a DARK background yields a light foreground toward L=1 that clears AA text", () => {
+    // Dark bg (anchorL ≈ 0.145) — the contrast-increasing extreme is WHITE, not black.
+    // The foreground search must step toward L=1, not L=0.
+    const c = ctx("dark");
+    c.resolved["background"] = deriveRole("background", c);
+    const fg = deriveRole("foreground", c);
+    const bg = c.resolved["background"]!;
+    const ratio = contrast(fg, bg);
+    expect(ratio).toBeGreaterThanOrEqual(requiredContrast("AA", "text"));
+    // fg.l must be well above mid (rising toward white, not sinking toward black).
+    expect(fg.l).toBeGreaterThan(0.5);
+    // dark-bg maximize: runs all the way to the LIGHT extreme (L=1).
+    expect(fg.l).toBe(1);
+  });
+
+  it("minimum-legible on a dark muted surface stops at the large-text floor, not the extreme", () => {
+    // Dark muted (anchorL + surfaceSteps.muted = 0.145 + 0.125 = 0.27) — still dark.
+    // minimum-legible stops as soon as contrast ≥ 3.0 (AA large-text), well before L=1.
+    const c = ctx("dark");
+    c.resolved["muted"] = deriveRole("muted", c);
+    const mutedFg = deriveRole("muted-fg", c);
+    const bg = c.resolved["muted"]!;
+    const ratio = contrast(mutedFg, bg);
+    // clears the large-text floor (≈ 3.0)
+    expect(ratio).toBeGreaterThanOrEqual(requiredContrast("AA", "large-text"));
+    // stops well below the light extreme — L should not be 1.0 (that would be maximize, not minimum-legible).
+    expect(mutedFg.l).toBeLessThan(1);
+    // and must be strictly less contrast than a maximize-contrast run on the same bg
+    const maxFg = { l: 1, c: 0, h: bg.h }; // extreme white
+    expect(contrast(maxFg, bg)).toBeGreaterThan(ratio);
   });
 });
 
