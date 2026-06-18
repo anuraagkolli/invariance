@@ -5,3 +5,5 @@ export * from "./roles/index.js";
 export * from "./spec/index.js";
 export * from "./manifest/index.js";
 export * from "./session/index.js";
+export * from "./profile/index.js";
+export * from "./compile/index.js";
