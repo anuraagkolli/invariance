@@ -1,56 +1,123 @@
 // packages/theming/test/verify/css-safe.test.ts
 import { describe, it, expect } from 'vitest';
-import { isSafeCssTokenValue } from '../../src/verify/css-safe.js';
+import { isSafeCssTokenValue, _positiveParseOnly } from '../../src/verify/css-safe.js';
 
-describe('isSafeCssTokenValue', () => {
-  it('accepts ordinary emitted color/dimension/typography values', () => {
-    expect(isSafeCssTokenValue('hsl(0 0% 100%)')).toBe(true);
-    expect(isSafeCssTokenValue('oklch(0.62 0.19 29.2)')).toBe(true);
-    expect(isSafeCssTokenValue('rgb(255 255 255)')).toBe(true);
-    expect(isSafeCssTokenValue('0 0% 100%')).toBe(true);
-    expect(isSafeCssTokenValue('0.5rem')).toBe(true);
-    expect(isSafeCssTokenValue('#ffffff')).toBe(true);
+// ---------------------------------------------------------------------------
+// ACCEPT — real compiler emits (all must return true)
+// ---------------------------------------------------------------------------
+describe('isSafeCssTokenValue — ACCEPT (real compiler emits)', () => {
+  it('shape:number — plain finite numbers', () => {
+    expect(isSafeCssTokenValue('8')).toBe(true);
+    expect(isSafeCssTokenValue('0.5')).toBe(true);
+    expect(isSafeCssTokenValue('-2')).toBe(true);
     expect(isSafeCssTokenValue('1.25')).toBe(true);
+  });
+
+  it('shape:triple — numeric channel triples (bare hsl/rgb/oklch components)', () => {
+    expect(isSafeCssTokenValue('0 0% 100%')).toBe(true);
+    expect(isSafeCssTokenValue('240 5.9% 10%')).toBe(true);
+    expect(isSafeCssTokenValue('0 72.2% 50.6%')).toBe(true);
+    expect(isSafeCssTokenValue('0 0 0')).toBe(true); // rgb triple
+  });
+
+  it('shape:function — culori-parseable color function forms', () => {
+    expect(isSafeCssTokenValue('oklch(0.62 0.19 29)')).toBe(true);
+    expect(isSafeCssTokenValue('hsl(0 0% 100%)')).toBe(true);
+  });
+
+  it('shape:hex — culori-parseable hex colors', () => {
+    expect(isSafeCssTokenValue('#ffffff')).toBe(true);
+    expect(isSafeCssTokenValue('#fff')).toBe(true);
+  });
+
+  it('shape:raw font-stack — comma-separated font identifiers and quoted strings', () => {
+    expect(isSafeCssTokenValue("ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif")).toBe(true);
     expect(isSafeCssTokenValue('ui-sans-serif, system-ui, sans-serif')).toBe(true);
   });
+});
 
-  it('rejects a semicolon (terminates the declaration)', () => {
-    expect(isSafeCssTokenValue('red; color: blue')).toBe(false);
+// ---------------------------------------------------------------------------
+// REJECT — injection attempts and malformed values (all must return false)
+// ---------------------------------------------------------------------------
+describe('isSafeCssTokenValue — REJECT (injection / breakout attempts)', () => {
+  it('THE critical bug fix: expression(alert(1)) is now REJECTED', () => {
+    // This was the motivating bypass: expression() is not a number, not a triple,
+    // not a culori color, and not a clean font-stack (contains parens) → structurally rejected.
+    expect(isSafeCssTokenValue('expression(alert(1))')).toBe(false);
   });
 
-  it('rejects a closing brace (escapes the rule block)', () => {
-    expect(isSafeCssTokenValue('red } body { display:none')).toBe(false);
+  it('rejects CSS injection via semicolon + rule injection', () => {
+    expect(isSafeCssTokenValue('red; } body { display:none')).toBe(false);
   });
 
-  it('rejects an opening brace (opens a new block)', () => {
-    expect(isSafeCssTokenValue('red { x: y')).toBe(false);
+  it('rejects semicolon+rule appended to a color', () => {
+    expect(isSafeCssTokenValue('#fff; color:red')).toBe(false);
   });
 
-  it('rejects comment delimiters', () => {
-    expect(isSafeCssTokenValue('red /* comment */')).toBe(false);
-    expect(isSafeCssTokenValue('red */')).toBe(false);
+  it('rejects url() exfiltration', () => {
+    expect(isSafeCssTokenValue('url(https://evil)')).toBe(false);
   });
 
-  it('rejects at-rules and url() exfiltration', () => {
-    expect(isSafeCssTokenValue('@import "evil.css"')).toBe(false);
-    expect(isSafeCssTokenValue('url(http://evil.example/leak)')).toBe(false);
-    expect(isSafeCssTokenValue('URL(x)')).toBe(false);
+  it('rejects </style> breakout via angle brackets', () => {
+    expect(isSafeCssTokenValue('</style><script>')).toBe(false);
   });
 
-  it('rejects backslash escapes and angle brackets', () => {
-    expect(isSafeCssTokenValue('\\3c script')).toBe(false);
-    expect(isSafeCssTokenValue('</style>')).toBe(false);
+  it('rejects CSS comment injection', () => {
+    expect(isSafeCssTokenValue('/* */ red')).toBe(false);
+  });
+
+  it('rejects at-rule injection', () => {
+    expect(isSafeCssTokenValue("@import 'x'")).toBe(false);
+  });
+
+  it('rejects closing brace (escapes rule block)', () => {
+    expect(isSafeCssTokenValue('100%}')).toBe(false);
+  });
+
+  it('rejects backslash escape sequences', () => {
+    expect(isSafeCssTokenValue('red\\3c')).toBe(false);
   });
 
   it('rejects empty and whitespace-only values', () => {
     expect(isSafeCssTokenValue('')).toBe(false);
     expect(isSafeCssTokenValue('   ')).toBe(false);
   });
+});
 
-  it('round-trips: a value that survives the deny set re-serializes unchanged', () => {
-    // A value with no forbidden chars but trailing artifacts must still equal itself when
-    // round-tripped — proves we did not silently normalize away a smuggled separator.
-    expect(isSafeCssTokenValue('hsl(0 0% 100%)')).toBe(true);
-    expect(isSafeCssTokenValue('var(--x)')).toBe(true); // var() is a legitimate token, no breakout
+// ---------------------------------------------------------------------------
+// Regression: positive parse alone is sufficient (fast-reject is not the real guard)
+// ---------------------------------------------------------------------------
+describe('_positiveParseOnly — regression: positive parse alone rejects breakouts', () => {
+  it('rejects expression(alert(1)) via positive parse, without fast-reject', () => {
+    // expression() contains parens → not a plain number, not a numeric triple,
+    // not a culori color, and not a clean font-stack.
+    expect(_positiveParseOnly('expression(alert(1))')).toBe(false);
+  });
+
+  it('rejects url(https://evil) via positive parse', () => {
+    expect(_positiveParseOnly('url(https://evil)')).toBe(false);
+  });
+
+  it('still accepts all compiler-emitted forms via positive parse', () => {
+    expect(_positiveParseOnly('8')).toBe(true);
+    expect(_positiveParseOnly('0 0% 100%')).toBe(true);
+    expect(_positiveParseOnly('#ffffff')).toBe(true);
+    expect(_positiveParseOnly('oklch(0.62 0.19 29)')).toBe(true);
+    expect(_positiveParseOnly('hsl(0 0% 100%)')).toBe(true);
+    expect(_positiveParseOnly("ui-sans-serif, system-ui, 'Segoe UI', sans-serif")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Legacy accept cases that must still pass (backward compat for other callers)
+// ---------------------------------------------------------------------------
+describe('isSafeCssTokenValue — legacy accept cases', () => {
+  it('accepts rgb() function form', () => {
+    // rgb(255 255 255) is culori-parseable
+    expect(isSafeCssTokenValue('rgb(255 255 255)')).toBe(true);
+  });
+
+  it('accepts oklch with decimal hue', () => {
+    expect(isSafeCssTokenValue('oklch(0.62 0.19 29.2)')).toBe(true);
   });
 });
