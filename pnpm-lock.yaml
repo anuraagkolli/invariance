@@ -363,6 +363,9 @@ importers:
 
   packages/theming:
     dependencies:
+      '@invariance/schema':
+        specifier: workspace:*
+        version: link:../schema
       culori:
         specifier: ^4
         version: 4.0.2
