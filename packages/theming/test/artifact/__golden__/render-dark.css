@@ -1,0 +1,4 @@
+.dark {
+  --background: oklch(0.15 0 0);
+  --primary: oklch(0.7 0.2 250);
+}
