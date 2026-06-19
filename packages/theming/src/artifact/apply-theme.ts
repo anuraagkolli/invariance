@@ -1,4 +1,10 @@
 // packages/theming/src/artifact/apply-theme.ts
+/// <reference lib="dom" />
+// ^ This file (the CLIENT sink) is the ONLY DOM-touching module in the otherwise plane-agnostic
+// core. The directive travels WITH the source, so any consumer that compiles the theming barrel —
+// including Node packages whose own tsconfig lib lacks DOM (e.g. @invariance/control-plane) — gets
+// the DOM types for this file and typechecks. (Relying on the package-wide tsconfig `lib:["DOM"]`
+// alone does NOT propagate to source-importing consumers; see the Plan-04 T7 / Plan-05 finding.)
 import type { ThemeArtifact } from "./theme-artifact.js";
 import type { Mode } from "./deps.js";
 import { isSafeCssTokenValue } from "./deps.js";
