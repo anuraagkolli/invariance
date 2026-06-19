@@ -9,3 +9,4 @@ export type {
   CoverageReport,
   CoverageReason,
 } from "./scanner.js";
+export { getCanManifest } from "./can-path.js";
