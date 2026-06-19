@@ -11,8 +11,12 @@ import type { FailOpenReason, ResolveThemeTagArgs } from "./resolve-theme-tag.js
 
 /**
  * Neutralize the one HTML-parser breakout an inline script body can carry: a literal `</script`
- * sequence. CSS values already pass isSafeCssTokenValue (no `</style>`, no breakout), and the JSON
- * string is the only place text is embedded, so escaping `</` → `<\/` makes the closing tag inert.
+ * sequence. This escape is LOAD-BEARING, not redundant. `renderStyleText` embeds both the var NAME
+ * and the CSS SELECTOR into the output, and those fields are unconstrained `z.string()` in
+ * `ThemeArtifact` — they are NOT scanned by `isSafeCssTokenValue`, which only scans VALUES.
+ * A var name or selector containing `</script>` would reach the script body verbatim without this
+ * guard. Escaping `</` → `<\/` is the only thing that prevents such a sequence from closing the
+ * inline `<script>` early and injecting arbitrary HTML.
  */
 function escapeForInlineScript(json: string): string {
   return json.replace(/<\//g, "<\\/");

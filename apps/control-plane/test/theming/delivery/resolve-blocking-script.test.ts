@@ -122,4 +122,30 @@ describe("resolveBlockingScript (the fallback delivery tier)", () => {
     const r = await resolveBlockingScript({ tenant: "t1", mode: "light", nonce: "", stores });
     expect(r).toEqual({ script: null, reason: "no_nonce" });
   });
+
+  it("load-bearing escape: a </script> in a var NAME is neutralized before it reaches the script body", async () => {
+    // The value is safe (passes isSafeCssTokenValue) so resolution does NOT short-circuit at
+    // unsafe_value — the malicious NAME flows all the way into renderStyleText/escapeForInlineScript.
+    const art = makeArtifact({
+      modes: {
+        light: {
+          selector: ":root",
+          vars: { "--x</script><img src=x onerror=alert(1)>": "oklch(1 0 0)" },
+        },
+      } as ThemeArtifact["modes"],
+    });
+    const hash = hashArtifact(art);
+    const stores = stubStores({
+      pointer: { hash, status: "live", updatedAt: "x" },
+      artifactByHash: new Map([[hash, art]]),
+    });
+    const r = await resolveBlockingScript({ tenant: "t1", mode: "light", nonce: "abc", stores });
+    expect("script" in r && typeof (r as { script: string }).script === "string").toBe(true);
+    const script = (r as { script: string }).script!;
+    // Extract the inline script body (between the opening <script nonce="abc"> and the closing </script>)
+    const open = '<script nonce="abc">';
+    const body = script.slice(open.length, -"</script>".length);
+    // The body must NOT contain a raw </script sequence — escapeForInlineScript must have fired
+    expect(body.toLowerCase()).not.toContain("</script");
+  });
 });
