@@ -63,6 +63,9 @@ importers:
       '@invariance/schema':
         specifier: workspace:*
         version: link:../../packages/schema
+      '@invariance/theming':
+        specifier: workspace:*
+        version: link:../../packages/theming
       acorn:
         specifier: ^8.14.0
         version: 8.16.0
