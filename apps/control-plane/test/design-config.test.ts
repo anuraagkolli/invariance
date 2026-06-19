@@ -16,7 +16,7 @@ describe("PUT/GET /design-config carries variableRoleMap", () => {
     expect(put.status).toBe(200);
 
     const get = await app.request("/v1/apps/acme/design-config");
-    const got = await get.json();
+    const got = (await get.json()) as any;
     expect(got.variableRoleMap["--primary"]).toEqual({
       role: "accent", scope: ":root", locked: true,
     });

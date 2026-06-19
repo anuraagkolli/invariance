@@ -10,9 +10,22 @@ import type { Mode } from "@invariance/theming";
 
 export const MODE_COOKIE = "iv-theme-mode";
 
-export function bootstrapMode(args: { doc: Document; defaultMode: Mode }): void {
+// Minimal structural DOM surface this file needs. Declaring locally keeps DOM types file-scoped —
+// no program-global DOM lib leak. A real browser Document/Window is structurally assignable.
+interface MediaQueryResult {
+  matches: boolean;
+}
+interface BootstrapView {
+  matchMedia?: (query: string) => MediaQueryResult;
+}
+interface BootstrapDocument {
+  defaultView: BootstrapView | null;
+  cookie: string;
+}
+
+export function bootstrapMode(args: { doc: BootstrapDocument; defaultMode: Mode }): void {
   const { doc, defaultMode } = args;
-  const view = doc.defaultView as (Window & typeof globalThis) | null;
+  const view = doc.defaultView;
   if (!view || typeof view.matchMedia !== "function") return; // cannot resolve system → concrete
 
   const prefersDark = view.matchMedia("(prefers-color-scheme: dark)").matches;

@@ -1,22 +1,35 @@
 // packages/theming/src/artifact/apply-theme.ts
-/// <reference lib="dom" />
-// ^ This file (the CLIENT sink) is the ONLY DOM-touching module in the otherwise plane-agnostic
-// core. The directive travels WITH the source, so any consumer that compiles the theming barrel —
-// including Node packages whose own tsconfig lib lacks DOM (e.g. @invariance/control-plane) — gets
-// the DOM types for this file and typechecks. (Relying on the package-wide tsconfig `lib:["DOM"]`
-// alone does NOT propagate to source-importing consumers; see the Plan-04 T7 / Plan-05 finding.)
+//
+// CLIENT sink. Injects a <style> at the END of <head> (source-order cascade win).
+// Nonce is DISCOVERED via the .nonce IDL property. Fail open: unsafe value, or
+// CSP-enforced-but-no-usable-nonce, or no block → inject nothing. (§7.2)
+
+// Minimal structural DOM surface this file needs. Declaring it locally keeps DOM types FILE-SCOPED:
+// no `/// <reference lib="dom" />` (which is program-global and would leak DOM globals into every Node
+// consumer that compiles the theming barrel). A real browser Document/HTMLStyleElement is structurally
+// assignable to these, so real callers pass `document` unchanged.
+interface NoncedElement {
+  nonce?: string;
+}
+interface StyleElement {
+  nonce?: string;
+  textContent: string | null;
+}
+interface ApplyDocument {
+  querySelector(selectors: string): NoncedElement | null;
+  createElement(tagName: "style"): StyleElement;
+  head: { appendChild(node: StyleElement): unknown };
+}
+
 import type { ThemeArtifact } from "./theme-artifact.js";
 import type { Mode } from "./deps.js";
 import { isSafeCssTokenValue } from "./deps.js";
 import { renderStyleText } from "./render.js";
 
-// CLIENT sink. Injects a <style> at the END of <head> (source-order cascade win).
-// Nonce is DISCOVERED via the .nonce IDL property. Fail open: unsafe value, or
-// CSP-enforced-but-no-usable-nonce, or no block → inject nothing. (§7.2)
 export function applyTheme(
   artifact: ThemeArtifact,
   mode: Mode,
-  opts: { doc: Document },
+  opts: { doc: ApplyDocument },
 ): void {
   const block = artifact.modes[mode];
   if (!block) return; // no block for this mode → inject nothing
@@ -31,9 +44,7 @@ export function applyTheme(
 
   const { doc } = opts;
   // Discover a trusted nonce via the .nonce IDL property (the attribute is hidden in the DOM).
-  const trusted = doc.querySelector("style[nonce],script[nonce]") as
-    | (HTMLElement & { nonce?: string })
-    | null;
+  const trusted = doc.querySelector("style[nonce],script[nonce]");
 
   const style = doc.createElement("style");
   if (trusted) {
