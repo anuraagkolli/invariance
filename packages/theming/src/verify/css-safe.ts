@@ -2,19 +2,26 @@
 //
 // A CSS *token value* is the right-hand side of `--x: <value>`. It is "safe" iff it POSITIVELY
 // parses as one of the known-safe shapes the compiler actually emits. This is a POSITIVE
-// parse-then-accept (spec §4.6: "parse-then-reserialize, not a regex") — a value is accepted only
-// if it structurally matches an expected form; unknown values (including expression(), url(),
-// comment injection, at-rules, etc.) are rejected because they fail every positive form.
+// parse-then-accept (spec §4.6) — a value is accepted only if it structurally matches an expected
+// form; unknown values (including expression(), url(), comment injection, at-rules, etc.) are
+// rejected because they fail every positive form.
 //
 // The four safe shapes:
 //   1. Plain number        — finite number, purely numeric string (shape:"number")
 //   2. Numeric channel triple — whitespace-separated tokens each being <number> or <number>%
 //                              (shape:"triple" — bare hsl/rgb/oklch triples)
-//   3. culori-parseable color — culori parse() returns non-null (hex, named, function forms)
+//   3. culori-parseable color — culori parse() returns non-undefined (hex, named, function forms)
 //   4. Font-stack           — comma-separated CSS font identifiers/quoted strings, safe chars only
 //
-// A fast-reject of hard breakout characters is kept as defense-in-depth BEFORE the positive parse,
-// but the positive parse alone is sufficient: expression(...) fails all four forms even without it.
+// Lexical precondition (part of the positive parse): any value containing a C0 control character
+// (U+0000–U+001F) or DEL (U+007F) is rejected BEFORE the four-form parse. A valid CSS token value
+// the compiler emits never contains a raw control char. This closes the gap where culori tolerates
+// internal whitespace control chars (e.g. `rgb(0\n0\n0)`) — _positiveParseOnly now rejects them.
+//
+// A fast-reject of hard breakout characters/substrings is kept as defense-in-depth BEFORE the
+// positive parse, but is NOT the real guard — removing it must leave the function rejecting
+// everything _positiveParseOnly rejects (including the control-char cases).
+// The positive parse (with control-char precondition) is the structural guard.
 
 import { parse as culoriParse } from 'culori';
 
@@ -79,10 +86,12 @@ function isNumericChannelTriple(s: string): boolean {
 // Shape 3: culori-parseable color
 // Accepts: "#ffffff", "#fff", "oklch(0.62 0.19 29)", "hsl(0 0% 100%)", named colors
 // Rejects: expression(...), url(...), and other non-color strings
+// Note: culori.parse returns undefined (not null) on failure.
 // ---------------------------------------------------------------------------
 function isCuloriColor(s: string): boolean {
   try {
-    return culoriParse(s) !== undefined && culoriParse(s) !== null;
+    const result = culoriParse(s);
+    return result !== undefined;
   } catch {
     return false;
   }
@@ -109,26 +118,41 @@ function isFontStack(s: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Lexical precondition: reject C0 control chars (U+0000–U+001F) and DEL (U+007F).
+// A valid CSS token value the compiler emits never contains raw control chars.
+// This closes the gap where culori tolerates internal control chars like `\n` in
+// `rgb(0\n0\n0)` — it returns a parsed color even for such inputs.
+// ---------------------------------------------------------------------------
+function hasControlChar(s: string): boolean {
+  for (let i = 0; i < s.length; i++) {
+    const code = s.charCodeAt(i);
+    if (code <= 31 || code === 127) return true;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
- * Returns true iff `value` is a known-safe CSS token value — one that the theming compiler
- * actually emits and that cannot break out of a CSS value position.
+ * Positive parse: returns true iff `value` is a known-safe CSS token value — one that the theming
+ * compiler actually emits and that cannot break out of a CSS value position.
  *
- * Safety is established by POSITIVE structural matching against the four emitted shapes.
+ * Safety is established by:
+ *   1. Lexical precondition: no C0 control chars or DEL (closes culori's internal-whitespace gap).
+ *   2. Positive structural matching against the four emitted shapes.
+ *
  * Unknown values (breakouts, function calls, injection attempts) fail all four forms and are
- * therefore rejected without relying on any forbidden-pattern list.
+ * therefore rejected without relying on any forbidden-pattern list. This is the real guard;
+ * the fast-reject in isSafeCssTokenValue is redundant defense-in-depth only.
  */
-export function isSafeCssTokenValue(value: string): boolean {
+export function _positiveParseOnly(value: string): boolean {
   if (typeof value !== 'string') return false;
   const trimmed = value.trim();
   if (trimmed.length === 0) return false;
-
-  // Defense-in-depth fast-reject (does not substitute for positive parse).
-  if (fastReject(trimmed)) return false;
-
-  // Positive parse: SAFE iff exactly one shape matches.
+  // Lexical precondition: no raw control chars (C0 + DEL).
+  if (hasControlChar(trimmed)) return false;
   return (
     isPlainNumber(trimmed) ||
     isNumericChannelTriple(trimmed) ||
@@ -137,16 +161,20 @@ export function isSafeCssTokenValue(value: string): boolean {
   );
 }
 
-// Exposed for testing: verify that the positive parse alone (without fast-reject) rejects
-// expression() and other breakouts. This proves the positive parse is the real guard.
-export function _positiveParseOnly(value: string): boolean {
+/**
+ * Returns true iff `value` is a known-safe CSS token value.
+ *
+ * Delegates the structural check to _positiveParseOnly (the real guard).
+ * The fast-reject is kept as redundant defense-in-depth only — removing it
+ * must leave this function rejecting everything _positiveParseOnly rejects.
+ */
+export function isSafeCssTokenValue(value: string): boolean {
   if (typeof value !== 'string') return false;
   const trimmed = value.trim();
   if (trimmed.length === 0) return false;
-  return (
-    isPlainNumber(trimmed) ||
-    isNumericChannelTriple(trimmed) ||
-    isCuloriColor(trimmed) ||
-    isFontStack(trimmed)
-  );
+
+  // Defense-in-depth fast-reject — NOT the real guard; _positiveParseOnly is.
+  if (fastReject(trimmed)) return false;
+
+  return _positiveParseOnly(value);
 }

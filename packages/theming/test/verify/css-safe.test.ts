@@ -90,7 +90,7 @@ describe('isSafeCssTokenValue — REJECT (injection / breakout attempts)', () =>
 describe('_positiveParseOnly — regression: positive parse alone rejects breakouts', () => {
   it('rejects expression(alert(1)) via positive parse, without fast-reject', () => {
     // expression() contains parens → not a plain number, not a numeric triple,
-    // not a culori color, and not a clean font-stack.
+    // not a culori color, and not a clean font-stack (contains parens) → structurally rejected.
     expect(_positiveParseOnly('expression(alert(1))')).toBe(false);
   });
 
@@ -105,6 +105,48 @@ describe('_positiveParseOnly — regression: positive parse alone rejects breako
     expect(_positiveParseOnly('oklch(0.62 0.19 29)')).toBe(true);
     expect(_positiveParseOnly('hsl(0 0% 100%)')).toBe(true);
     expect(_positiveParseOnly("ui-sans-serif, system-ui, 'Segoe UI', sans-serif")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Control-char precondition: _positiveParseOnly alone MUST reject internal control chars.
+// culori tolerates them (rgb(0\n0\n0) parses successfully), so without this precondition
+// the claim "positive parse alone is the guard" would be false.
+// ---------------------------------------------------------------------------
+describe('_positiveParseOnly — control-char precondition (closes culori internal-whitespace gap)', () => {
+  it('rejects rgb() with internal newline via positive parse alone', () => {
+    // culori.parse("rgb(0\n0\n0)") returns a color — so the culori check would pass.
+    // The control-char precondition in _positiveParseOnly must catch this BEFORE culori.
+    expect(_positiveParseOnly('rgb(0\n0\n0)')).toBe(false);
+  });
+
+  it('rejects hsl() with internal newline via positive parse alone', () => {
+    expect(_positiveParseOnly('hsl(0\n0%\n100%)')).toBe(false);
+  });
+
+  it('rejects rgb() with leading newline via positive parse alone', () => {
+    expect(_positiveParseOnly('rgb(\n0 0 0)')).toBe(false);
+  });
+
+  it('rejects rgb() with internal tab via positive parse alone', () => {
+    expect(_positiveParseOnly('rgb(0\t0\t0)')).toBe(false);
+  });
+
+  it('isSafeCssTokenValue also rejects control-char-bearing colors (belt+suspenders)', () => {
+    expect(isSafeCssTokenValue('rgb(0\n0\n0)')).toBe(false);
+    expect(isSafeCssTokenValue('hsl(0\n0%\n100%)')).toBe(false);
+    expect(isSafeCssTokenValue('rgb(\n0 0 0)')).toBe(false);
+    expect(isSafeCssTokenValue('rgb(0\t0\t0)')).toBe(false);
+  });
+
+  it('does NOT false-reject valid shorthand/named colors (no false-reject)', () => {
+    // These are compiler-emitted valid colors — must still be accepted.
+    expect(_positiveParseOnly('#fff')).toBe(true);
+    expect(_positiveParseOnly('red')).toBe(true);
+    expect(_positiveParseOnly('#ffffff')).toBe(true);
+    expect(_positiveParseOnly('oklch(0.62 0.19 29)')).toBe(true);
+    expect(_positiveParseOnly('hsl(0 0% 100%)')).toBe(true);
+    expect(_positiveParseOnly('rgb(255 255 255)')).toBe(true);
   });
 });
 
