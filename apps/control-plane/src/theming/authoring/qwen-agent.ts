@@ -56,6 +56,35 @@ function coerceClassification(value: unknown): GateClassification {
     : "out_of_scope"; // unknown/garbled → safe default; the verifier remains the real gate
 }
 
+export function buildDesignerMessages(input: DesignerInput): ChatMessage[] {
+  const fonts = input.envelope.allowedFonts.map((f) => `${f.id} (${f.stack})`).join("; ") || "(none)";
+  const locks = input.envelope.locks.length ? input.envelope.locks.join(", ") : "(none)";
+  const seeds = input.envelope.defaultSeeds;
+  return [
+    {
+      role: "system",
+      content:
+        "You are a design assistant for a governed theming product. Emit a SPARSE StyleSpec JSON " +
+        "object containing ONLY the fields you intend to change. Schema (all optional):\n" +
+        '{ "colors": { "primary"|"accent"|"neutral"|"destructive": "<css color, e.g. oklch(L C H)>" },\n' +
+        '  "radius": <number px>, "density": "compact"|"comfortable"|"spacious",\n' +
+        '  "typography": { "display"|"body"|"mono": "<font id>" }, "mode": "light"|"dark"|"both" }\n' +
+        "Use null for a field to revert it to the app default.\n" +
+        `Allowed font ids (use the id ONLY, never free text): ${fonts}.\n` +
+        `Locked tokens you must NOT change: ${locks}.\n` +
+        `Max chroma (keep colors at or below): ${input.envelope.chromaCap}.\n` +
+        `Current default seeds for relative requests like "darker": ${JSON.stringify(seeds)}.\n` +
+        "Respond with ONLY the JSON object, no prose.",
+    },
+    {
+      role: "user",
+      content:
+        `Current draft (your starting point): ${JSON.stringify(input.draft)}\n` +
+        `Request: ${input.prompt}`,
+    },
+  ];
+}
+
 export class QwenAgent implements Agent {
   private readonly chat: typeof chatText;
   constructor(deps?: { chat?: typeof chatText }) {
@@ -70,8 +99,9 @@ export class QwenAgent implements Agent {
     return reason === undefined ? { classification } : { classification, reason };
   }
 
-  // Designer (Task 4) is appended to this class in the next task.
-  async design(_input: DesignerInput): Promise<DesignerResult> {
-    throw new Error("not implemented");
+  async design(input: DesignerInput): Promise<DesignerResult> {
+    const raw = await this.chat({ messages: buildDesignerMessages(input), temperature: 0.4 });
+    // RAW JSON only — NOT validated/typed-cast here. The wall (parseSpec) is the enforcement.
+    return { specJson: tryParseJson(raw) };
   }
 }
