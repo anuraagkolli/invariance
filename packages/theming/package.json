@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@invariance/schema": "workspace:*",
+    "@types/culori": "^4.0.1",
     "culori": "^4",
     "zod": "^3.25.0"
   },
