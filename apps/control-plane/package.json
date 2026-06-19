@@ -19,6 +19,7 @@
     "@invariance/theming": "workspace:*",
     "acorn": "^8.14.0",
     "acorn-walk": "^8.3.0",
+    "culori": "^4",
     "hono": "^4.6.0",
     "pg": "^8.21.0",
     "tsx": "^4.19.0",
@@ -26,6 +27,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.2",
+    "@types/culori": "^4.0.1",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.20.0",
     "typescript": "^5.6.0",
