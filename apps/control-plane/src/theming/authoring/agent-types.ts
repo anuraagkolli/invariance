@@ -48,8 +48,8 @@ export type ConstraintEnvelope = {
 export function buildEnvelope(manifest: AppManifest): ConstraintEnvelope {
   return {
     contrastFloor: { tier: manifest.invariants.contrastTier },
-    locks: manifest.invariants.locks,
-    allowedFonts: manifest.invariants.allowedFonts,
+    locks: [...manifest.invariants.locks],
+    allowedFonts: manifest.invariants.allowedFonts.map((f) => ({ id: f.id, stack: f.stack })),
     chromaCap: manifest.invariants.chromaCap,
     defaultSeeds: manifest.defaultSeeds,
   };
