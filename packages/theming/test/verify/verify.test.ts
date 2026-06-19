@@ -179,6 +179,79 @@ describe('verify (the gate)', () => {
       expect(light).toBeUndefined();
     }
   });
+
+  it('treats a gamut-clamped foreground that re-parses under floor as contrast_floor', () => {
+    // Simulate the compiler emitting a foreground whose RE-PARSED value (after a gamut clamp) is a
+    // mid-grey that no longer clears the floor on white. The verifier must catch this on re-parse,
+    // not trust an upstream "it passed" claim.
+    const c = cleanCandidate();
+    c.light['--foreground'] = '0 0% 50%'; // re-parsed ~3.98:1 on white < AA 4.5 (verified via culori)
+    const v = verify(c, manifest);
+    expect(v.ok).toBe(false);
+    if (!v.ok) {
+      const f = v.failures.find((x) => x.code === 'contrast_floor' && x.mode === 'light');
+      expect(f).toBeDefined();
+      expect(f!.actual!).toBeLessThan(4.5);
+    }
+  });
+
+  it('treats an unparseable foreground as contrast_floor (actual 0)', () => {
+    const c = cleanCandidate();
+    c.light['--foreground'] = 'definitely-not-a-color';
+    const v = verify(c, manifest);
+    expect(v.ok).toBe(false);
+    if (!v.ok) {
+      const f = v.failures.find((x) => x.code === 'contrast_floor' && x.mode === 'light');
+      expect(f).toBeDefined();
+      expect(f!.actual).toBe(0);
+    }
+  });
+
+  it('passes a seed-lock-frozen closure that emits base verbatim (no per-role pin needed)', () => {
+    // Lock the seed-only 'neutral' (freezes the surface/line closure). The candidate emits base
+    // verbatim, so contrast + chroma + safety all hold and there is NO locked_drift failure
+    // (seed locks are confirmed by the sweep, not a per-role pin).
+    const seedLocked = {
+      ...manifest,
+      invariants: { ...manifest.invariants, locks: ['neutral'] },
+    } as unknown as AppManifest;
+    const v = verify(cleanCandidate(), seedLocked);
+    expect(v.ok).toBe(true);
+  });
+
+  it('accumulates multiple distinct failures in a single verdict', () => {
+    const c = cleanCandidate();
+    c.light['--foreground'] = '0 0% 50%'; // contrast_floor
+    c.light['--card'] = '0 0% 80%'; // locked_drift (card is locked)
+    const v = verify(c, manifest);
+    expect(v.ok).toBe(false);
+    if (!v.ok) {
+      const codes = new Set(v.failures.map((f) => f.code));
+      expect(codes.has('contrast_floor')).toBe(true);
+      expect(codes.has('locked_drift')).toBe(true);
+    }
+  });
+
+  it('every failure carries a non-empty deterministic message', () => {
+    const c = cleanCandidate();
+    c.light['--foreground'] = '0 0% 50%';
+    const v = verify(c, manifest);
+    expect(v.ok).toBe(false);
+    if (!v.ok) {
+      for (const f of v.failures) {
+        expect(typeof f.message).toBe('string');
+        expect(f.message.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('is pure: same inputs -> identical verdict across repeated calls', () => {
+    const c = cleanCandidate();
+    c.light['--foreground'] = '0 0% 50%';
+    const a = verify(c, manifest);
+    const b = verify(c, manifest);
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+  });
 });
 
 // ---------------------------------------------------------------------------
