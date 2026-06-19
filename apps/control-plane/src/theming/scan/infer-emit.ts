@@ -34,9 +34,9 @@ function heldEmit(heldFormat: HeldFormat): EmitContract {
     case "rgb-triple":
       return { shape: "triple", space: "rgb", precision: PRECISION };
     case "oklch":
-      return { shape: "raw", space: "oklch", precision: PRECISION }; // full color string passed through
+      return { shape: "raw", space: null, precision: PRECISION }; // full color string passed through; space is dead info for raw
     case "hex":
-      return { shape: "raw", space: "rgb", precision: PRECISION };
+      return { shape: "raw", space: null, precision: PRECISION };
     default:
       // keyword / unknown — no definite emit; raw string with no channel space.
       return { shape: "raw", space: null, precision: PRECISION };

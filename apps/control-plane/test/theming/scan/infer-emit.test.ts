@@ -34,13 +34,13 @@ describe("inferEmit — raw-consumption carve-out (held dictates)", () => {
     expect(out.confidence).toBe("confirmed");
   });
 
-  it("raw + oklch held → raw/oklch, confirmed", () => {
+  it("raw + oklch held → raw/null, confirmed", () => {
     const out = inferEmit({
       consumptionSites: [{ wrapping: "raw", selector: "a", property: "color" }],
       heldFormat: "oklch",
       opaqueDowngrade: false,
     });
-    expect(out.emit).toEqual({ shape: "raw", space: "oklch", precision: 4 });
+    expect(out.emit).toEqual({ shape: "raw", space: null, precision: 4 });
     expect(out.confidence).toBe("confirmed");
   });
 });
@@ -84,5 +84,44 @@ describe("inferEmit — low-confidence fallback", () => {
     const out = inferEmit({ consumptionSites: [], heldFormat: "unknown", opaqueDowngrade: false });
     expect(out.confidence).toBe("inferred");
     expect(out.reason).toBe("low_confidence_inference");
+  });
+});
+
+describe("inferEmit — cross-branch precedence", () => {
+  it("(a) color-mix beats a dictating wrapping AND emits held-derived emit", () => {
+    const out = inferEmit({
+      consumptionSites: [
+        { wrapping: "color-mix", selector: ".r", property: "box-shadow" },
+        { wrapping: "hsl", selector: ".r", property: "color" },
+      ],
+      heldFormat: "hsl-triple",
+      opaqueDowngrade: false,
+    });
+    expect(out.confidence).toBe("inferred");
+    expect(out.reason).toBe("color_mix");
+    expect(out.emit).toEqual({ shape: "triple", space: "hsl", precision: 4 });
+  });
+
+  it("(b) mixed dictating wrappings: first wins, confirmed", () => {
+    const out = inferEmit({
+      consumptionSites: [
+        { wrapping: "hsl", selector: ".a", property: "color" },
+        { wrapping: "rgb", selector: ".b", property: "background-color" },
+      ],
+      heldFormat: "hsl-triple",
+      opaqueDowngrade: false,
+    });
+    expect(out.confidence).toBe("confirmed");
+    expect(out.emit).toEqual({ shape: "triple", space: "hsl", precision: 4 });
+  });
+
+  it("(c) raw + unknown held under opaqueDowngrade → opaque_sheet", () => {
+    const out = inferEmit({
+      consumptionSites: [{ wrapping: "raw", selector: ".c", property: "border-color" }],
+      heldFormat: "unknown",
+      opaqueDowngrade: true,
+    });
+    expect(out.confidence).toBe("inferred");
+    expect(out.reason).toBe("opaque_sheet");
   });
 });
