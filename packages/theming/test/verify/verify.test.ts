@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { verify } from '../../src/verify/index.js';
 import type { AppManifest } from '../../src/manifest/index.js';
 import type { CandidateTheme } from '../../src/compile/index.js';
+import { SHADCN_CAN } from '../../src/manifest/shadcn-can.js';
 
 // A minimal AA manifest: white background, black foreground (contrast ~21, well over AA text 4.5),
 // one locked derived role (card pinned to white), chromaCap 0.4, modes light+dark allowed.
@@ -176,6 +177,88 @@ describe('verify (the gate)', () => {
       const light = v.failures.find((x) => x.code === 'contrast_floor' && x.mode === 'light');
       expect(dark).toBeDefined();
       expect(light).toBeUndefined();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Seed-lock closure pinning (§4.6) — gap-proof tests
+// ---------------------------------------------------------------------------
+// SHADCN_CAN has locks: ["primary"]. The primary seed's closure in iv-roles-1 includes:
+//   primary (seed role), primary-fg (foreground-of primary), ring (accent-line(primary)).
+// These tests confirm the verifier now string-pins the ENTIRE closure, not just the seed
+// output role itself. A tampered closure value that still clears contrast/chroma is caught.
+
+// Build a clean SHADCN_CAN candidate: emit base verbatim keyed by var name.
+function shadcnCleanCandidate(): CandidateTheme {
+  const base = SHADCN_CAN.base.light;
+  const vars: Record<string, string> = {};
+  for (const [varName, def] of Object.entries(SHADCN_CAN.variables)) {
+    const roleVal = base[def.role];
+    if (roleVal !== undefined) vars[varName] = roleVal;
+  }
+  return { light: vars, meta: { vocabVersion: 'iv-roles-1', profileVersion: 'iv-profile-1' } };
+}
+
+describe('verify — seed-lock closure pinning (§4.6 gap proofs)', () => {
+  it('no-false-fail: clean SHADCN_CAN candidate (base verbatim) still passes', () => {
+    const c = shadcnCleanCandidate();
+    const v = verify(c, SHADCN_CAN);
+    expect(v.ok).toBe(true);
+  });
+
+  it('catches tampered primary-fg even though it clears contrast and chroma', () => {
+    // primary base = "240 5.88% 10%" (very dark). primary-fg base = "0 0% 98%" (near-white).
+    // Tamper primary-fg to "0 0% 80%" — still high contrast against dark primary, chroma 0 < cap.
+    // Before the fix: ACCEPTED (only derived-role locks were pinned; primary-fg was not).
+    // After the fix: REJECTED with locked_drift on primary-fg.
+    const c = shadcnCleanCandidate();
+    c.light['--primary-foreground'] = '0 0% 80%';
+    const v = verify(c, SHADCN_CAN);
+    expect(v.ok).toBe(false);
+    if (!v.ok) {
+      const f = v.failures.find((x) => x.code === 'locked_drift' && x.role === 'primary-fg');
+      expect(f).toBeDefined();
+      expect(f!.varName).toBe('--primary-foreground');
+      expect(f!.mode).toBe('light');
+    }
+  });
+
+  it('catches tampered ring (accent-line(primary)) in the primary seed closure', () => {
+    // ring base = "240 5.88% 10%" (same dark as primary). Tamper to "0 0% 20%".
+    // Still passes ui contrast against white bg/card/popover (very dark on white), chroma 0 < cap.
+    // After the fix: REJECTED with locked_drift on ring.
+    const c = shadcnCleanCandidate();
+    c.light['--ring'] = '0 0% 20%';
+    const v = verify(c, SHADCN_CAN);
+    expect(v.ok).toBe(false);
+    if (!v.ok) {
+      const f = v.failures.find((x) => x.code === 'locked_drift' && x.role === 'ring');
+      expect(f).toBeDefined();
+      expect(f!.varName).toBe('--ring');
+      expect(f!.mode).toBe('light');
+    }
+  });
+
+  it('catches tampered background when neutral seed is locked', () => {
+    // Clone SHADCN_CAN with locks: ["neutral"]. neutral is a pure seed (no --neutral var).
+    // Its closure includes background, card, popover, muted, secondary, border, input and
+    // their foregrounds. Tamper --background (role: background, base "0 0% 100%") to "0 0% 95%".
+    // Still passes contrast (foreground "0 0% 3.92%" on "0 0% 95%" is very high), chroma 0 < cap.
+    // After the fix: REJECTED with locked_drift on background.
+    const neutralLockedManifest: AppManifest = {
+      ...SHADCN_CAN,
+      invariants: { ...SHADCN_CAN.invariants, locks: ['neutral'] },
+    } as unknown as AppManifest;
+    const c = shadcnCleanCandidate();
+    c.light['--background'] = '0 0% 95%';
+    const v = verify(c, neutralLockedManifest);
+    expect(v.ok).toBe(false);
+    if (!v.ok) {
+      const f = v.failures.find((x) => x.code === 'locked_drift' && x.role === 'background');
+      expect(f).toBeDefined();
+      expect(f!.varName).toBe('--background');
+      expect(f!.mode).toBe('light');
     }
   });
 });

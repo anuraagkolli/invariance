@@ -10,7 +10,8 @@ import type {
   ContrastTier,
   RoleGraph,
 } from '../roles/index.js';
-import { getRoleGraph, requiredContrast } from '../roles/index.js';
+import { getRoleGraph, classifySeedOrDerived, requiredContrast } from '../roles/index.js';
+import { affectedClosure } from '../compile/closure.js';
 import { isSafeCssTokenValue } from './css-safe.js';
 import { reparseToOklch } from './reparse.js';
 
@@ -125,26 +126,74 @@ function checkMode(
     }
   }
 
-  // (4) locked_drift — derived-role locks pinned to base[mode][role] (string equality).
-  // Seed locks (frozen closures) are confirmed by the contrast/chroma sweep above — they do not
-  // produce a per-role string pin here. Only roles that appear in graph.roles (derived output roles)
-  // are subject to the direct string-equality check.
+  // (4) locked_drift — string-pin every locked role and its full seed-frozen closure to base[mode].
+  //
+  // Per spec §4.6: a SEED lock freezes its ENTIRE derivation closure at base. That means every
+  // transitively-derived role (e.g. primary → primary-fg, ring; neutral → background, card, …)
+  // must equal base[mode][role]. Contrast/chroma alone cannot catch a tampered closure value that
+  // still clears those floors — the verifier must independently re-prove the full freeze.
+  //
+  // We track (role, mode) pairs already covered to avoid duplicate failures when multiple locks
+  // share a closure role.
+  const pinnedRoles = new Set<RoleId>();
+
   for (const lock of locks) {
-    // Only derived OUTPUT roles are pinned at the var level; seed-only locks freeze closures and
-    // are confirmed by the contrast/chroma sweep above.
-    if (!(lock in graph.roles)) continue;
-    const varName = varForRole(manifest, lock);
-    if (!varName) continue;
-    const emitted = vars[varName];
-    const expected = base[lock];
-    if (emitted != null && expected != null && emitted !== expected) {
-      failures.push({
-        code: 'locked_drift',
-        mode,
-        role: lock,
-        varName,
-        message: `Locked role ${lock} (${varName}) in ${mode} mode emitted "${emitted}" but base pins "${expected}".`,
-      });
+    const classification = (lock in graph.roles)
+      ? classifySeedOrDerived(graph, lock)
+      : graph.seeds.includes(lock) ? 'seed' : null;
+
+    if (classification === null) continue; // unknown id — skip
+
+    if (classification === 'seed') {
+      // Compute the full transitive closure of roles derived from this seed.
+      // affectedClosure accepts a Set<SeedId>; for a seed-named output role (e.g. "primary") its
+      // derivation kind is "seed" — we pass the seed name that maps to its own SeedId.
+      // For pure seeds (e.g. "neutral") that have no output role, we still pass the id as the seed.
+      const seedSet = new Set([lock]);
+      const closure = affectedClosure(seedSet, graph);
+
+      // Also include the seed-named output role itself if it exists (affectedClosure skips it when
+      // the derivation is {kind:"seed",seed:lock} — the role is in graph.roles but affectedClosure
+      // only adds roles whose deps hit the seed set; a seed-named role's dep IS the seed itself, so
+      // it IS included). Safety-add it explicitly to be sure.
+      if (lock in graph.roles) closure.add(lock);
+
+      for (const closureRole of closure) {
+        if (pinnedRoles.has(closureRole)) continue; // already pinned by a prior lock
+        const varName = varForRole(manifest, closureRole);
+        if (!varName) continue; // no var mapping for this role in this manifest — skip
+        const emitted = vars[varName];
+        const expected = base[closureRole];
+        if (emitted == null || expected == null) continue; // no base entry — skip
+        if (emitted !== expected) {
+          failures.push({
+            code: 'locked_drift',
+            mode,
+            role: closureRole,
+            varName,
+            message: `Seed-locked closure role ${closureRole} (${varName}) in ${mode} mode emitted "${emitted}" but base pins "${expected}" (frozen by seed lock "${lock}").`,
+          });
+        }
+        pinnedRoles.add(closureRole);
+      }
+    } else {
+      // Derived-role lock: single-role string pin (original behavior).
+      if (!(lock in graph.roles)) continue;
+      if (pinnedRoles.has(lock)) continue; // already covered
+      const varName = varForRole(manifest, lock);
+      if (!varName) continue;
+      const emitted = vars[varName];
+      const expected = base[lock];
+      if (emitted != null && expected != null && emitted !== expected) {
+        failures.push({
+          code: 'locked_drift',
+          mode,
+          role: lock,
+          varName,
+          message: `Locked role ${lock} (${varName}) in ${mode} mode emitted "${emitted}" but base pins "${expected}".`,
+        });
+      }
+      pinnedRoles.add(lock);
     }
   }
 }
