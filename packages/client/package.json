@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@invariance/schema": "workspace:*"
+    "@invariance/schema": "workspace:*",
+    "@invariance/theming": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18"

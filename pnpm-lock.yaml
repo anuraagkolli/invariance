@@ -247,6 +247,9 @@ importers:
       '@invariance/schema':
         specifier: workspace:*
         version: link:../schema
+      '@invariance/theming':
+        specifier: workspace:*
+        version: link:../theming
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
