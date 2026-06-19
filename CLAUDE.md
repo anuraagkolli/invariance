@@ -10,7 +10,7 @@ History note: this repo's earlier history (no longer tagged) is the previous ite
 
 ## Build boundary — legacy stack vs the new Tier-A engine (read before writing code)
 
-Mid-pivot: the **Tier-A theming engine is being rebuilt greenfield** in a new, isolated package **`@invariance/theming`** (imports only zod + culori; the 7-plan suite under `docs/superpowers/plans/2026-06-18-theming-0x`). **Build all Tier-A work there.** Do NOT build on or extend, for Tier-A:
+Mid-pivot: the **Tier-A theming engine is being rebuilt greenfield** in a new, isolated package **`@invariance/theming`** (imports zod + culori + `@invariance/schema`'s `canonicalJson` for content-addressing; the 7-plan suite under `docs/superpowers/plans/2026-06-18-theming-0x`). **Build all Tier-A work there.** Do NOT build on or extend, for Tier-A:
 
 - **Legacy live-demo stack (keep runnable — `pnpm demo` needs it — do not extend):** `packages/{design,design-schema,client,server}`, `apps/{control-plane,console,demo,nebula}`. Retired only once the Tier-A reference app (a later plan) supersedes Nebula.
 - **Abandoned reuse-based Tier-A code (superseded by `@invariance/theming`; parked, not deleted):** `packages/cli/src/discover/`, `packages/design/src/runtime/apply-mapped.ts`, `packages/design/src/config/design-config-constraints.ts`, `DesignConfig.variableRoleMap`/`allowedModes` (`packages/schema/src/design-config.ts`), and Nebula's `apps/nebula/src/lib/dev-config.ts` (`mergeInvarianceConfig`). Earlier `--inv-*`/subject=user reuse approach; the greenfield engine replaces it. Some is wired into the live demo — retire with the legacy stack, not piecemeal.

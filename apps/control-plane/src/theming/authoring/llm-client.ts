@@ -19,8 +19,9 @@ const OLLAMA_DEFAULT_BASE = "http://localhost:11434/v1";
 const QWEN_DEFAULT_MODEL = "qwen2.5:latest";
 
 export function resolveModel(): ResolvedModel {
-  // Provider switch is env-only; absent or anything != "anthropic" stays on the OpenAI-compatible
-  // (Ollama/qwen) path. Anthropic users set INVARIANCE_LLM_PROVIDER=anthropic + their own base/key.
+  // Default is qwen2.5 via Ollama (the OpenAI-compatible path); the LLM is never a hard dependency.
+  // To point at any other OpenAI-compatible endpoint (incl. an Anthropic-compatible proxy), override
+  // OPENAI_BASE_URL / OPENAI_MODEL / OPENAI_API_KEY — no Anthropic model id is ever the default.
   const baseUrl = process.env.OPENAI_BASE_URL ?? OLLAMA_DEFAULT_BASE;
   const model = process.env.OPENAI_MODEL ?? QWEN_DEFAULT_MODEL;
   const apiKey = process.env.OPENAI_API_KEY ?? "ollama"; // Ollama ignores the key but the SDK shape wants one
