@@ -186,16 +186,20 @@ describe("F4 — reset loads the stored StyleSpec and recompiles BYTE-IDENTICAL 
     const { hash, artifact } = await publishDraft(session, stores);
     session = { ...session, published: hash };
 
-    // wander the draft AFTER publishing (so reset must truly reload, not no-op)
-    session = commit(session, await drive(new MockAgent([{ classification: "in_scope_styling", spec: { density: "spacious" } }]), session, "airier"));
+    // wander the draft AFTER publishing with a delta that genuinely CHANGES THE ARTIFACT (radius —
+    // density has zero output roles in iv-roles-1, so it would not move the artifact and the
+    // byte-identity below would pass even on a buggy reset). This makes the reset proof load-bearing.
+    session = commit(session, await drive(new MockAgent([{ classification: "in_scope_styling", spec: { radius: 4 } }]), session, "tighter"));
     expect(rawStringify(session.draft)).not.toBe(composite); // draft moved away
+    const wanderedArtifact = buildArtifact(compile(session.draft, manifest), manifest, verify(compile(session.draft, manifest), manifest));
+    expect(hashArtifact(wanderedArtifact)).not.toBe(hash); // the wander really moved the ARTIFACT
 
     // reset reads the STORED StyleSpec (functional read path), not a token→seed decompile
     const reset = await resetToPublished(session, stores.audit);
     expect(rawStringify(reset.draft)).toBe(composite); // exact spec restored
 
-    // and recompiling the reset draft reproduces the published artifact BYTE-FOR-BYTE
-    // (compile the draft DIRECTLY — it is a parsed StyleSpec, colors are Oklch objects)
+    // and recompiling the reset draft reproduces the published artifact BYTE-FOR-BYTE — now
+    // discriminating, because the wandered artifact hashed differently
     const recompiled = compile(reset.draft, manifest);
     const reArtifact = buildArtifact(recompiled, manifest, verify(recompiled, manifest));
     expect(hashArtifact(reArtifact)).toBe(hash);
@@ -233,5 +237,31 @@ describe("F5 — a rejected turn mid-session leaves the draft clean for the next
     session = commit(session, next);
     expect(session.draft.radius).toBe(16);
     expect(session.draft.colors?.accent).toBeDefined();
+  });
+});
+
+describe("F6 — a VERIFIER-rejected turn (not just a wall reject) also leaves the draft clean", () => {
+  it("a wall-VALID delta that fails verify → runTurn rejected with a VerifyFailure; session untouched", async () => {
+    // neutral oklch(0.45 0.18 30) passes the wall but its saturated surfaces fail contrast_floor —
+    // exercising runTurn's verifier-reject branch (session.ts:51-52), which F5 (a wall reject) does not.
+    const agent = new MockAgent([
+      { classification: "in_scope_styling", spec: { radius: 16 } },
+      { classification: "in_scope_styling", spec: { colors: { neutral: "oklch(0.45 0.18 30)" } } },
+      { classification: "in_scope_styling", spec: { colors: { accent: "oklch(0.65 0.08 30)" } } },
+    ]);
+    let session: Session = { tenant: "acme", draft: APP_DEFAULT_SPEC, published: null };
+    session = commit(session, await drive(agent, session, "rounder"));
+    const good = rawStringify(session);
+
+    const rejected = await drive(agent, session, "saturated surfaces");
+    expect(rejected.kind).toBe("rejected");
+    if (rejected.kind === "rejected") {
+      // the failures are VERIFIER failures (it passed the wall) — distinct from F5's wall rejects
+      expect(rejected.failures.map((f) => f.code)).toContain("contrast_floor");
+    }
+    expect(rawStringify(session)).toBe(good); // draft byte-identical after a verifier reject
+
+    const next = await drive(agent, session, "warmer");
+    expect(next.kind).toBe("diff"); // session still usable, builds on {radius:16}
   });
 });

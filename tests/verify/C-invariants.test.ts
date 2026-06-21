@@ -41,7 +41,11 @@ const CONTRAST_PAIRS: Array<{ fg: string; bg: string; category: "text" | "large-
   { fg: "ring", bg: "popover", category: "ui" },
 ];
 
-const CONTRAST_TOL = 0.02; // float-noise guard between culori (engine) and our WCAG impl
+// Float-noise guard between culori (engine) and our from-scratch WCAG impl. The measured
+// engine-vs-oracle disagreement over thousands of pairs is ~2e-4, and accepted themes sit AT the
+// floor (minimum-perturbation repair), so this is kept tight: a real verifier over-accept of more
+// than 0.005 below the floor is flagged. (0.02 would have absorbed a real gap in the at-floor regime.)
+const CONTRAST_TOL = 0.005;
 const CHROMA_TOL = 0.005;
 
 function compileJson(json: unknown, manifest: AppManifest): CandidateTheme {
@@ -216,7 +220,10 @@ describe("C2 — root-pair hard-reject reachability + the gate that backs it", (
     }
     // eslint-disable-next-line no-console
     console.log(`[C2] legal-seed (foreground,background) root-pair rejections found = ${rootRejects} (0 expected at AA — defensive net; gate verified by tampering in C5)`);
-    expect(rootRejects).toBeGreaterThanOrEqual(0); // documentary; the gate is proven in C5
+    // Falsifiable claim: at AA the root pair is unreachable via legal seeds (background L is
+    // profile-anchored to the mode extreme). If a future change made it reachable, this flips and
+    // the in-loop oracle cross-check above would then run. The gate itself is proven in C5.
+    expect(rootRejects).toBe(0);
   });
 
   it("a candidate with a forced-failing root pair is REJECTED and refused by publish (not shipped)", async () => {
@@ -267,7 +274,7 @@ describe("C3 — untouched roles emit BYTE-IDENTICAL to base (no ramp approximat
 });
 
 describe("C4 — transitive re-derivation (closure walk, not stale base)", () => {
-  it("setting `primary` re-derives `ring` (accent-line(primary)), not stale base", () => {
+  it("setting `primary` re-derives `ring` (accent-line(primary)) — ring TRACKS primary's hue, not stale base", () => {
     // primary is locked in SHADCN_CAN, so use the no-locks clone where primary may move.
     const empty = compileJson({}, NO_LOCKS_CAN);
     const moved = compileJson({ colors: { primary: "oklch(0.55 0.2 20)" } }, NO_LOCKS_CAN);
@@ -275,6 +282,16 @@ describe("C4 — transitive re-derivation (closure walk, not stale base)", () =>
     expect(moved.light["--ring"]).not.toBe(empty.light["--ring"]); // ring re-derived transitively
     // background does NOT depend on primary → unchanged
     expect(moved.light["--background"]).toBe(empty.light["--background"]);
+
+    // STRONGER: ring must DERIVE from primary, not merely differ from base. Compile two distinct
+    // primary hues and assert the emitted ring hue tracks the emitted primary hue (accent-line),
+    // and that distinct primaries yield distinct rings.
+    const hueOf = (triple: string) => parseFloat(triple.split(/\s+/)[0]);
+    const pA = compileJson({ colors: { primary: "oklch(0.55 0.2 20)" } }, NO_LOCKS_CAN);
+    const pB = compileJson({ colors: { primary: "oklch(0.55 0.2 280)" } }, NO_LOCKS_CAN);
+    expect(Math.abs(hueOf(pA.light["--ring"]) - hueOf(pA.light["--primary"]))).toBeLessThan(8);
+    expect(Math.abs(hueOf(pB.light["--ring"]) - hueOf(pB.light["--primary"]))).toBeLessThan(8);
+    expect(pA.light["--ring"]).not.toBe(pB.light["--ring"]); // ring moved WITH primary
   });
 
   it("setting `neutral` moves ALL surface/line roles; brand seeds stay put", () => {

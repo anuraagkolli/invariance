@@ -31,9 +31,13 @@ describe("oracle: WCAG contrast ratio", () => {
   it("a color against itself = 1", () => {
     expect(contrastRatio("#3b82f6", "#3b82f6")).toBeCloseTo(1, 6);
   });
-  it("#767676 on white ≈ 4.54 (the canonical 'smallest passing gray')", () => {
-    // independently computed: Y(#767676)=0.18114 → (1.05)/(0.18114+0.05)=4.542
-    expect(contrastRatio("#767676", "#ffffff")).toBeCloseTo(4.54, 1);
+  it("#767676 on white = 4.5422 (the canonical 'smallest passing gray'), pinned tight", () => {
+    // independently computed: Y(#767676)=0.181164 → (1.05)/(0.181164+0.05)=4.54223
+    expect(contrastRatio("#767676", "#ffffff")).toBeCloseTo(4.5422, 3);
+  });
+  it("#595959 on white = 7.0 (WebAIM's published AAA-threshold gray — third-party anchor)", () => {
+    // a value that is neither 1 nor 21 and not derived from the oracle itself
+    expect(contrastRatio("#595959", "#ffffff")).toBeCloseTo(7.0, 1);
   });
   it("is symmetric (order does not matter)", () => {
     const a = contrastRatio("#1e293b", "#f8fafc");
@@ -60,23 +64,41 @@ describe("oracle: HSL → sRGB", () => {
     expect(g.g).toBeCloseTo(0.5, 6);
     expect(g.b).toBeCloseTo(0.5, 6);
   });
+  it("parses 3-digit hex, rgb() function, and rgb triple", () => {
+    expect(parseToSrgb("#fff")).toMatchObject({ r: 1, g: 1, b: 1 });
+    expect(parseToSrgb("#f00")).toMatchObject({ r: 1, g: 0, b: 0 });
+    const rgbFn = parseToSrgb("rgb(255 128 0)");
+    expect(rgbFn.r).toBeCloseTo(1, 6);
+    expect(rgbFn.g).toBeCloseTo(128 / 255, 6);
+    expect(rgbFn.b).toBeCloseTo(0, 6);
+    const rgbTriple = parseToSrgb("0 128 255", "rgb");
+    expect(rgbTriple.b).toBeCloseTo(1, 6);
+  });
 });
 
 describe("oracle: sRGB → OKLCH (independent OKLab impl)", () => {
-  it("sRGB red = oklch(0.628 0.2577 29.23)", () => {
+  it("sRGB red = oklch(0.62796 0.25768 29.234), pinned tight", () => {
     const ok = srgbToOklch({ r: 1, g: 0, b: 0 });
-    expect(ok.L).toBeCloseTo(0.6279, 2);
-    expect(ok.C).toBeCloseTo(0.2577, 2);
-    expect(ok.h).toBeCloseTo(29.23, 0);
+    expect(ok.L).toBeCloseTo(0.62796, 4);
+    expect(ok.C).toBeCloseTo(0.25768, 4);
+    expect(ok.h).toBeCloseTo(29.234, 2);
   });
   it("white is ~achromatic with L≈1", () => {
     const ok = srgbToOklch({ r: 1, g: 1, b: 1 });
-    expect(ok.L).toBeCloseTo(1, 2);
-    expect(ok.C).toBeLessThan(0.002);
+    expect(ok.L).toBeCloseTo(1, 5);
+    expect(ok.C).toBeLessThan(0.0001);
   });
   it("chromaOf reads OKLCH chroma of an emitted hex", () => {
-    expect(chromaOf("#ff0000")).toBeCloseTo(0.2577, 2);
-    expect(chromaOf("#ffffff")).toBeLessThan(0.002);
+    expect(chromaOf("#ff0000")).toBeCloseTo(0.25768, 4);
+    expect(chromaOf("#ffffff")).toBeLessThan(0.0001);
+  });
+  it("chromaOf's oklch shortcut agrees with the independent sRGB round-trip (in-gamut)", () => {
+    // chromaOf reads C straight out of an oklch() string; validate that shortcut against the
+    // full parse→sRGB→OKLab path for an in-gamut color, so the shortcut isn't an unchecked trust.
+    const shortcut = chromaOf("oklch(0.7 0.12 150)"); // = 0.12 by direct read
+    const roundTrip = srgbToOklch(parseToSrgb("oklch(0.7 0.12 150)")).C;
+    expect(shortcut).toBeCloseTo(0.12, 6);
+    expect(roundTrip).toBeCloseTo(0.12, 3); // in-gamut → round-trip reproduces the chroma
   });
   it("OKLCH↔sRGB round-trips", () => {
     const start = { L: 0.7, C: 0.1, h: 150 };

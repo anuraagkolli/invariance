@@ -91,8 +91,9 @@ describe("B3 — font not in allowlist → font_not_allowed", () => {
 });
 
 describe("B4 — out-of-range radius / invalid enums → out_of_range", () => {
-  it("radius just past MAX_RADIUS_PX (24)", () => {
-    expect(codes(expectReject({ radius: 24.001 }))).toContain("out_of_range");
+  it("radius just past MAX_RADIUS_PX (24) → out_of_range AT path 'radius'", () => {
+    const failures = expectReject({ radius: 24.001 });
+    expect(failures.some((f) => f.code === "out_of_range" && f.path === "radius")).toBe(true);
   });
   it("radius far over", () => {
     expect(codes(expectReject({ radius: 100 }))).toContain("out_of_range");
@@ -135,8 +136,9 @@ describe("B6 — structural junk → schema_invalid", () => {
   it("a nullable-group set to null (groups are optional, not nullable)", () => {
     expect(codes(expectReject({ colors: null }))).toContain("schema_invalid");
   });
-  it("a color leaf given a non-string", () => {
-    expect(codes(expectReject({ colors: { accent: 123 } }))).toContain("schema_invalid");
+  it("a color leaf given a non-string → schema_invalid AT path 'colors.accent'", () => {
+    const failures = expectReject({ colors: { accent: 123 } });
+    expect(failures.some((f) => f.code === "schema_invalid" && f.path === "colors.accent")).toBe(true);
   });
   for (const junk of [42, "a string", true, null, [], "not json at all"]) {
     it(`top-level non-spec value ${JSON.stringify(junk)}`, () => {
