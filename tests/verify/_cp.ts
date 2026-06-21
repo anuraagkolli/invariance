@@ -13,6 +13,8 @@ export {
 export type { Session, TurnResult } from "../../apps/control-plane/src/theming/authoring/session.js";
 
 export { MockAgent } from "../../apps/control-plane/src/theming/authoring/mock-agent.js";
+export { buildEnvelope } from "../../apps/control-plane/src/theming/authoring/agent-types.js";
+export type { GateClassification } from "../../apps/control-plane/src/theming/authoring/agent-types.js";
 
 export { publish, setKillSwitch } from "../../apps/control-plane/src/theming/publish/publisher.js";
 export type { PublishInput, PublishStores } from "../../apps/control-plane/src/theming/publish/publisher.js";
