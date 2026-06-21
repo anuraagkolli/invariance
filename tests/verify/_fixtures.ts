@@ -58,3 +58,12 @@ export const NO_LOCKS_CAN = AppManifest.parse({
   appId: "shadcn-can-nolocks",
   invariants: { ...SHADCN_CAN.invariants, locks: [] },
 });
+
+// ── A manifest locking a DERIVED output role ("card"). A derived-role lock must NOT
+//    be rejected at the wall (the compiler pins it post-expansion); refLocksResolveAndPinnable
+//    requires base[mode][card] to exist — SHADCN_CAN's base has it. ──
+export const CARD_LOCK_CAN = AppManifest.parse({
+  ...SHADCN_CAN,
+  appId: "shadcn-can-cardlock",
+  invariants: { ...SHADCN_CAN.invariants, locks: ["card"] },
+});
