@@ -1,0 +1,21 @@
+:root {
+  --accent: 240 4.76% 95.9%;
+  --accent-foreground: 240 5.88% 10%;
+  --background: 180 100% 98.115%;
+  --border: 211.083 36.389% 87.758%;
+  --card: 180 100% 98.115%;
+  --card-foreground: 0 0% 0%;
+  --destructive: 0 72.2% 50.6%;
+  --destructive-foreground: 0 0% 98%;
+  --foreground: 0 0% 0%;
+  --input: 211.083 36.389% 87.758%;
+  --muted: 210.86 100% 95.509%;
+  --muted-foreground: 0 0% 52.542%;
+  --popover: 180 100% 98.115%;
+  --popover-foreground: 0 0% 0%;
+  --primary: 240 5.88% 10%;
+  --primary-foreground: 0 0% 98%;
+  --ring: 240 5.88% 10%;
+  --secondary: 210.86 100% 95.509%;
+  --secondary-foreground: 0 0% 0%;
+}
