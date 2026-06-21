@@ -1,0 +1,19 @@
+{
+  "name": "@invariance/verify-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cross-cutting invariant verification suite for @invariance/theming. Does NOT modify engine source; re-derives every property independently.",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@invariance/theming": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "playwright": "^1.60.0",
+    "vitest": "^3.0.0"
+  }
+}

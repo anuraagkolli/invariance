@@ -401,6 +401,22 @@ importers:
         specifier: ^3.0.0
         version: 3.2.6(@types/node@22.19.21)(happy-dom@16.8.1)(jiti@1.21.7)(jsdom@29.1.1)(tsx@4.22.4)
 
+  tests/verify:
+    dependencies:
+      '@invariance/theming':
+        specifier: workspace:*
+        version: link:../../packages/theming
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.21
+      playwright:
+        specifier: ^1.60.0
+        version: 1.60.0
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.6(@types/node@22.19.21)(happy-dom@16.8.1)(jiti@1.21.7)(jsdom@29.1.1)(tsx@4.22.4)
+
 packages:
 
   '@alloc/quick-lru@5.2.0':
