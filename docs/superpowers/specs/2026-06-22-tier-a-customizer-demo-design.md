@@ -44,16 +44,24 @@ prompt wording and StyleSpec values are tuned during implementation; the beats a
 2. **"Make it feel like Acme — deep indigo, a little more rounded."** → outcome **diff** (primary→indigo,
    radius↑); the dashboard re-themes **instantly and smoothly**. Acknowledge.
 3. **"Warmer, softer surfaces."** → **diff** (neutral/accent shift); preview updates. Acknowledge.
-4. **The rejection beat (the differentiator):** **"Make the surfaces a bold, saturated purple."** →
-   outcome **rejected** (`contrast_floor`). A saturated mid-lightness surface can't carry legible card
-   text at AA, so `verify` refuses it. The panel says, legibly and a little dramatically: *"Those
-   surfaces would push card text below the AA 4.5:1 floor this platform requires."* **The preview does
-   not change — it stays accessible.** *"Watch it refuse to break accessibility."* (Note: `foreground`
-   is derived, never a settable seed, so the rejection comes from an over-aggressive *surface* choice,
-   which is what the verification fuzz confirmed reliably trips the floor.)
-5. **The lock beat (optional second governance proof):** **"Recolor the error/destructive state to a
-   friendly green."** → **rejected** (`seed_locked`) — the platform locked `destructive`. Shows locks,
-   not just contrast.
+4. **The contrast rejection beat:** **"Make the surfaces a bold, mid-tone purple."** → outcome
+   **rejected** (`contrast_floor`). A *mid-lightness* surface can't carry legible text at **AAA (7:1)**
+   — neither a near-white nor a near-black foreground reaches 7:1 against a surface whose luminance
+   sits in the ~0.10–0.30 band — so `verify` refuses it. The panel says, legibly and a little
+   dramatically: *"This platform requires AAA — the strictest accessibility standard. Those surfaces
+   can't carry legible text, so it's refused."* **The preview does not change — it stays accessible.**
+   *"Watch it refuse to break accessibility."*
+   > **Why AAA, not AA (load-bearing — see §4 and Part 1):** every foreground is
+   > `foreground-of(…, "maximize-contrast")`, whose worst case against any solid surface is ~**4.58:1**.
+   > So at **AA (4.5:1)** the text pairs essentially *never* fail — the only AA contrast rejections fire
+   > on the `ring` ui-pair ("focus ring too subtle"), a weak story. At **AAA (7:1)** a mid-L surface
+   > reliably fails the *text* pairs, giving the intuitive, robust rejection. `foreground` is derived
+   > (never a settable seed), so the trigger is always an over-aggressive *surface/brand* choice.
+5. **The lock rejection beat (the guaranteed anchor):** **"Recolor the error/destructive state to a
+   friendly green."** → **rejected** (`seed_locked`) — the platform locked `destructive`, so the wall
+   refuses it deterministically (it cannot miss on camera). *"The platform froze its error-state color;
+   the tenant literally cannot recolor it."* This beat is the governance anchor; the contrast beat (#4)
+   is the stronger story but must be empirically confirmed in Part 1.
 6. **Publish Acme** (promotes the acknowledged look to "live").
 7. **Switch to Globex**, author a contrasting brand (e.g. emerald, sharper corners) — or load a
    pre-baked Globex theme to keep the take short. Publish.
@@ -102,8 +110,13 @@ preview sets these as **inline custom properties on a wrapper `<div>`** that con
 (`wrapper.style.setProperty("--primary", "240 …% …%")`, etc.). The dashboard consumes
 `hsl(var(--primary))`. Re-theming is a synchronous style mutation → **instant, flicker-free on every
 prompt→result**, with **zero network and no iframe**. The studio chrome (outside the wrapper) is never
-re-themed because the redefinition is scoped to the wrapper, not `:root`. Light/dark = swap the
-applied var map (the `.light` vs `.dark` set) on the wrapper.
+re-themed because the redefinition is scoped to the wrapper, not `:root`.
+
+**Light/dark toggle must set BOTH** the applied var map (`.light` vs `.dark` set) **and**
+`class="dark"` on the wrapper. **The canvas themes 100% through CSS variables — zero `dark:` Tailwind
+utilities.** A `dark:`-gated style won't activate from a var-map swap alone, and `dark:` is idiomatic
+in shadcn-style code, so it would creep in by habit and render half-dark on camera. Setting the class
+too is belt-and-suspenders; pure-var theming is also more faithful to what the real product does.
 
 > Deliberately *not* the production applier (`:root`/`.dark` + end-of-head + iframe). That mechanism
 > proves the real cascade and is correct for Plan-08; for a live recording it is the single most
@@ -114,22 +127,27 @@ applied var map (the `.light` vs `.dark` set) on the wrapper.
 
 ## 4. The demo manifest & canned script (governance content)
 
-The demo ships **one demo manifest** — a two-mode `AppManifest` (light + a standard shadcn dark base,
-both AA, as in the verification suite's `TWO_MODE_CAN`) with:
+The demo ships **one demo manifest** — a two-mode `AppManifest` (light + dark base) with:
 
 - **Customizable brand seeds:** `primary`, `accent`, `neutral` are **unlocked** (so the tenant can
   rebrand — the whole point; note this differs from `SHADCN_CAN`, which locks `primary`).
 - **One platform lock:** `destructive` is **locked** (drives the lock-rejection beat #5).
-- **Contrast tier AA** (drives the contrast-rejection beat #4).
+- **Contrast tier AAA** (drives a *robust* text-contrast rejection — see §2 beat #4). **This is not a
+  one-line flip:** `refBasePassesTier` blocks manifest construction unless the base clears AAA at every
+  pair, and the standard shadcn base only clears AA (destructive-fg/destructive ≈ 4.62 < 7.0). So
+  **Part 1 builds an AAA-passing base** (both modes) and confirms it via `AppManifest.parse`.
 - **Chroma cap** as in the can (keeps brand colors from going garish).
 
-The **CannedAgent** maps each scripted prompt to a fixed `{ classification, specJson }`:
+The **CannedAgent** maps each scripted prompt to a fixed `{ classification, specJson }`. **At AAA the
+success beats' brand colors must be dark/light enough to clear 7:1** (a *mid-L* indigo would itself
+fail AAA), and the rejection beat's surface must sit in the failing mid-L band — all tuned and
+asserted in Part 1:
 
 | Beat | Prompt (illustrative) | Canned output | Engine outcome |
 |---|---|---|---|
-| 2 | "deep indigo, rounded" | `in_scope_styling`, `{colors:{primary: <indigo oklch>}, radius: <↑>}` | diff |
-| 3 | "warmer, softer surfaces" | `in_scope_styling`, `{colors:{neutral:<warm>, accent:<warm>}}` | diff |
-| 4 | "bold saturated purple surfaces" | `in_scope_styling`, `{colors:{neutral:<saturated mid-L, e.g. oklch(0.45 0.18 ~300)>}}` — the value class the verification fuzz confirmed trips the floor | **rejected** `contrast_floor` (verifier) |
+| 2 | "deep indigo, rounded" | `in_scope_styling`, `{colors:{primary: <DARK indigo oklch, clears AAA>}, radius:<↑>}` | diff |
+| 3 | "warmer, lighter surfaces" | `in_scope_styling`, `{colors:{neutral:<LIGHT warm>, accent:<warm>}}` | diff |
+| 4 | "bold mid-tone purple surfaces" | `in_scope_styling`, `{colors:{neutral:<mid-L, luminance ~0.10–0.30>}}` — fails AAA text on the surface pairs | **rejected** `contrast_floor` (verifier) |
 | 5 | "destructive → green" | `in_scope_styling`, `{colors:{destructive:<green>}}` | **rejected** `seed_locked` (wall) |
 
 The rejection beats are produced by the **real engine** (the wall rejects #5; `verify` rejects #4) —
@@ -143,7 +161,8 @@ the CannedAgent only supplies the proposal. The on-screen copy is rendered from 
 - **Canvas — `AnalyticsDashboard`:** sidebar, KPI stat cards, one or two charts (CSS/SVG using theme
   vars), a data table, filter chips, primary/secondary CTAs, a destructive action, muted helper text —
   chosen so every contrast-relevant role is visibly exercised. Pure presentational; renders at the
-  wrapper scope.
+  wrapper scope. **Themes exclusively through `hsl(var(--x))` — no `dark:` Tailwind utilities** (see
+  §3.2), so the var-map swap fully controls the look in both modes.
 - **Customizer — `PromptBox`** (with a few clickable scripted example prompts), **`OutcomePanel`**
   rendering the three outcomes: **diff** (field-level list with from→to color swatches), **no-change**
   ("heard you — nothing moved"), and a **first-class rejection** state (the floor/lock explanation,
@@ -169,19 +188,49 @@ by the rejection beat, not by infrastructure.
 
 ## 7. Testing (light — reliability of the take, not re-verifying the engine)
 
-The engine is already deeply verified (273 + 117 tests). The demo's tests guard the *recording*:
-- A component/integration test (vitest + happy-dom or Playwright/chromium) that: the dashboard mounts;
-  running scripted beat #2 sets the wrapper's `--primary` and `getComputedStyle` of a CTA reflects the
-  themed color; beat #4 yields the rejection state **and leaves the wrapper's computed styles
-  unchanged** (preview stayed accessible); the light/dark toggle swaps the applied set.
-- A smoke test that the full scripted sequence runs end-to-end without throwing (so a take won't die
+The engine is already deeply verified (273 + 117 tests). The demo's tests guard the *recording*, split
+by what each test medium can actually prove:
+
+- **Logic tests — node / happy-dom:** the engine-half outcomes (does a scripted prompt produce
+  `diff` / `no_change` / `rejected` with the right code), the page-session reducer (accumulate →
+  acknowledge → publish → reset), the CannedAgent mapping. happy-dom is fine here.
+- **Visual-truth tests — real chromium (Playwright) ONLY:** any "computed style reflects the theme"
+  assertion. happy-dom / jsdom do **not** resolve `hsl(var(--x))` through the cascade — such a test
+  would pass green while proving nothing. In chromium: beat #2 sets `--primary` and
+  `getComputedStyle` of a CTA reflects the themed color; beat #4 leaves the wrapper's computed styles
+  **unchanged** (preview stayed accessible); the light/dark toggle (class + var map) actually swaps
+  the rendered colors.
+- A **smoke test** that the full scripted sequence runs end-to-end without throwing (a take won't die
   mid-record).
 
 No re-testing of `compile`/`verify`/contrast math.
 
 ---
 
-## 8. What's dropped vs Plan-08, and how it promotes
+## 8. Build order — validated parts, empirical gate first
+
+Built and tested as five sequential parts, each green-and-reviewed before the next. The order
+**front-loads the "is the demo even possible" gate** so no UI is built on an unproven hero beat:
+
+1. **Prove the beats fire — NO UI (the empirical gate).** Build the **demo manifest** (incl. an
+   **AAA-passing base** in both modes, confirmed via `AppManifest.parse`) and the **CannedAgent**'s
+   canned specs. Run every scripted prompt through the *real* `parseSpec → mergeDelta → diffSpecs →
+   compile → verify` and assert each produces its intended outcome — **especially #4 → `contrast_floor`
+   and #5 → `seed_locked`**, and that the success beats (#2, #3) clear AAA. Tune the tier, the base, and
+   the canned color values here. **This is hours of work and it gates everything.** If AAA proves too
+   finicky (success beats failing), fall back to **AA with the lock beat leading** and contrast demoted
+   to a maybe — decided here, on real compiled output, not a plausible triple.
+2. **Canvas + `applyScoped`.** The `AnalyticsDashboard` rendering through `hsl(var(--x))` at wrapper
+   scope (no `dark:` utilities); light/dark by var-map swap **+ `.dark` class**. Verified in **chromium**.
+3. **Customizer + page-session.** `PromptBox`, `OutcomePanel` (rejection first-class), `SessionControls`,
+   wired to Parts 1 + 2.
+4. **Side-by-side + light/dark climax.** The two-tenant view and the mode toggle.
+5. **Recording-reliability tests + rejection-state polish.** The smoke test of the full scripted
+   sequence + the on-camera styling of the rejection states.
+
+Each part becomes its own implementation plan (writing-plans), executed and tested before the next.
+
+## 9. What's dropped vs Plan-08, and how it promotes
 
 **Dropped for the demo:** server-side session controller + HTTP routes, audit trail, PII handling,
 preview-token expiry, SSR end-user host route, `resolveThemeTag`-based delivery, content-addressed
