@@ -44,40 +44,31 @@ prompt wording and StyleSpec values are tuned during implementation; the beats a
 2. **"Make it feel like Acme — deep indigo, a little more rounded."** → outcome **diff** (primary→indigo,
    radius↑); the dashboard re-themes **instantly and smoothly**. Acknowledge.
 3. **"Warmer, softer surfaces."** → **diff** (neutral/accent shift); preview updates. Acknowledge.
-4. **The contrast rejection beat:** **"Make the surfaces a bold, mid-tone purple."** → outcome
-   **rejected** (`contrast_floor`). A *mid-lightness* surface can't carry legible text at **AAA (7:1)**
-   — neither a near-white nor a near-black foreground reaches 7:1 against a surface whose luminance
-   sits in the ~0.10–0.30 band — so `verify` refuses it. The panel says, legibly and a little
-   dramatically: *"This platform requires AAA — the strictest accessibility standard. Those surfaces
-   can't carry legible text, so it's refused."* **The preview does not change — it stays accessible.**
-   *"Watch it refuse to break accessibility."*
-   > **Why AAA, not AA (load-bearing — see §4 and Part 1):** every foreground is
-   > `foreground-of(…, "maximize-contrast")`, whose worst case against any solid surface is ~**4.58:1**.
-   > So at **AA (4.5:1)** the text pairs essentially *never* fail — the only AA contrast rejections fire
-   > on the `ring` ui-pair ("focus ring too subtle"), a weak story. At **AAA (7:1)** a mid-L surface
-   > reliably fails the *text* pairs, giving the intuitive, robust rejection. `foreground` is derived
-   > (never a settable seed), so the trigger is always an over-aggressive *surface/brand* choice.
-5. **The lock rejection beat (the guaranteed anchor):** **"Recolor the error/destructive state to a
-   friendly green."** → **rejected** (`seed_locked`) — the platform locked `destructive`, so the wall
-   refuses it deterministically (it cannot miss on camera). *"The platform froze its error-state color;
-   the tenant literally cannot recolor it."* This beat is the governance **anchor** (deterministic,
-   credible, AA-realistic). **Whether the lock or the contrast beat is the demo's hero is decided in
-   Part 1** — contrast is more visceral *if* it fires cleanly at a defensible tier; the lock has none
-   of contrast's reachability/AAA-contrivance risks.
+4. **The contrast rejection beat (secondary governance proof):** **"Make the surfaces a bold, saturated
+   [color]."** → outcome **rejected** (`contrast_floor` on **`muted-fg/muted`**, large-text 3:1, at the
+   realistic **AA** tier). A saturated surface can't carry legible muted/secondary text, so `verify`
+   refuses it. Panel: *"Muted/secondary text on that surface would fall below the legibility floor — so
+   it's refused."* **The preview does not change — it stays accessible.** *"Watch it refuse to break
+   accessibility."* (Part-1 finding: surfaces are profile-anchored and maximize-contrast body text
+   always clears AA ≈4.58, so a body-text refusal is unreachable at AA — the `muted-fg` pair is the
+   reachable AA contrast story. See `apps/tier-a-demo/MECHANISM-FINDINGS.md`.)
+5. **The lock rejection beat (the HERO):** **"Recolor the error/destructive state to a friendly
+   green."** → **rejected** (`seed_locked`) — the platform locked `destructive`, so the wall refuses it
+   deterministically (it cannot miss on camera). *"The platform froze its error-state color; the tenant
+   literally cannot recolor it."* This is the demo's **governance hero** — deterministic,
+   mode-independent, and at the realistic AA tier (no AAA contrivance).
 6. **Publish Acme** (promotes the acknowledged look to "live").
 7. **Switch to Globex**, author a contrasting brand (e.g. emerald, sharper corners) — or load a
    pre-baked Globex theme to keep the take short. Publish.
 8. **Climax — two-tenant side-by-side:** the *same* dashboard, Acme (indigo, rounded) beside Globex
-   (emerald, sharp). Both clear the platform's contrast floor; both obey the same locks. **Toggle
+   (emerald, sharp). Both clear the platform's **AA** contrast floor; both obey the same locks. **Toggle
    light↔dark on both** to show the theme is mode-polarized (dark ≠ inverted light) and accessibility
    holds in both modes.
 
-> **⚠ Beats #4 and #8 and §4's tier are PROVISIONAL pending Part 1 (the spike).** The contrast beat's
-> *mechanism* (surfaces are likely profile-anchored — L from the ramp's anchorL, only hue/chroma from
-> `neutral` — so the trigger probably must retarget from a `neutral` surface to a mid-L `primary`/
-> `accent` seed-role), its *tier* (AA vs AAA), and *whether contrast or the lock beat is the hero* are
-> all decided by Part 1 on real compiled output. Treat the dramatic full-screen-purple framing above as
-> the hoped-for version, not a settled fact.
+> **Mechanism settled by the Part-1 spike (2026-06-23):** tier = **AA**; hero = the **lock** beat
+> (`seed_locked`, deterministic); the contrast beat is the **secondary** AA `muted-fg` rejection.
+> Surfaces are profile-anchored (no full-screen contrast beat) and a body-text AA rejection is
+> unreachable, so the dramatic/AAA framings were dropped. Full data: `apps/tier-a-demo/MECHANISM-FINDINGS.md`.
 
 The narrative, the staged rejection states, and the side-by-side are the deliverable. Polish lives
 here, not in infrastructure.
@@ -141,31 +132,29 @@ The demo ships **one demo manifest** — a two-mode `AppManifest` (light + dark 
 
 - **Customizable brand seeds:** `primary`, `accent`, `neutral` are **unlocked** (so the tenant can
   rebrand — the whole point; note this differs from `SHADCN_CAN`, which locks `primary`).
-- **One platform lock:** `destructive` is **locked** (drives the lock-rejection beat #5).
-- **Contrast tier — AA or AAA, decided by the Part 1 spike (§8).** AAA gives a *robust* text-contrast
-  rejection (§2 beat #4) but is **not a one-line flip**: `refBasePassesTier` blocks manifest
-  construction unless the base clears the tier at every pair, and the standard shadcn base only clears
-  AA (destructive-fg/destructive ≈ 4.62 < 7.0) — so AAA requires building an AAA-passing base in both
-  modes (confirmed via `AppManifest.parse`) and forcing brand seeds dark/light. AA is the realistic
-  standard but makes the contrast beat hard to fire (text pairs clear ≈ 4.58 ≥ 4.5). The spike picks
-  the tier on real output + the hero decision.
+- **One platform lock:** `destructive` is **locked** — drives the **hero** lock-rejection beat #5.
+- **Contrast tier — AA (settled by the Part-1 spike).** AA is the realistic/legal standard, so the
+  standard shadcn base already passes `refBasePassesTier` (no AAA base to build). The spike confirmed
+  surfaces are profile-anchored and maximize-contrast body text always clears AA (≈4.58 ≥ 4.5), so the
+  reachable AA contrast rejection is the **`muted-fg/muted`** large-text pair under a *saturated*
+  `neutral` (beat #4, secondary). See `apps/tier-a-demo/MECHANISM-FINDINGS.md`.
 - **Chroma cap** as in the can (keeps brand colors from going garish).
 
-The **CannedAgent** maps each scripted prompt to a fixed `{ classification, specJson }`. **At AAA the
-success beats' brand colors must be dark/light enough to clear 7:1** (a *mid-L* indigo would itself
-fail AAA), and the rejection beat's surface must sit in the failing mid-L band — all tuned and
-asserted in Part 1:
+The **CannedAgent** maps each scripted prompt to a fixed `{ classification, specJson }`. The success
+beats use seed values the spike confirmed clear AA in both modes (dark indigo, warm-light neutral); the
+contrast-rejection beat uses a *saturated* neutral that trips `muted-fg`:
 
 | Beat | Prompt (illustrative) | Canned output | Engine outcome |
 |---|---|---|---|
-| 2 | "deep indigo, rounded" | `in_scope_styling`, `{colors:{primary: <DARK indigo oklch, clears AAA>}, radius:<↑>}` | diff |
-| 3 | "warmer, lighter surfaces" | `in_scope_styling`, `{colors:{neutral:<LIGHT warm>, accent:<warm>}}` | diff |
-| 4 | "bold mid-tone purple surfaces" | `in_scope_styling`, `{colors:{neutral:<mid-L, luminance ~0.10–0.30>}}` — fails AAA text on the surface pairs | **rejected** `contrast_floor` (verifier) |
+| 2 | "deep indigo, rounded" | `in_scope_styling`, `{colors:{primary:"oklch(0.35 0.12 270)"}, radius:<↑>}` (dark indigo, primary-fg/primary ≈ 11.6:1) | diff |
+| 3 | "warmer, lighter surfaces" | `in_scope_styling`, `{colors:{neutral:"oklch(0.95 0.03 60)", accent:<warm>}}` (light warm surfaces ≈ 20:1) | diff |
+| 4 | "bold, saturated surfaces" | `in_scope_styling`, `{colors:{neutral:"oklch(0.45 0.18 ~30)"}}` — trips `muted-fg/muted` (large-text 3:1) at AA | **rejected** `contrast_floor` (verifier) |
 | 5 | "destructive → green" | `in_scope_styling`, `{colors:{destructive:<green>}}` | **rejected** `seed_locked` (wall) |
 
 The rejection beats are produced by the **real engine** (the wall rejects #5; `verify` rejects #4) —
 the CannedAgent only supplies the proposal. The on-screen copy is rendered from the engine's
-`failureTemplate` (deterministic, keyed on the failure code), then styled for the camera.
+`failureTemplate` (deterministic, keyed on the failure code), then styled for the camera. (Exact
+`accent`/`radius`/green values are tuned when the next plan encodes + asserts these beats.)
 
 ---
 
@@ -226,7 +215,13 @@ Built and tested as five sequential parts, each green-and-reviewed before the ne
 **front-loads the "is the demo even possible" gate** so no UI is built on an unproven hero beat:
 
 1. **The spike — prove which beats fire, NO UI (the empirical gate). Its output is a DECISION, and it
-   may revise this spec (§2 beats #4/#8, §4's tier).** In order:
+   may revise this spec (§2 beats #4/#8, §4's tier).**
+   > **✓ RESOLVED 2026-06-23** (`apps/tier-a-demo`, `MECHANISM-FINDINGS.md`): surfaces are
+   > profile-anchored; a body-text AA rejection is unreachable; AAA would read as contrived → **AA tier,
+   > lock-led hero, AA `muted-fg` contrast as the secondary beat**. The scaffold + probe + decision sub-steps
+   > below were executed; the *encode* sub-step (1.iii) was split into the next plan (build against settled facts).
+
+   In order:
    1. **Mechanism probe (the first thing written, before any tuning).** Run, through the *real*
       `parseSpec → compile → verify`: (a) a mid-L **`neutral`** — does it propagate to surface
       lightness, or are surfaces pinned to the ramp's anchorL (taking only hue/chroma)? (b) a mid-L
