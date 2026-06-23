@@ -217,6 +217,22 @@ importers:
         specifier: ^3.0.0
         version: 3.2.6(@types/node@22.19.21)(happy-dom@16.8.1)(jiti@1.21.7)(jsdom@29.1.1)(tsx@4.22.4)
 
+  apps/tier-a-demo:
+    dependencies:
+      '@invariance/theming':
+        specifier: workspace:*
+        version: link:../../packages/theming
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.21
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.6(@types/node@22.19.21)(happy-dom@16.8.1)(jiti@1.21.7)(jsdom@29.1.1)(tsx@4.22.4)
+
   packages/cli:
     dependencies:
       '@hono/node-server':
@@ -413,6 +429,9 @@ importers:
       playwright:
         specifier: ^1.60.0
         version: 1.60.0
+      tsx:
+        specifier: ^4.19.0
+        version: 4.22.4
       vitest:
         specifier: ^3.0.0
         version: 3.2.6(@types/node@22.19.21)(happy-dom@16.8.1)(jiti@1.21.7)(jsdom@29.1.1)(tsx@4.22.4)
