@@ -60,14 +60,24 @@ prompt wording and StyleSpec values are tuned during implementation; the beats a
 5. **The lock rejection beat (the guaranteed anchor):** **"Recolor the error/destructive state to a
    friendly green."** → **rejected** (`seed_locked`) — the platform locked `destructive`, so the wall
    refuses it deterministically (it cannot miss on camera). *"The platform froze its error-state color;
-   the tenant literally cannot recolor it."* This beat is the governance anchor; the contrast beat (#4)
-   is the stronger story but must be empirically confirmed in Part 1.
+   the tenant literally cannot recolor it."* This beat is the governance **anchor** (deterministic,
+   credible, AA-realistic). **Whether the lock or the contrast beat is the demo's hero is decided in
+   Part 1** — contrast is more visceral *if* it fires cleanly at a defensible tier; the lock has none
+   of contrast's reachability/AAA-contrivance risks.
 6. **Publish Acme** (promotes the acknowledged look to "live").
 7. **Switch to Globex**, author a contrasting brand (e.g. emerald, sharper corners) — or load a
    pre-baked Globex theme to keep the take short. Publish.
 8. **Climax — two-tenant side-by-side:** the *same* dashboard, Acme (indigo, rounded) beside Globex
-   (emerald, sharp). Both pass AA; both obey the same locks. **Toggle light↔dark on both** to show the
-   theme is mode-polarized (dark ≠ inverted light) and accessibility holds in both modes.
+   (emerald, sharp). Both clear the platform's contrast floor; both obey the same locks. **Toggle
+   light↔dark on both** to show the theme is mode-polarized (dark ≠ inverted light) and accessibility
+   holds in both modes.
+
+> **⚠ Beats #4 and #8 and §4's tier are PROVISIONAL pending Part 1 (the spike).** The contrast beat's
+> *mechanism* (surfaces are likely profile-anchored — L from the ramp's anchorL, only hue/chroma from
+> `neutral` — so the trigger probably must retarget from a `neutral` surface to a mid-L `primary`/
+> `accent` seed-role), its *tier* (AA vs AAA), and *whether contrast or the lock beat is the hero* are
+> all decided by Part 1 on real compiled output. Treat the dramatic full-screen-purple framing above as
+> the hoped-for version, not a settled fact.
 
 The narrative, the staged rejection states, and the side-by-side are the deliverable. Polish lives
 here, not in infrastructure.
@@ -132,10 +142,13 @@ The demo ships **one demo manifest** — a two-mode `AppManifest` (light + dark 
 - **Customizable brand seeds:** `primary`, `accent`, `neutral` are **unlocked** (so the tenant can
   rebrand — the whole point; note this differs from `SHADCN_CAN`, which locks `primary`).
 - **One platform lock:** `destructive` is **locked** (drives the lock-rejection beat #5).
-- **Contrast tier AAA** (drives a *robust* text-contrast rejection — see §2 beat #4). **This is not a
-  one-line flip:** `refBasePassesTier` blocks manifest construction unless the base clears AAA at every
-  pair, and the standard shadcn base only clears AA (destructive-fg/destructive ≈ 4.62 < 7.0). So
-  **Part 1 builds an AAA-passing base** (both modes) and confirms it via `AppManifest.parse`.
+- **Contrast tier — AA or AAA, decided by the Part 1 spike (§8).** AAA gives a *robust* text-contrast
+  rejection (§2 beat #4) but is **not a one-line flip**: `refBasePassesTier` blocks manifest
+  construction unless the base clears the tier at every pair, and the standard shadcn base only clears
+  AA (destructive-fg/destructive ≈ 4.62 < 7.0) — so AAA requires building an AAA-passing base in both
+  modes (confirmed via `AppManifest.parse`) and forcing brand seeds dark/light. AA is the realistic
+  standard but makes the contrast beat hard to fire (text pairs clear ≈ 4.58 ≥ 4.5). The spike picks
+  the tier on real output + the hero decision.
 - **Chroma cap** as in the can (keeps brand colors from going garish).
 
 The **CannedAgent** maps each scripted prompt to a fixed `{ classification, specJson }`. **At AAA the
@@ -212,14 +225,28 @@ No re-testing of `compile`/`verify`/contrast math.
 Built and tested as five sequential parts, each green-and-reviewed before the next. The order
 **front-loads the "is the demo even possible" gate** so no UI is built on an unproven hero beat:
 
-1. **Prove the beats fire — NO UI (the empirical gate).** Build the **demo manifest** (incl. an
-   **AAA-passing base** in both modes, confirmed via `AppManifest.parse`) and the **CannedAgent**'s
-   canned specs. Run every scripted prompt through the *real* `parseSpec → mergeDelta → diffSpecs →
-   compile → verify` and assert each produces its intended outcome — **especially #4 → `contrast_floor`
-   and #5 → `seed_locked`**, and that the success beats (#2, #3) clear AAA. Tune the tier, the base, and
-   the canned color values here. **This is hours of work and it gates everything.** If AAA proves too
-   finicky (success beats failing), fall back to **AA with the lock beat leading** and contrast demoted
-   to a maybe — decided here, on real compiled output, not a plausible triple.
+1. **The spike — prove which beats fire, NO UI (the empirical gate). Its output is a DECISION, and it
+   may revise this spec (§2 beats #4/#8, §4's tier).** In order:
+   1. **Mechanism probe (the first thing written, before any tuning).** Run, through the *real*
+      `parseSpec → compile → verify`: (a) a mid-L **`neutral`** — does it propagate to surface
+      lightness, or are surfaces pinned to the ramp's anchorL (taking only hue/chroma)? (b) a mid-L
+      **`primary`** and a mid-L **`accent`** (`{kind:"seed"}` → role L = seed L). For each, record
+      *exactly which `contrastPair` fails and at which tier* (AA 4.5 vs AAA 7.0). Prior verification
+      strongly suggests surfaces are **anchored** (so `neutral` can't drive a text pair below floor —
+      it can at most fail the `ring` ui-pair), and that a mid-L seed-role fails a text pair **only at
+      AAA** (maximize-contrast worst case ≈ 4.58 > 4.5). Confirm or refute on real output.
+   2. **The decision (three-way, on data + buyer-judgment):** *contrast-via-surface-at-AAA* (only if
+      surfaces propagate — the dramatic full-screen version), *contrast-via-`primary`/`accent`-at-AAA*
+      (reliable, recolors buttons, but blanket-AAA reads as restrictive/contrived to a technical buyer),
+      or *lock-led at the realistic AA* (the `seed_locked` wall rejection as hero — deterministic and
+      credible — with contrast demoted or cut). Record the rationale.
+   3. **Encode the chosen mechanism:** the **demo manifest** (the chosen tier; if AAA, an AAA-passing
+      base in both modes confirmed via `AppManifest.parse` — *not* a one-line flip, see §4) + the
+      **CannedAgent** specs, with a test asserting **each scripted prompt produces its intended
+      outcome** (the hero rejection fires; the success beats clear the floor) on the real compiled
+      output. Then update §2's beats and §4's tier to match what was proven.
+   This part is rigorous; being wrong here is the only expensive mistake. It is the "is this demo even
+   possible / what is the demo actually" gate — no UI until it settles.
 2. **Canvas + `applyScoped`.** The `AnalyticsDashboard` rendering through `hsl(var(--x))` at wrapper
    scope (no `dark:` utilities); light/dark by var-map swap **+ `.dark` class**. Verified in **chromium**.
 3. **Customizer + page-session.** `PromptBox`, `OutcomePanel` (rejection first-class), `SessionControls`,
