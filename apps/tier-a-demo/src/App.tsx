@@ -1,37 +1,46 @@
-// Crypto-free subpaths (not the barrel): the barrel pulls node:crypto via artifact/hash-artifact,
-// which the browser bundle can't include. compile/spec are browser-safe; the demo never hashes.
-import { compile } from "@invariance/theming/compile";
-import { parseSpec } from "@invariance/theming/spec";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { AnalyticsDashboard } from "./canvas/AnalyticsDashboard.js";
+import { CannedAgent } from "./demo/canned-agent.js";
 import { DEMO_MANIFEST } from "./demo/manifest.js";
+import { SCRIPT } from "./demo/script.js";
 import { applyScoped } from "./preview/apply-scoped.js";
+import { OutcomePanel } from "./studio/OutcomePanel.js";
+import { PromptBox } from "./studio/PromptBox.js";
+import { SessionControls } from "./studio/SessionControls.js";
+import { useDemoSession } from "./studio/useDemoSession.js";
 
-// A sample published look (the engine runs client-side — pure). Part 4 will drive this from the
-// CannedAgent + the page-held session; here it's a fixed theme to prove the scoped applier re-themes.
-const parsed = parseSpec({ colors: { primary: "oklch(0.35 0.12 270)" }, radius: 14 }, DEMO_MANIFEST);
-const SAMPLE_THEME = parsed.ok ? compile(parsed.spec, DEMO_MANIFEST) : undefined;
+const agent = new CannedAgent(SCRIPT);
+const EXAMPLES = Object.keys(SCRIPT);
 
 export function App() {
+  const demo = useDemoSession(agent, DEMO_MANIFEST, "acme");
   const wrapper = useRef<HTMLDivElement>(null);
-  const [mode, setMode] = useState<"light" | "dark">("light");
 
   useEffect(() => {
-    if (wrapper.current && SAMPLE_THEME) applyScoped(wrapper.current, SAMPLE_THEME, mode);
-  }, [mode]);
+    if (wrapper.current) applyScoped(wrapper.current, demo.state.applied, demo.state.mode);
+  }, [demo.state.applied, demo.state.mode]);
 
   return (
-    <div data-testid="app">
-      <button
-        data-testid="toggle-dark"
-        onClick={() => setMode((m) => (m === "light" ? "dark" : "light"))}
-        style={{ padding: "8px 12px", margin: 8 }}
-      >
-        Toggle {mode === "light" ? "dark" : "light"}
-      </button>
-      <div ref={wrapper} data-testid="scope" style={{ background: "hsl(var(--background))" }}>
-        <AnalyticsDashboard />
-      </div>
+    <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", height: "100vh", fontFamily: "system-ui" }}>
+      <aside style={{ display: "flex", flexDirection: "column", gap: 14, padding: 16, borderRight: "1px solid #e4e4e7", overflow: "auto" }}>
+        <h2 style={{ margin: 0 }}>Customize — Acme</h2>
+        <PromptBox examples={EXAMPLES} onSubmit={demo.submit} />
+        {demo.state.notice && (
+          <p data-testid="notice" style={{ color: "#a16207", margin: 0 }}>
+            {demo.state.notice}
+          </p>
+        )}
+        <OutcomePanel outcome={demo.state.outcome} onAcknowledge={demo.acknowledge} />
+        <SessionControls published={demo.state.published} onPublish={demo.publish} onReset={demo.reset} />
+        <button data-testid="toggle-dark" onClick={demo.toggleMode} style={{ marginTop: "auto", padding: "6px 12px" }}>
+          Mode: {demo.state.mode}
+        </button>
+      </aside>
+      <main style={{ overflow: "auto" }}>
+        <div ref={wrapper} data-testid="scope" style={{ background: "hsl(var(--background))", minHeight: "100%" }}>
+          <AnalyticsDashboard />
+        </div>
+      </main>
     </div>
   );
 }
