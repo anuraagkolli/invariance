@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Empirically determine, on real compiled output, *which settable seed (if any) drives a contrast pair below floor and at which tier* — the finding that decides whether the demo's hero is the contrast beat (and at AA or AAA) or the lock beat — before any UI or manifest tuning is built on an unproven assumption.
+**Goal:** Empirically determine, on real compiled output, **both halves of "is the contrast beat viable"** — does a rejection fire (and via which seed, at which tier) AND do the scripted *success* beats clear that tier (in *both* modes) — so Task 3 can decide the demo's hero (contrast-at-AA/AAA vs lock) on settled facts, before any UI or manifest tuning is built on an unproven assumption.
 
-**Architecture:** A new, minimal `apps/tier-a-demo` package (TS + vitest, **no UI, no Vite/React yet**) that calls the *real, already-verified* `@invariance/theming` pipeline directly. One probe test measures (a) whether a mid-lightness `neutral` propagates to surface lightness or surfaces are pinned to the ramp's anchorL, and (b) the contrast a mid-lightness *seed-role* (`primary`/`accent`) produces, against both the AA (4.5:1) and AAA (7:1) thresholds. The output is a **decision** (recorded, and applied back to the spec).
+**Architecture:** A new, minimal `apps/tier-a-demo` package (TS + vitest, **no UI, no Vite/React yet**) that calls the *real, already-verified* `@invariance/theming` pipeline directly. A probe test measures: (a) whether a mid-lightness `neutral` propagates to surface lightness or surfaces are pinned to the ramp's anchorL; (b) the contrast a *band* of mid-lightness `primary` values produces, vs AA (4.5:1) and AAA (7:1); (c) what a saturated `neutral` actually fails at AA (documentary); and (d) whether the scripted **success** colors (dark indigo, warm surfaces) clear the candidate tier. The output is a **decision**. If the decision is AAA, a conditional Task 4 extends the probe to two modes before settling.
 
 **Tech Stack:** TypeScript (ESM, strict), vitest, `@invariance/theming` (workspace). No new runtime deps; the WCAG measurement helper is inlined in the probe test (the probe measures the engine's output to make a *product* decision — it is not re-verifying the engine).
 
@@ -13,9 +13,14 @@
 - **Do NOT modify `@invariance/theming` or any engine source.** The demo only *consumes* it.
 - **Rejections come from the real engine**, never faked — this plan asserts engine behavior directly.
 - **This part ships NO UI and adds no Vite/React.** vitest `environment: "node"`.
-- **This is a SPIKE: its deliverable is a DECISION that may revise the spec** (`docs/superpowers/specs/2026-06-22-tier-a-customizer-demo-design.md` §2 beats #4/#8, §4 tier, hero ranking). The manifest, CannedAgent, beat-assertion tests, and all UI are deliberately **out of scope** and planned in the next part against the settled facts.
+- **Measure first, pin second.** Probe steps LOG measurements and are read by a human *before* any
+  threshold assertion is written. Assertions pin the *discovered* numbers as a regression — they must
+  never be made green by tuning the input until it matches a hypothesis. If reality contradicts a
+  hypothesis, record the real number; never edit the engine.
+- **This is a SPIKE: its deliverable is a DECISION that may revise the spec** (`docs/superpowers/specs/2026-06-22-tier-a-customizer-demo-design.md` §2 beats #4/#8, §4 tier, hero ranking). The demo manifest, CannedAgent, beat-assertion tests, and all UI are **out of scope** and planned in the next part against the settled facts.
+- **Asymmetric dark-mode gate:** a **lock-led-AA** decision is fully de-risked by the light-only probe (the `seed_locked` wall rejection is mode-independent; AA success clearance ≈ 4.58 ≥ 4.5 holds in both modes). An **AAA** decision is NOT — it must pass the two-mode Task 4 before being settled.
 - **Execution isolation:** start by branching off `governed-customization-redesign` (or a worktree via `superpowers:using-git-worktrees`) — do NOT build on the `verify/engine` branch.
-- Engine facts (from `docs/verify/2026-06-21-engine-verification.md`, treat as the hypothesis to confirm/refute): every foreground is `foreground-of(…, "maximize-contrast")` with worst case ≈ **4.58:1**; `background`'s L was found **profile-anchored** (unreachable via legal seeds). `primary`/`accent`/`destructive` are `{kind:"seed"}` (role L = seed L). `SHADCN_CAN` is light-only, locks `["primary"]`, tier AA, chromaCap 0.3.
+- Engine facts (from `docs/verify/2026-06-21-engine-verification.md` — the hypothesis to confirm/refute): every foreground is `foreground-of(…, "maximize-contrast")` and **runs to the achromatic extreme regardless of tier** (the repair loop is only a safety net), worst case ≈ **4.58:1**; `background`'s L was found **profile-anchored**; `primary`/`accent`/`destructive` are `{kind:"seed"}` (role L = seed L); dark mode is **mode-polarized** (a per-mode `seedNudge` can shift a seed's L). `SHADCN_CAN` is light-only, locks `["primary"]`, tier AA, chromaCap 0.3. `VerifyFailure` shape (ledger §6.1): `{ code, mode, pair?: {fg,bg,category}, role?, varName?, required?, actual?, message }`.
 
 ---
 
@@ -124,28 +129,23 @@ git commit -m "feat(tier-a-demo): scaffold package for the mechanism spike (no U
 
 ---
 
-### Task 2: The mechanism probe — measure surface-propagation and seed-role contrast vs AA/AAA
+### Task 2: The mechanism probe — measure (then pin) surface-propagation, the failing band, and success clearance
 
 **Files:**
+- Create: `apps/tier-a-demo/test/_measure.ts` (the inline WCAG helper, shared by Task 2 and a possible Task 4)
 - Test: `apps/tier-a-demo/test/mechanism-probe.test.ts`
 
 **Interfaces:**
 - Consumes: `@invariance/theming` — `parseSpec`, `compile`, `verify`, `AppManifest`, `SHADCN_CAN`.
-- Produces: confirmed mechanism facts (logged + asserted) that Task 3's decision depends on:
-  `surfaceAnchored: boolean`, `midLPrimaryRatio: number`, `midLPrimaryFailsAAAOnly: boolean`,
-  and the set of contrast pairs that fail at AA for a saturated `neutral`.
+- Produces: confirmed facts (logged, then pinned) that Task 3's decision depends on — surface anchoring, the mid-L `primary` failing band vs AA/AAA, the AA contrast-failure pair, and whether the dark-indigo success color clears the candidate tier (light).
 
-- [ ] **Step 1: Write the probe with an inline WCAG measurer (assertions encode the hypothesis)**
+- [ ] **Step 1: Write the WCAG measurement helper**
 
-`apps/tier-a-demo/test/mechanism-probe.test.ts`:
+`apps/tier-a-demo/test/_measure.ts`:
 ```typescript
-import { AppManifest, type CandidateTheme, compile, parseSpec, verify } from "@invariance/theming";
-import { SHADCN_CAN } from "@invariance/theming";
-import { describe, expect, it } from "vitest";
-
-// --- inline WCAG measurement of an emitted bare HSL triple "H S% L%" (product-decision probe;
-// --- not an independence check, so reusing standard WCAG math is fine) ---
-function hslTripleToSrgb(triple: string): [number, number, number] {
+// Inline WCAG measurement of an emitted bare HSL triple "H S% L%". This probe measures the engine's
+// output to make a PRODUCT decision; it is not an independence check, so standard WCAG math is fine.
+export function hslTripleToSrgb(triple: string): [number, number, number] {
   const [h, s, l] = triple.trim().split(/\s+/).map((t) => parseFloat(t));
   const S = s / 100;
   const L = l / 100;
@@ -162,19 +162,28 @@ function hslTripleToSrgb(triple: string): [number, number, number] {
   else rgb = [c, 0, x];
   return [rgb[0] + m, rgb[1] + m, rgb[2] + m];
 }
-function luminance(triple: string): number {
+export function luminance(triple: string): number {
   const lin = (v: number) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
   const [r, g, b] = hslTripleToSrgb(triple).map(lin);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
-function contrast(a: string, b: string): number {
+export function contrast(a: string, b: string): number {
   const la = luminance(a) + 0.05;
   const lb = luminance(b) + 0.05;
   return Math.max(la, lb) / Math.min(la, lb);
 }
-function lightnessPct(triple: string): number {
+export function lightnessPct(triple: string): number {
   return parseFloat(triple.trim().split(/\s+/)[2]); // the L% token
 }
+```
+
+- [ ] **Step 2: Write the probe as MEASUREMENTS ONLY (logs, no threshold assertions yet)**
+
+`apps/tier-a-demo/test/mechanism-probe.test.ts`:
+```typescript
+import { AppManifest, type CandidateTheme, compile, parseSpec, SHADCN_CAN, verify } from "@invariance/theming";
+import { describe, expect, it } from "vitest";
+import { contrast, lightnessPct } from "./_measure.js";
 
 // unlocked, light-only probe manifest so every seed actually moves under compile
 const PROBE: AppManifest = AppManifest.parse({
@@ -182,139 +191,250 @@ const PROBE: AppManifest = AppManifest.parse({
   appId: "probe",
   invariants: { ...SHADCN_CAN.invariants, locks: [] },
 });
-
 function compileJson(json: unknown): CandidateTheme {
   const p = parseSpec(json, PROBE);
   if (!p.ok) throw new Error(`probe rejected: ${JSON.stringify(p.failures)}`);
   return compile(p.spec, PROBE);
 }
+/* eslint-disable no-console */
 
-describe("MECHANISM PROBE — which seed drives a failing contrast pair, at which tier", () => {
-  it("(a) surfaces are profile-ANCHORED: a mid-L neutral keeps --background light", () => {
-    const base = compileJson({});
-    const midNeutral = compileJson({ colors: { neutral: "oklch(0.55 0.08 300)" } });
-    const baseL = lightnessPct(base.light["--background"]);
-    const movedL = lightnessPct(midNeutral.light["--background"]);
-    // eslint-disable-next-line no-console
-    console.log(`[probe a] background L: base=${baseL}% mid-neutral=${movedL}% (anchored ⟹ stays high)`);
-    // HYPOTHESIS: anchored — background stays light despite a mid-L neutral.
-    // If this FAILS (movedL drops toward ~55), surfaces PROPAGATE and the dramatic full-screen
-    // contrast beat is viable — record that; it changes Task 3's decision.
-    expect(movedL).toBeGreaterThan(85);
+describe("MECHANISM PROBE — measurements (read these, then pin in Step 4)", () => {
+  it("(a) surface propagation: does a mid-L neutral move --background L?", () => {
+    const baseL = lightnessPct(compileJson({}).light["--background"]);
+    const movedL = lightnessPct(compileJson({ colors: { neutral: "oklch(0.55 0.08 300)" } }).light["--background"]);
+    console.log(`[a] background L: base=${baseL}% mid-neutral=${movedL}% → ${movedL > 85 ? "ANCHORED" : "PROPAGATES"}`);
+    expect(typeof movedL).toBe("number");
   });
 
-  it("(b) a mid-L seed-role (primary) fails text contrast ONLY at AAA (clears AA ≈4.58, misses 7:1)", () => {
-    const t = compileJson({ colors: { primary: "oklch(0.58 0.15 280)" } });
-    const ratio = contrast(t.light["--primary-foreground"], t.light["--primary"]);
-    const primaryL = lightnessPct(t.light["--primary"]);
-    // eslint-disable-next-line no-console
-    console.log(`[probe b] mid-L primary: --primary L=${primaryL}% primary-fg/primary contrast=${ratio.toFixed(3)} (AA 4.5 / AAA 7.0)`);
-    // HYPOTHESIS: clears AA but fails AAA — so the text-contrast beat is only reachable at AAA.
-    expect(ratio).toBeGreaterThanOrEqual(4.5); // clears AA
-    expect(ratio).toBeLessThan(7.0); // fails AAA
+  it("(b) failing band: mid-L primary → primary-fg/primary contrast across an L sweep", () => {
+    for (const L of [0.45, 0.5, 0.55, 0.6, 0.65]) {
+      const t = compileJson({ colors: { primary: `oklch(${L} 0.15 280)` } });
+      const r = contrast(t.light["--primary-foreground"], t.light["--primary"]);
+      console.log(`[b] primary oklchL=${L} → emittedL=${lightnessPct(t.light["--primary"])}% contrast=${r.toFixed(3)} (AA≥4.5 ${r >= 4.5 ? "Y" : "N"} / AAA≥7 ${r >= 7 ? "Y" : "N"})`);
+    }
+    expect(true).toBe(true);
   });
 
-  it("(c) what a saturated neutral actually fails at AA (expect the ring ui-pair, not a text pair)", () => {
-    const t = compileJson({ colors: { neutral: "oklch(0.45 0.18 30)" } });
-    const verdict = verify(t, PROBE);
-    const failures = verdict.ok ? [] : verdict.failures;
-    const summary = failures.map((f) => `${f.code}:${f.pair ? `${f.pair.fg}/${f.pair.bg}(${f.pair.category})` : f.role ?? ""}`);
-    // eslint-disable-next-line no-console
-    console.log(`[probe c] saturated neutral @AA verdict.ok=${verdict.ok} failures=[${summary.join(", ")}]`);
-    // documentary: records WHICH pair carries the only AA contrast story (the weak "ring" one if so).
-    // Assert at least that the verdict is decisive (no throw); the failing-pair detail is recorded above.
+  it("(c) saturated neutral @ AA: which pair fails (documentary)", () => {
+    const verdict = verify(compileJson({ colors: { neutral: "oklch(0.45 0.18 30)" } }), PROBE);
+    const fails = verdict.ok ? [] : verdict.failures.map((f) => `${f.code}:${f.pair ? `${f.pair.fg}/${f.pair.bg}(${f.pair.category})` : f.role ?? ""}`);
+    console.log(`[c] saturated neutral @AA ok=${verdict.ok} fails=[${fails.join(", ")}]`);
     expect(typeof verdict.ok).toBe("boolean");
+  });
+
+  it("(d) SUCCESS clearance (tier-independent): scripted success colors → their key pair contrast", () => {
+    // beat #2 dark indigo primary; the value MUST clear the chosen tier (≥7 for AAA viability).
+    const indigo = compileJson({ colors: { primary: "oklch(0.35 0.12 270)" } });
+    const indigoR = contrast(indigo.light["--primary-foreground"], indigo.light["--primary"]);
+    console.log(`[d] dark-indigo primary → primary-fg/primary=${indigoR.toFixed(3)} (AAA≥7 ${indigoR >= 7 ? "Y" : "N"})`);
+    // beat #3 warm light surfaces are anchored-light (probe a) → foreground-of(light) clears trivially;
+    // measure to confirm, not assume:
+    const warm = compileJson({ colors: { neutral: "oklch(0.95 0.03 60)" } });
+    const warmR = contrast(warm.light["--foreground"], warm.light["--background"]);
+    console.log(`[d] warm-light surfaces → foreground/background=${warmR.toFixed(3)} (AAA≥7 ${warmR >= 7 ? "Y" : "N"})`);
+    expect(typeof indigoR).toBe("number");
   });
 });
 ```
 
-- [ ] **Step 2: Run the probe and READ the logged measurements**
+- [ ] **Step 3: Run the probe and READ every logged line**
 
 Run: `pnpm -F @invariance/tier-a-demo test mechanism-probe`
-Expected: the `[probe a]`, `[probe b]`, `[probe c]` lines print real numbers. Read them.
-- If (a) and (b) PASS → the hypothesis holds: surfaces anchored, seed-role text-contrast reachable only at AAA. Proceed.
-- If (a) FAILS (`movedL` dropped) → surfaces propagate; the dramatic full-screen contrast beat is viable. **Record the actual numbers** and adjust the assertion to match reality (e.g. `expect(movedL).toBeLessThan(70)` with a comment), so the test documents the true mechanism.
-- If (b) FAILS → re-read the printed ratio and adjust the bounds to the measured truth (e.g. if it clears AAA, the seed-role contrast beat is unreachable too → lock beat is forced). Tune the probe's `primary` oklch L so the test pins the real boundary, with a comment citing the measured value.
+Expected: 4 tests PASS; the `[a]`–`[d]` lines print real numbers. Record them (they feed Task 3 and `MECHANISM-FINDINGS.md`). Do not proceed until you have read and noted:
+- (a) ANCHORED or PROPAGATES, with the two L values.
+- (b) for which oklchL the `primary-fg/primary` contrast falls in `[4.5, 7.0)` — the failing-AAA band.
+- (c) the exact pair(s) that fail at AA (likely the `ring` ui-pair — the weak story).
+- (d) whether dark-indigo clears 7 (AAA-viable success) and the warm-surfaces ratio.
 
-> This is a spike: the assertions exist to *lock in the confirmed mechanism as a regression*, not to force a predetermined answer. If reality differs from the hypothesis, change the assertion to match reality and note it — do not change the engine.
+- [ ] **Step 4: PIN the discovered numbers as regression assertions**
 
-- [ ] **Step 3: Re-run until green against reality**
+Edit `mechanism-probe.test.ts`: replace each `expect(typeof …).toBe(...)` / `expect(true)` placeholder with an
+assertion that pins the *measured* reality (not a hypothesis). Examples — use YOUR measured values:
+```typescript
+// (a) if measured ANCHORED (movedL stayed ~base):
+expect(movedL).toBeGreaterThan(85);
+// (a) if measured PROPAGATES instead, pin that truth and note it:
+// expect(movedL).toBeLessThan(70); // surfaces propagate — full-screen contrast beat is viable
+
+// (b) pin the failing sub-band you observed, e.g. if 0.5–0.6 fail AAA but clear AA:
+//   inside the loop, for the L values you saw fail:
+expect(r, `primary L=${L}`).toBeLessThan(7.0);   // fails AAA
+expect(r, `primary L=${L}`).toBeGreaterThanOrEqual(4.5); // clears AA
+
+// (d) pin success clearance for the indigo you'll actually script:
+expect(indigoR).toBeGreaterThanOrEqual(7.0); // dark indigo clears AAA in light
+```
+(c) stays documentary (no threshold assertion — it records which pair carries the AA story).
+
+- [ ] **Step 5: Re-run green and commit**
 
 Run: `pnpm -F @invariance/tier-a-demo test mechanism-probe`
-Expected: PASS (3 tests), now asserting the *measured* mechanism.
-
-- [ ] **Step 4: Commit**
-
+Expected: PASS, now pinning the measured mechanism.
 ```bash
-git add apps/tier-a-demo/test/mechanism-probe.test.ts
-git commit -m "test(tier-a-demo): mechanism probe — surface anchoring + seed-role contrast vs AA/AAA"
+git add apps/tier-a-demo/test/_measure.ts apps/tier-a-demo/test/mechanism-probe.test.ts
+git commit -m "test(tier-a-demo): mechanism probe — anchoring, failing band, AA pair, success clearance (light)"
 ```
 
 ---
 
-### Task 3: Record findings, make the decision, update the spec
+### Task 3: Record findings, make the decision; settle the spec OR route to Task 4
 
 **Files:**
 - Create: `apps/tier-a-demo/MECHANISM-FINDINGS.md`
-- Modify: `docs/superpowers/specs/2026-06-22-tier-a-customizer-demo-design.md` (§2 beats #4/#8, §4 tier, hero ranking — only as the findings dictate)
+- Modify: `docs/superpowers/specs/2026-06-22-tier-a-customizer-demo-design.md` (only as the findings dictate)
 
 **Interfaces:**
-- Consumes: the logged measurements from Task 2.
-- Produces: a settled decision (the demo's contrast mechanism + tier + hero) that the *next* plan (manifest + CannedAgent + beat-assertions + canvas) builds against.
+- Consumes: Task 2's measurements.
+- Produces: either a SETTLED decision (lock-led-AA) with the spec updated, OR a decision to pursue AAA that **gates on Task 4** before the spec is settled.
 
 - [ ] **Step 1: Record the measured findings**
 
-Create `apps/tier-a-demo/MECHANISM-FINDINGS.md` with the actual numbers from Task 2's logs:
+Create `apps/tier-a-demo/MECHANISM-FINDINGS.md` with the actual numbers from Task 2:
 ```markdown
 # Tier-A Demo — Part 1 Mechanism Findings (<date>)
 
 Measured on the real @invariance/theming pipeline (probe manifest = SHADCN_CAN, locks removed):
 
-- **Surface propagation:** background L base = <X>%, under a mid-L neutral = <Y>%.
-  → surfaces are [ANCHORED / PROPAGATING].
-- **Mid-L seed-role contrast:** mid-L `primary` (oklch 0.58/0.15/280) → primary-fg/primary = <Z>:1.
-  → clears AA (<4.5? Y/N>), fails AAA (<7.0? Y/N>).
-- **Saturated neutral @ AA:** verify failures = [<codes/pairs>].
-  → the only AA contrast story is [the `ring` ui-pair / a text pair / none].
+- Surface propagation: background L base=<X>% / mid-neutral=<Y>% → [ANCHORED / PROPAGATES].
+- Mid-L primary failing band: contrast falls in [4.5,7.0) for oklchL ∈ <list>; the AAA-failing band is <range>.
+- Saturated neutral @AA fails: [<codes/pairs>] → the AA contrast story is [ring ui-pair / a text pair / none].
+- Success clearance (light): dark-indigo primary-fg/primary=<Z>:1 (clears AAA: <Y/N>); warm surfaces=<W>:1.
 
 ## Decision (three-way)
 Chosen: [ contrast-via-surface-at-AAA | contrast-via-primary/accent-at-AAA | lock-led-at-AA ]
-Rationale: [does it fire? how dramatic? does blanket-AAA read as contrived to a technical buyer?
-whether the lock beat — deterministic, AA-realistic — is the better hero.]
+Rationale: [fires? dramatic? does blanket-AAA read as contrived to a technical buyer? is the lock —
+deterministic, mode-independent, AA-realistic — the better hero?]
+Dark-mode gate: [N/A for lock-led-AA | REQUIRED → Task 4 (AAA only)]
 ```
 
-- [ ] **Step 2: Present the findings + recommendation and get the decision**
+- [ ] **Step 2: Present findings + recommendation; get the decision**
 
-Surface the findings table and a recommendation to the user (the human checkpoint). The decision is a
-judgment on **data + buyer-perception**, not just "does the rejection fire":
-- If surfaces anchored + seed-role fails only at AAA + blanket-AAA reads as contrived → recommend
-  **lock-led at AA** (the `seed_locked` wall rejection as hero — deterministic, credible), with the
-  contrast beat either cut or kept as a secondary "even a mid-L brand button can't go illegible at AAA"
-  moment only if the user wants AAA.
-- If surfaces propagate → recommend **contrast-via-surface-at-AAA** (the dramatic full-screen version).
-- Record the user's choice in `MECHANISM-FINDINGS.md`.
+Surface the findings table + recommendation to the user (human checkpoint). The decision is a judgment
+on **data + buyer-perception**, not just "does the rejection fire":
+- Surfaces anchored + seed-role fails only at AAA + blanket-AAA reads as contrived → recommend
+  **lock-led-AA** (the `seed_locked` wall rejection as hero — deterministic, credible).
+- Surfaces propagate → **contrast-via-surface-at-AAA** is viable (dramatic) → still AAA → Task 4.
+- User wants the visceral contrast hero and accepts AAA → **AAA path** → Task 4.
+Record the choice + rationale in `MECHANISM-FINDINGS.md`.
 
-- [ ] **Step 3: Update the spec to settled facts**
+- [ ] **Step 3: Branch on the decision**
+  - **If lock-led-AA (no AAA):** the light-only probe is sufficient. Go to Step 4 (settle the spec).
+  - **If any AAA path:** **STOP — do NOT settle the spec yet.** Do Task 4 first; settle only after it
+    confirms AAA is viable in both modes (or forces a fall back to lock-led-AA).
 
-In `docs/superpowers/specs/2026-06-22-tier-a-customizer-demo-design.md`, rewrite §2 beat #4 (and #8's
-phrasing), §4's tier line, and the §2-beat-#5 / hero-ranking text to state the *decided* mechanism,
-tier, and hero — removing the PROVISIONAL callout. Keep Appendix A (Plan-08) unchanged.
+- [ ] **Step 4: Settle the spec (after lock-led-AA, or after Task 4 confirms AAA)**
 
-- [ ] **Step 4: Commit**
-
+In `docs/superpowers/specs/2026-06-22-tier-a-customizer-demo-design.md`, rewrite §2 beat #4 (+ #8's
+phrasing), §4's tier line, and the §2-beat-#5 / hero-ranking text to the *decided* mechanism, tier, and
+hero — removing the PROVISIONAL callout. Keep Appendix A (Plan-08) unchanged.
 ```bash
 git add apps/tier-a-demo/MECHANISM-FINDINGS.md docs/superpowers/specs/2026-06-22-tier-a-customizer-demo-design.md
-git commit -m "docs(tier-a-demo): record mechanism findings + decide contrast/tier/hero; settle the spec"
+git commit -m "docs(tier-a-demo): record mechanism findings + decision; settle the spec"
 ```
+
+---
+
+### Task 4 (CONDITIONAL — only if Task 3 chose an AAA path): two-mode AAA viability gate
+
+> Skip entirely if the decision is lock-led-AA. This task de-risks AAA's hard half: the success beats
+> must clear 7:1 in **both** modes, and an AAA dark base must be **constructible** at all.
+
+**Files:**
+- Test: `apps/tier-a-demo/test/aaa-two-mode-probe.test.ts`
+
+**Interfaces:**
+- Consumes: `@invariance/theming` — `AppManifest`, `parseSpec`, `compile`, `verify`, `SHADCN_CAN`; `./_measure.js`.
+- Produces: a yes/no on AAA viability in both modes; either confirms AAA (Task 3 Step 4 proceeds) or forces the fall back to lock-led-AA (return to Task 3 Step 2 with that finding).
+
+- [ ] **Step 1: Construct a candidate AAA two-mode manifest and probe constructibility**
+
+`apps/tier-a-demo/test/aaa-two-mode-probe.test.ts`:
+```typescript
+import { AppManifest, type CandidateTheme, compile, parseSpec, SHADCN_CAN, verify } from "@invariance/theming";
+import { describe, expect, it } from "vitest";
+import { contrast } from "./_measure.js";
+/* eslint-disable no-console */
+
+// A candidate AAA base in BOTH modes. refBasePassesTier (a superRefine) will THROW on AppManifest.parse
+// if any pair fails 7:1 in either mode — so this step also probes "is an AAA dark base constructible".
+// Start from the standard shadcn dark base and raise contrast where AAA demands (e.g. destructive,
+// muted-fg); iterate the values until parse() succeeds, recording what had to change.
+const AAA_LIGHT: Record<string, string> = { /* fill from SHADCN_CAN.base.light, raised to clear 7:1 */ };
+const AAA_DARK: Record<string, string> = { /* a dark base raised to clear 7:1 */ };
+
+it("AAA base is constructible in both modes (refBasePassesTier accepts it)", () => {
+  let parsed: AppManifest | null = null;
+  try {
+    parsed = AppManifest.parse({
+      ...SHADCN_CAN,
+      appId: "probe-aaa",
+      modes: { allowed: ["light", "dark"], default: "light", selectors: { light: ":root", dark: ".dark" } },
+      base: { light: AAA_LIGHT, dark: AAA_DARK },
+      invariants: { ...SHADCN_CAN.invariants, contrastTier: "AAA", locks: [] },
+    });
+  } catch (e) {
+    console.log(`[aaa] base NOT constructible at AAA: ${(e as Error).message}`);
+  }
+  // If this fails repeatedly, AAA is impractical for the demo → report and fall back to lock-led-AA.
+  expect(parsed, "could not build an AAA-passing base — fall back to lock-led-AA").not.toBeNull();
+});
+```
+Iterate `AAA_LIGHT`/`AAA_DARK` until `parse()` succeeds (run the test, read the thrown failing pair from
+the log, raise that pair's contrast, repeat). Record in `MECHANISM-FINDINGS.md` what had to change — if
+it proves impractical, that itself is the finding: **fall back to lock-led-AA**.
+
+- [ ] **Step 2: Confirm the scripted SUCCESS colors clear 7:1 in BOTH modes**
+
+Append to the same file (using the constructed AAA manifest, `M`):
+```typescript
+it("scripted success beats clear AAA in light AND dark (dark is mode-polarized)", () => {
+  const M = AppManifest.parse({ /* the AAA manifest from Step 1 */ } as never);
+  const p = parseSpec({ colors: { primary: "oklch(0.35 0.12 270)" } }, M); // beat #2 dark indigo
+  expect(p.ok).toBe(true);
+  if (!p.ok) return;
+  const t: CandidateTheme = compile(p.spec, M);
+  const verdict = verify(t, M);
+  const light = contrast(t.light["--primary-foreground"], t.light["--primary"]);
+  const dark = t.dark ? contrast(t.dark["--primary-foreground"], t.dark["--primary"]) : NaN;
+  console.log(`[aaa] indigo primary-fg/primary light=${light.toFixed(3)} dark=${dark.toFixed(3)} verdict.ok=${verdict.ok}`);
+  // The whole point: the happy path must NOT be rejected, in either mode.
+  expect(verdict.ok, "scripted success beat must verify (clear AAA) in both modes").toBe(true);
+});
+```
+If `verdict.ok` is false (the dark `seedNudge` dragged the indigo mid-L so dark fails AAA), the success
+beat breaks in the climax view → either pick a darker/lighter indigo that clears AAA in both modes
+(re-measure), or **fall back to lock-led-AA**. Record the outcome.
+
+- [ ] **Step 3: Commit and return to Task 3 Step 4 with the verdict**
+
+```bash
+git add apps/tier-a-demo/test/aaa-two-mode-probe.test.ts apps/tier-a-demo/MECHANISM-FINDINGS.md
+git commit -m "test(tier-a-demo): AAA two-mode viability gate (base constructibility + both-mode success clearance)"
+```
+Then resume Task 3 Step 4: settle the spec to AAA (if confirmed) or to lock-led-AA (if AAA proved
+unviable).
 
 ---
 
 ## Self-Review
 
-**1. Spec coverage (of §8 Part 1):** the spike's three sub-goals — the mechanism probe (surface-vs-seed-role), the three-way decision, and encoding/settling — map to Tasks 2 and 3; the scaffold (Task 1) is the prerequisite. The *encode the manifest + CannedAgent + beat-assertions* portion of §8-Part-1 is deliberately deferred to the next plan (per the user's "plan Part 1, run it, then plan against settled facts"), and §8 will be re-read when that plan is written. No other spec section is in scope here.
+**1. Spec coverage (of §8 Part 1):** the spike now covers BOTH halves of "is the contrast beat viable" —
+the rejection mechanism (Task 2 a/b/c) AND success-beat clearance (Task 2 d + Task 4 for AAA's dark
+mode) — plus the three-way decision and spec-settling (Task 3); scaffold (Task 1) is the prerequisite.
+The *encode the manifest + CannedAgent + beat-assertions* and all UI portions of §8 are deliberately
+deferred to the next plan (per "plan Part 1, run it, then plan against settled facts").
 
-**2. Placeholder scan:** the only intentional blanks are the `<X>/<Y>/<Z>` measurement slots and the bracketed decision in `MECHANISM-FINDINGS.md` — these are *outputs the spike fills at run time*, not plan placeholders; every code step has complete code. No "TBD"/"add error handling"/"similar to" anywhere.
+**2. Placeholder scan:** the `<X>/<Y>/<Z>` slots in `MECHANISM-FINDINGS.md` and the `AAA_LIGHT`/
+`AAA_DARK` record literals are *spike outputs filled at run time* (the spike's entire job is to discover
+them), not plan placeholders. Every executable step has complete code; Task 4 explicitly instructs the
+iterate-until-parse loop rather than hand-waving "fill in the base."
 
-**3. Type consistency:** `compileJson` is defined once per test file where used; `PROBE` is an `AppManifest`; `contrast`/`luminance`/`lightnessPct`/`hslTripleToSrgb` are defined inline in the probe and used only there. `parseSpec`/`compile`/`verify`/`AppManifest`/`SHADCN_CAN` are the real engine barrel exports (confirmed in the interface ledger).
+**3. Type consistency:** `_measure.ts` exports `hslTripleToSrgb/luminance/contrast/lightnessPct`, used
+by Tasks 2 and 4. `PROBE`/`M` are `AppManifest`; `compileJson` returns `CandidateTheme`. Engine barrel
+exports (`parseSpec/compile/verify/AppManifest/SHADCN_CAN`) and the `VerifyFailure` field names
+(`f.code/f.pair?.fg/f.pair?.bg/f.pair?.category/f.role`) match the ledger §6.1 and the verification
+suite that exercised them.
 
-**Note:** Task 3 Steps 2–3 are intentionally judgment/doc steps (no test) — a spike's deliverable is a decision; the reviewer gates the decision and the spec edit. This is the one place "test the deliverable" yields to "record and decide."
+**Note:** Task 3 Steps 2–3 and Task 4's iterate-until-parse are judgment/exploration steps (a spike's
+deliverable is a decision); the reviewer gates the decision and the spec edit. This is the one place
+"test the deliverable" yields to "measure, decide, record."
