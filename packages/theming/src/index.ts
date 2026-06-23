@@ -10,3 +10,4 @@ export * from "./compile/index.js";
 export * from "./verify/index.js";
 export * from "./artifact/index.js";
 export * from "./scan/index.js";
+export * from "./authoring/index.js";
