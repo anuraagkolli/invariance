@@ -3,7 +3,7 @@ import type { StyleSpec } from "../spec/style-spec.js";
 
 type Group = "colors" | "typography";
 const GROUPS: Group[] = ["colors", "typography"];
-const SCALARS = ["radius", "density", "mode"] as const;
+const SCALARS = ["radius", "density", "mode", "shadow", "borderWeight"] as const;
 
 // Total canonicalization: drop empty groups so a draft has EXACTLY ONE representation.
 // Run after every merge → "draft == appDefault?" becomes structural equality ({}).

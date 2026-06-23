@@ -36,6 +36,8 @@ export const StyleSpec = z
       .strict()
       .optional(),
     mode: z.enum(["light", "dark", "both"]).optional().nullable(),
+    shadow: z.enum(["flat", "soft", "elevated"]).optional().nullable(),
+    borderWeight: z.enum(["hairline", "standard", "heavy"]).optional().nullable(),
   })
   .strict();
 

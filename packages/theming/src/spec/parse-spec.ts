@@ -69,9 +69,17 @@ export function parseSpec(json: unknown, manifest: AppManifest): ParseResult {
       }
     }
   }
-  // radius/density/mode are seed axes too; a lock on them rejects setting them.
+  // radius/density/mode/shadow/borderWeight are seed axes too; a lock on them rejects setting them.
+  // shadow/borderWeight are not yet in the role graph seeds (added in a later slice), so we check
+  // the raw locks array for them; the rest use the pre-filtered seedLocks set.
+  const rawLocks = new Set(manifest.invariants.locks);
   for (const axis of ["radius", "density", "mode"] as const) {
     if (spec[axis] !== undefined && seedLocks.has(axis)) {
+      failures.push({ code: "seed_locked", path: axis, message: `seed "${axis}" is locked` });
+    }
+  }
+  for (const axis of ["shadow", "borderWeight"] as const) {
+    if (spec[axis] !== undefined && rawLocks.has(axis)) {
       failures.push({ code: "seed_locked", path: axis, message: `seed "${axis}" is locked` });
     }
   }

@@ -33,6 +33,8 @@ export function seedsInDraft(draft: StyleSpec): Set<SeedId> {
   }
   if (draft.radius !== undefined) s.add("radius");
   if (draft.density !== undefined) s.add("density");
+  if (draft.shadow !== undefined) s.add("shadow");
+  if (draft.borderWeight !== undefined) s.add("borderWeight");
   if (draft.typography) {
     for (const axis of ["display", "body", "mono"] as const) {
       if (draft.typography[axis] !== undefined) s.add(axis);

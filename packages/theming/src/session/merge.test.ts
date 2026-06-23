@@ -89,4 +89,36 @@ describe("mergeDelta", () => {
     );
     expect(JSON.stringify(out)).not.toContain("null");
   });
+
+  // Round-trip tests for shadow + borderWeight (catches the "silent drop" trap)
+  it("shadow + borderWeight delta merges onto draft and persists", () => {
+    const draft: StyleSpec = {};
+    const delta = { shadow: "elevated", borderWeight: "heavy" } as unknown as StyleSpec;
+    const out = mergeDelta(draft, delta);
+    expect(out).toEqual({ shadow: "elevated", borderWeight: "heavy" });
+  });
+
+  it("shadow + borderWeight persist alongside other scalars (no silent drop)", () => {
+    const draft = { radius: 8, shadow: "soft" } as unknown as StyleSpec;
+    const delta = { shadow: "elevated", borderWeight: "heavy" } as unknown as StyleSpec;
+    const out = mergeDelta(draft, delta);
+    expect(out).toEqual({ radius: 8, shadow: "elevated", borderWeight: "heavy" });
+  });
+
+  it("null sentinel on shadow + borderWeight reverts them (deleted from draft)", () => {
+    const draft = { shadow: "elevated", borderWeight: "heavy" } as unknown as StyleSpec;
+    const delta = { shadow: null, borderWeight: null } as unknown as StyleSpec;
+    const out = mergeDelta(draft, delta);
+    expect(out).toEqual({});
+  });
+
+  it("canonicalize: null shadow is stripped", () => {
+    const out = canonicalize({ shadow: null } as unknown as StyleSpec);
+    expect(out).toEqual({});
+  });
+
+  it("canonicalize: null borderWeight is stripped", () => {
+    const out = canonicalize({ borderWeight: null } as unknown as StyleSpec);
+    expect(out).toEqual({});
+  });
 });

@@ -72,4 +72,61 @@ describe("diffSpecs (three-state, resolved values)", () => {
     expect(a.to).toMatch(/^oklch\(/); // resolved app default, same string form as a present value
     expect(a.to).not.toMatch(/^#/); // never a raw hex
   });
+
+  // Round-trip tests for shadow + borderWeight
+  it("adding shadow → kind added, from null, to the set value", () => {
+    const out = diffSpecs({} as StyleSpec, { shadow: "elevated" } as unknown as StyleSpec, SHADCN_CAN);
+    const r = out.find((d) => d.role === "shadow");
+    expect(r).toBeDefined();
+    expect(r!.kind).toBe("added");
+    expect(r!.from).toBeNull();
+    expect(r!.to).toBe("elevated");
+  });
+
+  it("adding borderWeight → kind added, from null, to the set value", () => {
+    const out = diffSpecs({} as StyleSpec, { borderWeight: "heavy" } as unknown as StyleSpec, SHADCN_CAN);
+    const r = out.find((d) => d.role === "borderWeight");
+    expect(r).toBeDefined();
+    expect(r!.kind).toBe("added");
+    expect(r!.from).toBeNull();
+    expect(r!.to).toBe("heavy");
+  });
+
+  it("changing shadow → kind changed, both values resolved", () => {
+    const out = diffSpecs(
+      { shadow: "soft" } as unknown as StyleSpec,
+      { shadow: "elevated" } as unknown as StyleSpec,
+      SHADCN_CAN,
+    );
+    const r = out.find((d) => d.role === "shadow")!;
+    expect(r.kind).toBe("changed");
+    expect(r.from).toBe("soft");
+    expect(r.to).toBe("elevated");
+  });
+
+  it("removing shadow → kind removed, to = documented default 'soft'", () => {
+    const out = diffSpecs({ shadow: "elevated" } as unknown as StyleSpec, {} as StyleSpec, SHADCN_CAN);
+    const r = out.find((d) => d.role === "shadow")!;
+    expect(r.kind).toBe("removed");
+    expect(r.from).toBe("elevated");
+    expect(r.to).toBe("soft"); // documented default
+  });
+
+  it("removing borderWeight → kind removed, to = documented default 'hairline'", () => {
+    const out = diffSpecs({ borderWeight: "heavy" } as unknown as StyleSpec, {} as StyleSpec, SHADCN_CAN);
+    const r = out.find((d) => d.role === "borderWeight")!;
+    expect(r.kind).toBe("removed");
+    expect(r.from).toBe("heavy");
+    expect(r.to).toBe("hairline"); // documented default
+  });
+
+  it("shadow + borderWeight set to same value in both specs → no diff emitted", () => {
+    const out = diffSpecs(
+      { shadow: "soft", borderWeight: "standard" } as unknown as StyleSpec,
+      { shadow: "soft", borderWeight: "standard" } as unknown as StyleSpec,
+      SHADCN_CAN,
+    );
+    expect(out.find((d) => d.role === "shadow")).toBeUndefined();
+    expect(out.find((d) => d.role === "borderWeight")).toBeUndefined();
+  });
 });

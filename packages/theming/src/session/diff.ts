@@ -26,7 +26,7 @@ function render(v: Leaf): string | undefined {
 
 // The four color seeds in colors{} map 1:1 to seed/role ids.
 const COLOR_SEEDS = ["primary", "accent", "neutral", "destructive"] as const;
-const SCALARS = ["radius", "density"] as const; // mode is not a default-seeded color field; see note
+const SCALARS = ["radius", "density", "shadow", "borderWeight"] as const; // mode is not a default-seeded color field; see note
 const TYPO = ["display", "body", "mono"] as const;
 
 // App-default value for a field, from defaultSeeds, rendered to the SAME stable string form as a present
@@ -41,6 +41,8 @@ function appDefault(field: string, manifest: AppManifest): string | undefined {
   }
   if (field === "radius") return String(manifest.defaultSeeds.radius);
   if (field === "density") return manifest.defaultSeeds.density;
+  if (field === "shadow") return (manifest.defaultSeeds as Record<string, unknown>)["shadow"] as string | undefined ?? "soft";
+  if (field === "borderWeight") return (manifest.defaultSeeds as Record<string, unknown>)["borderWeight"] as string | undefined ?? "hairline";
   return undefined; // typography/mode have no defaultSeeds value
 }
 

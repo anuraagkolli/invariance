@@ -106,4 +106,62 @@ describe("parseSpec — the wall", () => {
     const r = parseSpec({ typography: { body: "sans" } }, m);
     expect(r.ok).toBe(true);
   });
+
+  // shadow + borderWeight parse tests
+  it("accepts valid shadow enum value", () => {
+    const r = parseSpec({ shadow: "elevated" }, SHADCN_CAN);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.spec.shadow).toBe("elevated");
+  });
+
+  it("accepts valid borderWeight enum value", () => {
+    const r = parseSpec({ borderWeight: "heavy" }, SHADCN_CAN);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.spec.borderWeight).toBe("heavy");
+  });
+
+  it("rejects an invalid shadow value with out_of_range", () => {
+    const r = parseSpec({ shadow: "banana" }, SHADCN_CAN);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.failures.some((f) => f.code === "out_of_range")).toBe(true);
+  });
+
+  it("rejects an invalid borderWeight value with out_of_range", () => {
+    const r = parseSpec({ borderWeight: "ultra-thin" }, SHADCN_CAN);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.failures.some((f) => f.code === "out_of_range")).toBe(true);
+  });
+
+  it("accepts null sentinel for shadow (removal)", () => {
+    const r = parseSpec({ shadow: null }, SHADCN_CAN);
+    expect(r.ok).toBe(true);
+  });
+
+  it("accepts null sentinel for borderWeight (removal)", () => {
+    const r = parseSpec({ borderWeight: null }, SHADCN_CAN);
+    expect(r.ok).toBe(true);
+  });
+
+  it("seed-lock projection: locked shadow is rejected with seed_locked", () => {
+    const m = structuredClone(SHADCN_CAN);
+    // Bypass the schema validation by directly setting the lock (shadow not yet in seeds graph)
+    (m.invariants as Record<string, unknown>)["locks"] = ["shadow"];
+    const r = parseSpec({ shadow: "flat" }, m);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.failures.some((f) => f.code === "seed_locked")).toBe(true);
+      expect(r.failures.some((f) => f.path === "shadow")).toBe(true);
+    }
+  });
+
+  it("seed-lock projection: locked borderWeight is rejected with seed_locked", () => {
+    const m = structuredClone(SHADCN_CAN);
+    (m.invariants as Record<string, unknown>)["locks"] = ["borderWeight"];
+    const r = parseSpec({ borderWeight: "heavy" }, m);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.failures.some((f) => f.code === "seed_locked")).toBe(true);
+      expect(r.failures.some((f) => f.path === "borderWeight")).toBe(true);
+    }
+  });
 });
