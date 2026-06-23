@@ -62,4 +62,55 @@ describe("session-state (pure reducers)", () => {
     expect(s.notice).toBeTruthy();
     expect(s.applied).toBe(held);
   });
+
+  it("acknowledged gate: false initially, false after diff, true after ack, false after reset", async () => {
+    let s = initialState(DEMO_MANIFEST, "acme");
+    expect(s.acknowledged).toBe(false);
+
+    s = await submitState(s, agent, INDIGO, DEMO_MANIFEST);
+    expect(s.outcome?.kind).toBe("diff");
+    expect(s.acknowledged).toBe(false); // diff re-locks the gate
+
+    s = ackState(s);
+    expect(s.acknowledged).toBe(true); // ack unlocks
+
+    s = resetState(s, DEMO_MANIFEST);
+    expect(s.acknowledged).toBe(false); // reset clears it
+  });
+
+  it("canPublish gate: false before ack, true after ack, false after publish, false after reset", async () => {
+    const canPublish = (st: typeof s): boolean => st.acknowledged && !st.published;
+    let s = initialState(DEMO_MANIFEST, "acme");
+    expect(canPublish(s)).toBe(false);
+
+    s = await submitState(s, agent, INDIGO, DEMO_MANIFEST);
+    expect(canPublish(s)).toBe(false); // diff but not yet acknowledged
+
+    s = ackState(s);
+    expect(canPublish(s)).toBe(true); // acknowledged and not published
+
+    s = publishState(s);
+    expect(canPublish(s)).toBe(false); // published flips true, gate closes
+
+    s = resetState(s, DEMO_MANIFEST);
+    expect(canPublish(s)).toBe(false); // reset clears everything
+  });
+
+  it("a no_change or rejected submit AFTER ack does NOT relock acknowledged", async () => {
+    let s = initialState(DEMO_MANIFEST, "acme");
+    // customize and acknowledge
+    s = ackState(await submitState(s, agent, INDIGO, DEMO_MANIFEST));
+    expect(s.acknowledged).toBe(true);
+
+    // a rejection (locked error prompt) must not relock
+    s = await submitState(s, agent, ERROR, DEMO_MANIFEST);
+    expect(s.outcome?.kind).toBe("rejected");
+    expect(s.acknowledged).toBe(true); // still acknowledged
+
+    // a fresh customize+ack, then re-submit the same draft — no_change
+    s = ackState(await submitState(initialState(DEMO_MANIFEST, "acme"), agent, INDIGO, DEMO_MANIFEST));
+    s = await submitState(s, agent, INDIGO, DEMO_MANIFEST); // same spec → no_change
+    expect(s.outcome?.kind).toBe("no_change");
+    expect(s.acknowledged).toBe(true); // no_change must not relock
+  });
 });

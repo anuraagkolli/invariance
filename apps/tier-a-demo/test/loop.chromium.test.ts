@@ -80,8 +80,12 @@ describe("chromium e2e: the customize loop", () => {
     expect(close(await ctaBg(), THEMED), "themed indigo").toBe(true);
     expect(close(await ctaBg(), BASE)).toBe(false);
 
+    // publish is disabled until acknowledged (the governance beat)
+    expect(await page.locator('[data-testid="publish"]').isDisabled(), "publish disabled before acknowledge").toBe(true);
+
     // acknowledge → publish (a customized, LIVE look)
     await page.locator('[data-testid="acknowledge"]').click();
+    expect(await page.locator('[data-testid="publish"]').isDisabled(), "publish enabled after acknowledge").toBe(false);
     await page.locator('[data-testid="publish"]').click();
     await page.waitForFunction(() => document.querySelector('[data-testid="publish"]')?.textContent?.includes("Live") === true);
     const published = await ctaBg();

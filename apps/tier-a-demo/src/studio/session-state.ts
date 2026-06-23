@@ -11,6 +11,7 @@ export type DemoState = {
   notice: string | null; // non-engine UX message (unscripted / non-in-scope) — NOT a fake rejected
   applied: CandidateTheme; // what the preview currently shows; advances ONLY on a diff
   published: boolean; // page-held: real product flips the KV pointer (artifact→pointer→audit)
+  acknowledged: boolean; // true once the current diff is acknowledged; gates Publish
   mode: Mode;
 };
 
@@ -21,6 +22,7 @@ export function initialState(manifest: AppManifest, tenant: string): DemoState {
     notice: null,
     applied: compile(APP_DEFAULT_SPEC, manifest), // the un-themed base look
     published: false,
+    acknowledged: false,
     mode: "light",
   };
 }
@@ -34,8 +36,11 @@ export async function submitState(state: DemoState, agent: Agent, prompt: string
       notice: null,
       applied: outcome.kind === "diff" ? outcome.candidate : state.applied, // advance ONLY on diff
       published: outcome.kind === "diff" ? false : state.published,
+      // a fresh diff re-locks the gate; no_change/rejected preserve the existing acknowledged state
+      acknowledged: outcome.kind === "diff" ? false : state.acknowledged,
     };
   } catch {
+    // unscripted: preserve acknowledged (same as preserving published)
     return { ...state, outcome: null, notice: "I don't have a styling for that — try one of the examples." };
   }
 }
@@ -46,6 +51,7 @@ export function ackState(state: DemoState): DemoState {
     ...state,
     session: acknowledge({ ...state.session, candidate: state.outcome.candidate, pendingSpec: state.outcome.pendingSpec }),
     outcome: null,
+    acknowledged: true,
   };
 }
 
@@ -62,6 +68,7 @@ export function resetState(state: DemoState, manifest: AppManifest): DemoState {
     outcome: null,
     notice: null,
     published: false,
+    acknowledged: false,
   };
 }
 

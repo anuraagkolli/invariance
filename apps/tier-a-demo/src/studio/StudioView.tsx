@@ -32,7 +32,7 @@ export function StudioView() {
           </p>
         )}
         <OutcomePanel outcome={demo.state.outcome} onAcknowledge={demo.acknowledge} />
-        <SessionControls published={demo.state.published} onPublish={demo.publish} onReset={demo.reset} />
+        <SessionControls published={demo.state.published} canPublish={demo.state.acknowledged && !demo.state.published} onPublish={demo.publish} onReset={demo.reset} />
         <button data-testid="toggle-dark" onClick={demo.toggleMode} style={{ marginTop: "auto", padding: "6px 12px" }}>
           Mode: {demo.state.mode}
         </button>
