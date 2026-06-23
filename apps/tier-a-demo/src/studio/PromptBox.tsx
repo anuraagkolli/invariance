@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 export function PromptBox({ examples, onSubmit }: { examples: string[]; onSubmit: (prompt: string) => void }) {
   const [value, setValue] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
   const send = () => {
     const v = value.trim();
     if (v) {
@@ -13,6 +14,7 @@ export function PromptBox({ examples, onSubmit }: { examples: string[]; onSubmit
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ display: "flex", gap: 8 }}>
         <input
+          ref={inputRef}
           data-testid="prompt-input"
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -29,7 +31,10 @@ export function PromptBox({ examples, onSubmit }: { examples: string[]; onSubmit
           <button
             key={ex}
             data-testid="example"
-            onClick={() => onSubmit(ex)}
+            onClick={() => {
+              setValue(ex); // fill the input (reads as natural-language typing on camera), operator presses Send
+              inputRef.current?.focus();
+            }}
             style={{ padding: "4px 8px", fontSize: 12, borderRadius: 999, border: "1px solid #d4d4d8", background: "#fafafa" }}
           >
             {ex}

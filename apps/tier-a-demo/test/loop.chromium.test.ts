@@ -64,8 +64,9 @@ describe("chromium e2e: the customize loop", () => {
     );
     expect(close(await ctaBg(), BASE), "starts at base").toBe(true);
 
-    // click the indigo example → the preview re-themes (applied advances on the diff)
+    // click the indigo example (fills the input) → Send → the preview re-themes (applied advances on the diff)
     await page.locator('[data-testid="example"]', { hasText: "deep indigo" }).click();
+    await page.locator('[data-testid="send"]').click();
     await page.waitForFunction(
       (t) => {
         const el = document.querySelector('[data-testid="cta"]');
@@ -93,6 +94,7 @@ describe("chromium e2e: the customize loop", () => {
 
     // a governance rejection AFTER publish → the panel shows it, the published preview is UNCHANGED
     await page.locator('[data-testid="example"]', { hasText: "error state" }).click();
+    await page.locator('[data-testid="send"]').click();
     await page.waitForSelector('[data-testid="rejection"]');
     expect(close(await ctaBg(), published), "rejection did not disturb the published look").toBe(true);
 
