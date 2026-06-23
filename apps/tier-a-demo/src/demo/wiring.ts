@@ -1,15 +1,15 @@
-// The demo holds session in the page but runs the REAL Tier-A turn-machine + engine half (both pure,
-// browser-safe), now living in @invariance/theming — so this is a normal workspace package import that
-// Vite bundles cleanly (no cross-app relative path). The real studio (Plan-08) uses the server-side
-// session controller; the demo's only difference is WHERE the Session object lives.
-export { runTurn, acknowledge, APP_DEFAULT_SPEC, buildEnvelope } from "@invariance/theming";
+// The single browser-safe wiring module. Imports the engine from the CRYPTO-FREE SUBPATHS (the
+// barrel pulls node:crypto via artifact/hash-artifact, which a browser bundle can't include). The
+// demo holds session in the page but runs the REAL Tier-A turn-machine + engine half (all pure).
+export { runTurn, acknowledge, APP_DEFAULT_SPEC } from "@invariance/theming/session";
+export type { Session, TurnResult } from "@invariance/theming/session";
+export { buildEnvelope, failureTemplate } from "@invariance/theming/authoring";
 export type {
-  Session,
-  TurnResult,
   Agent,
   GateClassification,
   GatekeeperInput,
   GatekeeperResult,
   DesignerInput,
   DesignerResult,
-} from "@invariance/theming";
+  FailureMessage,
+} from "@invariance/theming/authoring";

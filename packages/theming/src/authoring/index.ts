@@ -3,6 +3,8 @@ import { FontStackId as FontStackIdSchema, type StyleSpec } from "../spec/index.
 import type { ContrastTier, SeedId, RoleId } from "../roles/index.js";
 import type { AppManifest } from "../manifest/index.js";
 
+export * from "./failure-ux.js";
+
 // FontStackId's TYPE alias is intentionally excluded from the roles barrel (the zod VALUE is the
 // reachable surface). Derive the type from it (= string).
 type FontStackId = z.infer<typeof FontStackIdSchema>;
