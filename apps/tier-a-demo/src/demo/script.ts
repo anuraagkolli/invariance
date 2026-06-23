@@ -22,3 +22,13 @@ export const SCRIPT: Record<string, CannedTurn> = {
     spec: { colors: { destructive: "oklch(0.6 0.15 150)" } }, // → seed_locked (hero beat)
   },
 };
+
+// Globex — a genuinely contrasting brand under the SAME manifest (emerald + sharp corners). Validated
+// AA through the real engine (test/globex-brand.test.ts), so the side-by-side proves "two brands, one
+// set of invariants," not "two themes we eyeballed."
+export const GLOBEX_SCRIPT: Record<string, CannedTurn> = {
+  "Match Globex — emerald, crisp corners.": {
+    classification: "in_scope_styling",
+    spec: { colors: { primary: "oklch(0.5 0.13 160)", accent: "oklch(0.68 0.1 160)" }, radius: 2 },
+  },
+};
