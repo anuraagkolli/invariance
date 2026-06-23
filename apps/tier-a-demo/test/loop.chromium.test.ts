@@ -49,7 +49,19 @@ describe("chromium e2e: the customize loop", () => {
     const ctaBg = async (): Promise<[number, number, number]> =>
       parseCssRgb(await page.evaluate(() => getComputedStyle(document.querySelector('[data-testid="cta"]')!).backgroundColor));
 
-    // starts at the base primary
+    // starts at the base primary (wait for it to settle — the scoped re-theme CSS transition
+    // animates the CTA from its initial fallback to the base color over ~0.3s on first paint)
+    await page.waitForFunction(
+      (t) => {
+        const el = document.querySelector('[data-testid="cta"]');
+        if (!el) return false;
+        const m = /rgba?\(([^)]+)\)/.exec(getComputedStyle(el).backgroundColor);
+        if (!m) return false;
+        const [r, g, b] = m[1].split(",").map((x) => Math.round(parseFloat(x)));
+        return Math.abs(r - t[0]) <= 3 && Math.abs(g - t[1]) <= 3 && Math.abs(b - t[2]) <= 3;
+      },
+      BASE,
+    );
     expect(close(await ctaBg(), BASE), "starts at base").toBe(true);
 
     // click the indigo example → the preview re-themes (applied advances on the diff)
