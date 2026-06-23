@@ -81,9 +81,8 @@ viewed + Guardrails-tested; *look* invariants are edited via the control-plane *
 live config. Two enforcement engines remain by design (design compiler for look; verifier +
 sandbox for data). Per-effort design history lives in `docs/superpowers/specs/` + `…/plans/`.
 
-**Recently shipped (2026-06-14, on `combined`):** SP2
-(`docs/superpowers/plans/2026-06-14-sp2-theme-history-and-vocab.md`) — theme history + rollback
-moved into the control plane (`theme_versions` store + `GET/PUT /v1/apps/:appId/themes`,
+**Recently shipped (2026-06-14, on `combined`):** SP2 (plan since retired; see git history) —
+theme history + rollback moved into the control plane (`theme_versions` store + `GET/PUT /v1/apps/:appId/themes`,
 `…/themes/history`, `…/themes/rollback`) and the Console (`#/themes` view); Nebula reads/writes
 themes there and its `/dev` page is **deleted**. The look-invariant vocabulary is now
 manifest-driven via `AppManifest.designSurface` (the Console's per-app hardcode is gone).

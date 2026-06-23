@@ -11,5 +11,4 @@ export type {
   GatekeeperResult,
   DesignerInput,
   DesignerResult,
-  FailureMessage,
 } from "@invariance/theming/authoring";

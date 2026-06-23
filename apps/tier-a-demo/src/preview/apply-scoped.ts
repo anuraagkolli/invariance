@@ -1,4 +1,4 @@
-import type { CandidateTheme } from "@invariance/theming";
+import type { CandidateTheme } from "@invariance/theming/compile";
 
 // The demo's stand-in for the production :root/.dark applier. Same VALUES, scoped to a wrapper element
 // instead of :root. Sets every emitted var as an inline custom property on `wrapper`, AND toggles
