@@ -20,7 +20,7 @@ const ROWS = [
   { name: "Initech", plan: "Starter", usage: 38 },
 ];
 
-export function AnalyticsDashboard() {
+export function AnalyticsDashboard({ ctaTestId = "cta" }: { ctaTestId?: string } = {}) {
   return (
     <div className="flex min-h-[560px] w-full" style={{ ...bg("--background"), ...fg("--foreground") }}>
       {/* sidebar */}
@@ -55,7 +55,7 @@ export function AnalyticsDashboard() {
             <button className="px-3 py-2 text-sm font-medium" style={{ ...rounded, ...bg("--secondary"), ...fg("--secondary-foreground") }}>
               Export
             </button>
-            <button data-testid="cta" className="px-3 py-2 text-sm font-semibold" style={{ ...rounded, ...bg("--primary"), ...fg("--primary-foreground") }}>
+            <button data-testid={ctaTestId} className="px-3 py-2 text-sm font-semibold" style={{ ...rounded, ...bg("--primary"), ...fg("--primary-foreground") }}>
               New report
             </button>
           </div>

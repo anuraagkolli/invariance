@@ -1,46 +1,27 @@
-import { useEffect, useRef } from "react";
-import { AnalyticsDashboard } from "./canvas/AnalyticsDashboard.js";
-import { CannedAgent } from "./demo/canned-agent.js";
-import { DEMO_MANIFEST } from "./demo/manifest.js";
-import { SCRIPT } from "./demo/script.js";
-import { applyScoped } from "./preview/apply-scoped.js";
-import { OutcomePanel } from "./studio/OutcomePanel.js";
-import { PromptBox } from "./studio/PromptBox.js";
-import { SessionControls } from "./studio/SessionControls.js";
-import { useDemoSession } from "./studio/useDemoSession.js";
+import { useState } from "react";
+import { SideBySideView } from "./studio/SideBySideView.js";
+import { StudioView } from "./studio/StudioView.js";
 
-const agent = new CannedAgent(SCRIPT);
-const EXAMPLES = Object.keys(SCRIPT);
+type View = "studio" | "side";
 
 export function App() {
-  const demo = useDemoSession(agent, DEMO_MANIFEST, "acme");
-  const wrapper = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (wrapper.current) applyScoped(wrapper.current, demo.state.applied, demo.state.mode);
-  }, [demo.state.applied, demo.state.mode]);
-
+  const [view, setView] = useState<View>("studio");
+  const tab = (v: View, label: string, testid: string) => (
+    <button
+      data-testid={testid}
+      onClick={() => setView(v)}
+      style={{ padding: "6px 12px", fontWeight: view === v ? 700 : 400, borderBottom: view === v ? "2px solid #111" : "2px solid transparent" }}
+    >
+      {label}
+    </button>
+  );
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", height: "100vh", fontFamily: "system-ui" }}>
-      <aside style={{ display: "flex", flexDirection: "column", gap: 14, padding: 16, borderRight: "1px solid #e4e4e7", overflow: "auto" }}>
-        <h2 style={{ margin: 0 }}>Customize — Acme</h2>
-        <PromptBox examples={EXAMPLES} onSubmit={demo.submit} />
-        {demo.state.notice && (
-          <p data-testid="notice" style={{ color: "#a16207", margin: 0 }}>
-            {demo.state.notice}
-          </p>
-        )}
-        <OutcomePanel outcome={demo.state.outcome} onAcknowledge={demo.acknowledge} />
-        <SessionControls published={demo.state.published} onPublish={demo.publish} onReset={demo.reset} />
-        <button data-testid="toggle-dark" onClick={demo.toggleMode} style={{ marginTop: "auto", padding: "6px 12px" }}>
-          Mode: {demo.state.mode}
-        </button>
-      </aside>
-      <main style={{ overflow: "auto" }}>
-        <div ref={wrapper} data-testid="scope" style={{ background: "hsl(var(--background))", minHeight: "100%" }}>
-          <AnalyticsDashboard />
-        </div>
-      </main>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "system-ui" }}>
+      <header style={{ display: "flex", gap: 8, padding: "6px 12px", borderBottom: "1px solid #e4e4e7" }}>
+        {tab("studio", "Studio", "view-studio")}
+        {tab("side", "Side-by-side", "view-side")}
+      </header>
+      <div style={{ flex: 1, minHeight: 0 }}>{view === "studio" ? <StudioView /> : <SideBySideView />}</div>
     </div>
   );
 }
