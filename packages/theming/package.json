@@ -9,7 +9,8 @@
     "./manifest": "./src/manifest/index.ts",
     "./spec": "./src/spec/index.ts",
     "./session": "./src/session/index.ts",
-    "./authoring": "./src/authoring/index.ts"
+    "./authoring": "./src/authoring/index.ts",
+    "./compile": "./src/compile/index.ts"
   },
   "scripts": {
     "test": "vitest run",

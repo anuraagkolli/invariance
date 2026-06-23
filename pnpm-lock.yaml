@@ -244,6 +244,9 @@ importers:
       autoprefixer:
         specifier: ^10.4.0
         version: 10.5.0(postcss@8.5.15)
+      happy-dom:
+        specifier: ^16.0.0
+        version: 16.8.1
       playwright:
         specifier: ^1.60.0
         version: 1.60.0

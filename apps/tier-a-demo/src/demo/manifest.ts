@@ -1,4 +1,7 @@
-import { AppManifest, SHADCN_CAN } from "@invariance/theming";
+// Import from the crypto-free subpath, not the barrel: the barrel pulls artifact/hash-artifact
+// (node:crypto), which a browser bundle (App.tsx → manifest.ts) cannot include. `manifest` is
+// browser-safe. (Tests import the barrel fine — they run in node.)
+import { AppManifest, SHADCN_CAN } from "@invariance/theming/manifest";
 
 // Standard shadcn "zinc" dark base — AA-designed (same values the verification suite validated).
 const SHADCN_DARK: Record<string, string> = {
