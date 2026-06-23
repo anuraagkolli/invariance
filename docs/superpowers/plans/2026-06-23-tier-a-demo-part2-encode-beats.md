@@ -10,7 +10,8 @@
 
 ## Global Constraints
 
-- **Settled by the Part-1 spike (`apps/tier-a-demo/MECHANISM-FINDINGS.md`):** tier = **AA**; hero = the **lock** beat (`seed_locked` on `destructive`); secondary = the AA **`muted-fg/muted`** contrast rejection under a saturated `neutral`. Surfaces are profile-anchored. Confirmed canned values: success primary `oklch(0.35 0.12 270)` (≈11.6:1), success neutral `oklch(0.95 0.03 60)` (≈20:1), contrast-reject neutral `oklch(0.45 0.18 30)` (trips `muted-fg`).
+- **Settled by the Part-1 spike (`apps/tier-a-demo/MECHANISM-FINDINGS.md`):** tier = **AA**; hero = the **lock** beat (`seed_locked` on `destructive`); secondary = the AA **`muted-fg/muted`** contrast rejection under a saturated `neutral`. Surfaces are profile-anchored. Confirmed canned values: success primary `oklch(0.35 0.12 270)` (≈11.6:1), success neutral `oklch(0.95 0.03 60)` (≈20:1).
+- **Contrast-reject margin (measured 2026-06-23 — the beat is ROBUST, not rounding-fragile):** `oklch(0.45 0.18 30)` → emitted `muted-fg/muted` ≈ **2.31:1**, a 0.69 margin below the 3.0 large-text floor; the whole band L∈[0.40,0.55] × C∈[0.12,0.30] rejects at **2.06–2.67**. `minimum-legible` does not reach a high-contrast extreme against a saturated muted surface, so the failure is wide, not a near-threshold hair — but Part 2 PINS the margin + band so a future ramp tweak can't silently flip the demo's only contrast beat to passing.
 - **Do NOT modify engine or control-plane source.** The demo only consumes them.
 - **Rejections come from the real engine** (`parseSpec`/`verify`); the `CannedAgent` only supplies the proposal `specJson`.
 - **No UI, no Vite/React.** vitest `environment: "node"`.
@@ -143,6 +144,27 @@ export type {
 } from "../../../control-plane/src/theming/authoring/agent-types.js";
 ```
 
+- [ ] **Step 1b: Validate the relative-import depth NOW (the one fragile wiring point) — before building on it**
+
+`apps/tier-a-demo/test/wiring.test.ts`:
+```typescript
+import { describe, expect, it } from "vitest";
+import { acknowledge, APP_DEFAULT_SPEC, buildEnvelope, runTurn } from "../src/demo/wiring.js";
+
+describe("wiring", () => {
+  it("re-exports the real control-plane Tier-A stages (relative-import depth is correct)", () => {
+    expect(typeof runTurn).toBe("function");
+    expect(typeof acknowledge).toBe("function");
+    expect(typeof buildEnvelope).toBe("function");
+    expect(APP_DEFAULT_SPEC).toBeDefined();
+  });
+});
+```
+Run: `pnpm -F @invariance/tier-a-demo test wiring` (and `pnpm -F @invariance/tier-a-demo typecheck`).
+Expected: PASS. If it errors `cannot find module`, the `../../../` depth is wrong — `wiring.ts` is at
+`apps/tier-a-demo/src/demo/`, so up three (`demo`→`src`→`tier-a-demo`) lands in `apps/`, then into
+`control-plane/src/theming/authoring/…`. Fix the depth here, before Tasks 2–3 build on it.
+
 - [ ] **Step 2: Write the scripted beats**
 
 `apps/tier-a-demo/src/demo/script.ts`:
@@ -249,18 +271,20 @@ git commit -m "feat(tier-a-demo): CannedAgent + scripted beats over the real Age
 - Create: `apps/tier-a-demo/test/beats.test.ts`
 
 **Interfaces:**
-- Consumes: `DEMO_MANIFEST`, `CannedAgent`, `SCRIPT`, `runTurn`, `acknowledge`, `APP_DEFAULT_SPEC`, `buildEnvelope`, `Session`.
-- Produces: the committed proof that each scripted beat yields its intended outcome — the gate the whole demo rests on.
+- Consumes: `DEMO_MANIFEST`, `CannedAgent`, `SCRIPT`, `runTurn`, `acknowledge`, `APP_DEFAULT_SPEC`, `buildEnvelope`, `Session`, `TurnResult`; `@invariance/theming` `parseSpec`/`compile`; `contrast` from `./_measure.js` (Part 1).
+- Produces: the committed proof that each scripted beat yields its intended outcome (incl. the contrast beat's pinned margin + band, and the `no_change` outcome) — the gate the whole demo rests on.
 
-- [ ] **Step 1: Write a beat-driver + the four outcome assertions (the failing test)**
+- [ ] **Step 1: Write the beat-driver + all outcome assertions (the failing test)**
 
 `apps/tier-a-demo/test/beats.test.ts`:
 ```typescript
+import { compile, type CandidateTheme, parseSpec } from "@invariance/theming";
 import { describe, expect, it } from "vitest";
 import { DEMO_MANIFEST } from "../src/demo/manifest.js";
 import { CannedAgent } from "../src/demo/canned-agent.js";
 import { SCRIPT } from "../src/demo/script.js";
 import { APP_DEFAULT_SPEC, type Session, type TurnResult, acknowledge, buildEnvelope, runTurn } from "../src/demo/wiring.js";
+import { contrast } from "./_measure.js";
 
 const agent = new CannedAgent(SCRIPT);
 const envelope = buildEnvelope(DEMO_MANIFEST);
@@ -273,47 +297,93 @@ async function driveBeat(session: Session, prompt: string): Promise<TurnResult> 
   return runTurn(session, designed.specJson, DEMO_MANIFEST);
 }
 const fresh = (): Session => ({ tenant: "acme", draft: APP_DEFAULT_SPEC, published: null });
+function compileNeutral(neutral: string): CandidateTheme {
+  const p = parseSpec({ colors: { neutral } }, DEMO_MANIFEST);
+  if (!p.ok) throw new Error(`rejected: ${JSON.stringify(p.failures)}`);
+  return compile(p.spec, DEMO_MANIFEST);
+}
+
+const INDIGO = "Make it feel like Acme — deep indigo, a little more rounded.";
+const WARM = "Warmer, lighter surfaces.";
+const SATURATED = "Make the surfaces a bold, saturated orange.";
+const RECOLOR_ERROR = "Recolor the error state to a friendly green.";
 
 describe("scripted beats fire their intended engine outcome (the governance proof)", () => {
-  it("beat #2 (deep indigo, rounded) → accepted diff", async () => {
-    const t = await driveBeat(fresh(), "Make it feel like Acme — deep indigo, a little more rounded.");
+  it("beat #2 (deep indigo, rounded) → accepted diff, with a populated dark var set", async () => {
+    const t = await driveBeat(fresh(), INDIGO);
     expect(t.kind).toBe("diff");
-    if (t.kind === "diff") expect(t.diff.some((d) => d.role === "primary")).toBe(true);
+    if (t.kind !== "diff") return;
+    expect(t.diff.some((d) => d.role === "primary")).toBe(true);
+    // both-mode proof: an accepted diff already means verify passed every allowed mode; assert dark is
+    // actually emitted so a future change that drops dark from the manifest fails loudly here.
+    expect(t.candidate.dark && Object.keys(t.candidate.dark).length > 0).toBe(true);
   });
 
-  it("beat #3 (warmer, lighter surfaces) → accepted diff", async () => {
-    const t = await driveBeat(fresh(), "Warmer, lighter surfaces.");
+  it("beat #3 (warmer, lighter surfaces) → accepted diff touching neutral + accent", async () => {
+    const t = await driveBeat(fresh(), WARM);
     expect(t.kind).toBe("diff");
+    if (t.kind !== "diff") return;
+    expect(t.diff.some((d) => d.role === "neutral")).toBe(true);
+    expect(t.diff.some((d) => d.role === "accent")).toBe(true);
   });
 
   it("beat #4 (saturated surfaces) → SECONDARY: contrast_floor on muted-fg", async () => {
-    const t = await driveBeat(fresh(), "Make the surfaces a bold, saturated orange.");
+    const t = await driveBeat(fresh(), SATURATED);
     expect(t.kind).toBe("rejected");
-    if (t.kind === "rejected") {
-      expect(t.failures.some((f) => "code" in f && f.code === "contrast_floor")).toBe(true);
-      expect(t.failures.some((f) => "pair" in f && f.pair?.fg === "muted-fg")).toBe(true);
-    }
+    if (t.kind !== "rejected") return;
+    expect(t.failures.some((f) => "code" in f && f.code === "contrast_floor")).toBe(true);
+    expect(t.failures.some((f) => "pair" in f && f.pair?.fg === "muted-fg")).toBe(true);
   });
 
   it("beat #5 (recolor the locked error state) → HERO: seed_locked at the wall", async () => {
-    const t = await driveBeat(fresh(), "Recolor the error state to a friendly green.");
+    const t = await driveBeat(fresh(), RECOLOR_ERROR);
     expect(t.kind).toBe("rejected");
-    if (t.kind === "rejected") {
-      expect(t.failures.some((f) => "code" in f && f.code === "seed_locked")).toBe(true);
+    if (t.kind !== "rejected") return;
+    expect(t.failures.some((f) => "code" in f && f.code === "seed_locked")).toBe(true);
+  });
+});
+
+describe("the contrast beat is ROBUST (pinned margin + band) — a ramp tweak can't silently kill it", () => {
+  it("the canned saturated neutral fails muted-fg/muted with margin (measured ≈2.31, assert ≤2.7 — well below 3.0)", () => {
+    const spec = SCRIPT[SATURATED].spec as { colors: { neutral: string } };
+    const ratio = contrast(
+      compileNeutral(spec.colors.neutral).light["--muted-foreground"],
+      compileNeutral(spec.colors.neutral).light["--muted"],
+    );
+    expect(ratio).toBeLessThan(2.7); // measured ≈2.31; margin >0.3 below the 3.0 large-text floor
+  });
+
+  it("a band of saturated neutrals around the canned value also fails the floor (measured 2.06–2.67)", () => {
+    for (const L of [0.45, 0.5]) {
+      for (const C of [0.12, 0.18, 0.24]) {
+        const t = compileNeutral(`oklch(${L} ${C} 30)`);
+        const ratio = contrast(t.light["--muted-foreground"], t.light["--muted"]);
+        expect(ratio, `oklch(${L} ${C} 30)`).toBeLessThan(3.0); // whole band rejects, not a knife-edge
+      }
     }
+  });
+});
+
+describe("the no_change outcome (the third TurnResult kind — Part 3's 'nothing moved' state)", () => {
+  it("re-submitting an already-acknowledged value yields kind:no_change", async () => {
+    let s = fresh();
+    const t1 = await driveBeat(s, INDIGO);
+    expect(t1.kind).toBe("diff");
+    if (t1.kind !== "diff") return;
+    s = acknowledge({ ...s, candidate: t1.candidate, pendingSpec: t1.pendingSpec });
+    const t2 = await driveBeat(s, INDIGO); // same delta onto the now-indigo draft → empty diff
+    expect(t2.kind).toBe("no_change");
   });
 });
 
 describe("session accumulation (the page-held draft composes across acks)", () => {
   it("two acknowledged success beats compose into one draft", async () => {
     let s = fresh();
-    const t1 = await driveBeat(s, "Make it feel like Acme — deep indigo, a little more rounded.");
-    expect(t1.kind).toBe("diff");
-    if (t1.kind !== "diff") return;
+    const t1 = await driveBeat(s, INDIGO);
+    if (t1.kind !== "diff") throw new Error("beat #2 should diff");
     s = acknowledge({ ...s, candidate: t1.candidate, pendingSpec: t1.pendingSpec });
-    const t2 = await driveBeat(s, "Warmer, lighter surfaces.");
-    expect(t2.kind).toBe("diff");
-    if (t2.kind !== "diff") return;
+    const t2 = await driveBeat(s, WARM);
+    if (t2.kind !== "diff") throw new Error("beat #3 should diff");
     s = acknowledge({ ...s, candidate: t2.candidate, pendingSpec: t2.pendingSpec });
     expect(s.draft.radius).toBe(14); // from beat #2
     expect(s.draft.colors?.primary).toBeDefined(); // beat #2
@@ -325,25 +395,28 @@ describe("session accumulation (the page-held draft composes across acks)", () =
 - [ ] **Step 2: Run — read outcomes; if a rejection beat doesn't fire, retune (measure-first)**
 
 Run: `pnpm -F @invariance/tier-a-demo test beats`
-Expected: PASS (5 tests). If beat #4 does NOT reject (the two-mode AA manifest behaves differently than the light-only probe), add a one-off `console.log(JSON.stringify(t))`, read the verdict, and retune the saturated-neutral value (raise chroma / move L into the failing band — the probe's `oklch(0.45 0.18 30)` is the confirmed starting point) until it rejects on `muted-fg`; update `SCRIPT`. Do NOT weaken the assertion to pass — the beat must genuinely fire.
+Expected: PASS (8 tests). If beat #4 does NOT reject on the two-mode manifest (the probe was light-only),
+`console.log(JSON.stringify(t))`, read the verdict, and retune the saturated-neutral value within the
+confirmed failing band (L 0.40–0.55 × C 0.12–0.30, all measured 2.06–2.67) until it rejects on
+`muted-fg`; update `SCRIPT`. Do NOT weaken an assertion to pass — the beat must genuinely fire with margin.
 
 - [ ] **Step 3: Run the whole package suite green and commit**
 
 Run: `pnpm -F @invariance/tier-a-demo test`
-Expected: all green (smoke + mechanism-probe + manifest + canned-agent + beats).
+Expected: all green (smoke + mechanism-probe + manifest + wiring + canned-agent + beats).
 ```bash
 git add apps/tier-a-demo/test/beats.test.ts apps/tier-a-demo/src/demo/script.ts
-git commit -m "test(tier-a-demo): beat-assertion gate — lock(hero)+muted-fg(secondary) reject, success beats accept, draft composes"
+git commit -m "test(tier-a-demo): beat-assertion gate — lock(hero)+muted-fg(secondary,margin+band) reject, success accept, no_change, draft composes"
 ```
 
 ---
 
 ## Self-Review
 
-**1. Spec coverage:** this plan implements the deferred §8-Part-1.iii "encode the manifest + CannedAgent + beat-assertions" against the settled (AA / lock-hero / muted-fg-secondary) facts. The success beats (#2/#3) and both rejection beats (#4/#5) each map to a `beats.test.ts` assertion; the demo manifest's lock/tier/modes map to `manifest.test.ts`; the agent-selector seam maps to `CannedAgent`. UI (canvas, applyScoped, customizer, side-by-side) remains for Part 3+.
+**1. Spec coverage:** this plan implements the deferred §8-Part-1.iii "encode the manifest + CannedAgent + beat-assertions" against the settled (AA / lock-hero / muted-fg-secondary) facts. The success beats (#2/#3, with roles asserted in the diff and beat #2's dark var set populated), both rejection beats (#4 with a **pinned margin ≤2.7 + a failing band**, #5 the `seed_locked` hero), and the **`no_change`** third outcome each map to a `beats.test.ts` assertion; the demo manifest's lock/tier/modes map to `manifest.test.ts`; the agent-selector seam maps to `CannedAgent`; the fragile relative-import depth is validated early by `wiring.test.ts` (Task 2 Step 1b). UI (canvas, applyScoped, customizer, side-by-side) remains for Part 3+.
 
 **2. Placeholder scan:** every step has complete code. The only "retune if needed" instruction (Task 3 Step 2) is a measure-first guard with a concrete confirmed starting value (`oklch(0.45 0.18 30)`), not a placeholder; the dark-base values are concrete (the verification-validated shadcn zinc set).
 
 **3. Type consistency:** `CannedTurn` is defined once in `script.ts` and imported by `canned-agent.ts`; `Agent`/`Session`/`TurnResult`/`GateClassification`/`buildEnvelope`/`runTurn`/`acknowledge`/`APP_DEFAULT_SPEC` are re-exported once from `wiring.ts` and consumed by Tasks 2–3. `DEMO_MANIFEST` is an `AppManifest`. The `TurnResult` discriminant (`kind: "diff"|"no_change"|"rejected"`) and `VerifyFailure`/`WallFailure` field names (`code`, `pair?.fg`) match the ledger §6.1 and the verification suite.
 
-**Note on the relative import depth:** `wiring.ts` is at `apps/tier-a-demo/src/demo/`, so control-plane source is `../../../control-plane/src/theming/authoring/…` (up to `apps/`, across to `control-plane`). Verify the depth on first run; vitest resolves the `.js`→`.ts` mapping as it does in the verification suite. (When Part 3 introduces the Vite build, if cross-app bundling is awkward, extract `runTurn`/`acknowledge` into `@invariance/theming/session` or copy the ~15-line reducer into the demo — a Part-3 decision, not this plan's.)
+**Note on the relative import depth:** validated early by `wiring.test.ts` + `typecheck` (Task 2 Step 1b) rather than discovered at Task 3. (When Part 3 introduces the Vite build, if cross-app bundling is awkward, extract `runTurn`/`acknowledge` into `@invariance/theming/session` or copy the ~15-line reducer into the demo — a Part-3 decision, not this plan's.)
