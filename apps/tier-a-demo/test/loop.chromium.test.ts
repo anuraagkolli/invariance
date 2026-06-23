@@ -22,7 +22,9 @@ const close = (a: [number, number, number], b: [number, number, number], tol = 3
 // the indigo beat's expected emitted primary (same inputs as SCRIPT's indigo turn), and the base.
 const parsed = parseSpec({ colors: { primary: "oklch(0.35 0.12 270)" }, radius: 14 }, DEMO_MANIFEST);
 if (!parsed.ok) throw new Error("setup");
-const THEMED = rgb255(compile(parsed.spec, DEMO_MANIFEST).light["--primary"]);
+const THEME = compile(parsed.spec, DEMO_MANIFEST);
+const THEMED = rgb255(THEME.light["--primary"]);
+const THEMED_DARK = rgb255(THEME.dark!["--primary"]); // mode-polarized — differs from light
 const BASE = rgb255(DEMO_MANIFEST.base.light.primary);
 
 let server: ViteDevServer;
@@ -77,6 +79,23 @@ describe("chromium e2e: the customize loop", () => {
     await page.locator('[data-testid="example"]', { hasText: "error state" }).click();
     await page.waitForSelector('[data-testid="rejection"]');
     expect(close(await ctaBg(), published), "rejection did not disturb the published look").toBe(true);
+
+    // light↔dark toggle swaps the rendered colors (mode-polarized — dark ≠ light), the climax cascade.
+    await page.locator('[data-testid="toggle-dark"]').click();
+    await page.waitForFunction(
+      (t) => {
+        const el = document.querySelector('[data-testid="cta"]');
+        if (!el) return false;
+        const m = /rgba?\(([^)]+)\)/.exec(getComputedStyle(el).backgroundColor);
+        if (!m) return false;
+        const [r, g, b] = m[1].split(",").map((x) => Math.round(parseFloat(x)));
+        return Math.abs(r - t[0]) <= 3 && Math.abs(g - t[1]) <= 3 && Math.abs(b - t[2]) <= 3;
+      },
+      THEMED_DARK,
+    );
+    const dark = await ctaBg();
+    expect(close(dark, THEMED_DARK), "dark themed primary").toBe(true);
+    expect(close(dark, THEMED), "dark differs from light (the toggle swapped)").toBe(false);
 
     await page.close();
   });
