@@ -4,13 +4,15 @@ import { type TurnResult, failureTemplate } from "../demo/wiring.js";
 // local. rejected always carries real wall/verifier failures (no empty-array sentinel; the unscripted
 // "notice" is an App-level banner, not an outcome).
 const COLOR_ROLES = new Set(["primary", "accent", "neutral", "destructive"]);
-const swatch = (triple: string): React.CSSProperties => ({
+const swatch = (value: string): React.CSSProperties => ({
   display: "inline-block",
   width: 14,
   height: 14,
   borderRadius: 3,
-  background: `hsl(${triple})`,
-  border: "1px solid hsl(var(--border))",
+  // Seed values arrive as full color strings (oklch/hex/rgb — render natively); base values as bare
+  // hsl triples ("H S% L%") which must be wrapped in hsl().
+  background: /[a-z(#]/i.test(value) ? value : `hsl(${value})`,
+  border: "1px solid #d4d4d8",
 });
 
 export function OutcomePanel({ outcome, onAcknowledge }: { outcome: TurnResult | null; onAcknowledge: () => void }) {
