@@ -43,15 +43,48 @@ export function TenantColumn({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "8px 12px", fontFamily: "system-ui" }}>
-        <strong style={{ textTransform: "capitalize" }}>{tenant}</strong>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "flex-end" }}>
-          {examples.map((ex) => (
-            <button key={ex} data-testid={`example-${tenant}`} onClick={() => demo.submit(ex)} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 999, border: "1px solid #d4d4d8" }}>
-              {ex}
-            </button>
-          ))}
-        </div>
+      {/* Fixed-height chrome bar so BOTH columns align regardless of chip count; chips on a single
+          non-wrapping row (scrolls if they overflow) — no multi-row wrap, no misaligned dashboards. */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          height: 52,
+          flex: "0 0 auto",
+          padding: "0 16px",
+          borderBottom: "1px solid #e4e4e7",
+          background: "#ffffff",
+          fontFamily: "system-ui",
+        }}
+      >
+        <strong style={{ textTransform: "capitalize", fontSize: 15, whiteSpace: "nowrap" }}>{tenant}</strong>
+        {examples.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              overflowX: "auto",
+              flexWrap: "nowrap",
+              minWidth: 0,
+              scrollbarWidth: "none",
+              // soft right-edge fade so any overflow reads as intentional, not a hard clip
+              maskImage: "linear-gradient(to right, #000 calc(100% - 20px), transparent)",
+              WebkitMaskImage: "linear-gradient(to right, #000 calc(100% - 20px), transparent)",
+            }}
+          >
+            {examples.map((ex) => (
+              <button
+                key={ex}
+                data-testid={`example-${tenant}`}
+                onClick={() => demo.submit(ex)}
+                style={{ flex: "0 0 auto", fontSize: 11, padding: "3px 9px", borderRadius: 999, border: "1px solid #d4d4d8", background: "#fafafa", color: "#3f3f46", whiteSpace: "nowrap", cursor: "pointer" }}
+              >
+                {ex}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div ref={wrapper} data-testid={`scope-${tenant}`} style={{ background: "hsl(var(--background))", flex: 1, overflow: "auto" }}>
         <AnalyticsDashboard
