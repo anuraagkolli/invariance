@@ -83,8 +83,14 @@ export const ivProfile1: RampProfile = {
   },
 };
 
+// v2 profile — append-only: adds spacing table.
+export { ivProfile2, PROFILE_VERSION_2 } from "./iv-profile-2.js";
+export type { RampProfileV2, DensitySpacing } from "./iv-profile-2.js";
+import { ivProfile2, PROFILE_VERSION_2 } from "./iv-profile-2.js";
+
 const PROFILES: Record<string, RampProfile> = {
   [PROFILE_VERSION]: ivProfile1,
+  [PROFILE_VERSION_2]: ivProfile2, // append-only: v2 adds spacing table
 };
 
 /** Lookup by version; throws on unknown (retention §9 — never a silent miscompile against the wrong numbers). */

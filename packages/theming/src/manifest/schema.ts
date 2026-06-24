@@ -51,6 +51,9 @@ export const AppManifest = z
       }),
       radius: z.number(),
       density: z.enum(["compact", "comfortable", "spacious"]),
+      // Optional in v2+ manifests; existing v1 fixtures that omit them still parse.
+      shadow: z.enum(["flat", "soft", "elevated"]).optional(),
+      borderWeight: z.enum(["hairline", "standard", "heavy"]).optional(),
     }),
 
     invariants: z.object({

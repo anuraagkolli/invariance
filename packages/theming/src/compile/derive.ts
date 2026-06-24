@@ -77,6 +77,11 @@ export function deriveRole(role: RoleId, ctx: DeriveCtx): Oklch {
       // because a caller that reaches here has a code path bug (pick roles have no OKLCH value).
       throw new Error(`pick derivation has no OKLCH value: ${role}`);
 
+    case "space-step":
+      // spacing roles are dimension (not OKLCH) — emitted as raw px from the spacing table,
+      // never through the OKLCH derive path. Reaching here is a code path bug.
+      throw new Error(`space-step derivation has no OKLCH value: ${role}`);
+
     case "foreground-of": {
       const bg = ctx.resolved[d.bg];
       if (!bg) throw new Error(`foreground-of(${d.bg}) before bg resolved`);

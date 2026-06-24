@@ -1,9 +1,11 @@
 // packages/theming/src/roles/graph.ts
 import type { RoleGraph, RoleId, SeedId } from "./types.js";
 import { ivRoles1, VOCAB_VERSION } from "./iv-roles-1.js";
+import { ivRoles2, VOCAB_VERSION_2 } from "./iv-roles-2.js";
 
 const REGISTRY: Record<string, RoleGraph> = {
   [VOCAB_VERSION]: ivRoles1,
+  [VOCAB_VERSION_2]: ivRoles2, // append-only: v2 adds spacing roles
 };
 
 // Lookup by version; throws on unknown so a GC'd/typo'd version is loud, not a silent miscompile (§9).

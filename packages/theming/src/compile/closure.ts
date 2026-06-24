@@ -18,6 +18,8 @@ export function derivationDeps(d: Derivation): { seeds: SeedId[]; roles: RoleId[
       return { seeds: [d.seed], roles: [] };
     case "pick":
       return { seeds: [d.axis], roles: [] };
+    case "space-step":
+      return { seeds: ["density"], roles: [] };
     case "foreground-of":
       return { seeds: [], roles: [d.bg] };
   }

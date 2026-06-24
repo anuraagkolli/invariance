@@ -4,4 +4,5 @@
 export type { SeedId, RoleId, StepId, VarName, Kind, Mode, SpecMode, ContrastCategory, ContrastTier, Derivation, ContrastPair, RoleGraph } from "./types.js";
 export * from "./contrast.js";
 export * from "./iv-roles-1.js";
+export * from "./iv-roles-2.js";
 export * from "./graph.js";

@@ -3,6 +3,7 @@ import type { RoleId, SeedId, VarName } from "../roles/index.js";
 import { getRoleGraph } from "../roles/index.js";
 import type { StyleSpec, Oklch } from "../spec/index.js";
 import { getRampProfile } from "../profile/index.js";
+import type { RampProfileV2 } from "../profile/index.js";
 import { toOklch, emitValue } from "./oklch.js";
 import { seedsInDraft, affectedClosure, topoOrder } from "./closure.js";
 import { deriveRole, type DeriveCtx } from "./derive.js";
@@ -101,10 +102,11 @@ function compileMode(
 
   // Job 1: expand. base is the canvas — every role starts as its parsed base value (via
   // reconstruction for bare-triple emit), then affected roles are re-derived in topological order.
-  // Typography picks are excluded from the OKLCH path.
+  // Typography picks and space-step roles are excluded from the OKLCH path.
   const values: Record<RoleId, Oklch> = {};
   for (const [role, def] of Object.entries(graph.roles)) {
     if (def.kind === "typography") continue;
+    if (def.derivation.kind === "space-step") continue;
     const baseVal = baseMode[role];
     if (baseVal === undefined) continue;
     if (def.kind === "dimension") {
@@ -119,8 +121,11 @@ function compileMode(
 
   // Re-derive affected roles in topological order (seeds' closures overwrite the base canvas).
   // Locked roles are excluded from `affected` so their base value is preserved throughout.
+  // Skip typography and space-step roles — both are handled outside the OKLCH derive path.
   for (const role of topoOrder(affected, graph)) {
-    if (graph.roles[role]?.kind === "typography") continue;
+    const roleDef = graph.roles[role];
+    if (roleDef?.kind === "typography") continue;
+    if (roleDef?.derivation.kind === "space-step") continue;
     ctx.resolved = values;
     values[role] = deriveRole(role, ctx);
   }
@@ -152,24 +157,82 @@ function dimOklch(raw: string): Oklch {
  * from the closure in compileMode). We reconstruct it here by comparing the OKLCH values
  * returned from compileMode against the parsed base canvas — but that round-trip is fragile.
  * Instead, we accept the affected closure as a parameter so both steps share the same set.
+ *
+ * v2 additions (both v1-byte-identical because v1 manifests have no space-step roles and no picks):
+ *   - space-step roles: emitted as raw px from the profile's spacing table (before the affected check).
+ *   - typography picks: resolved from the draft's typography field → allowedFonts stack; falls back
+ *     to base when the draft sets no pick (so v1 output is unchanged).
  */
 function serializeMode(
   mode: Mode,
   values: Record<RoleId, Oklch>,
   affected: Set<RoleId>,
   manifest: AppManifest,
+  draft: StyleSpec,
 ): Record<VarName, string> {
   const baseMode = mode === "light" ? manifest.base.light : (manifest.base.dark ?? manifest.base.light);
   const graph = getRoleGraph(manifest.vocabVersion);
+  const profile = getRampProfile(manifest.profileVersion);
+
+  // Resolve density once: draft picks first, then manifest default, then fall back to "comfortable".
+  const resolvedDensity: "compact" | "comfortable" | "spacious" =
+    draft.density ?? manifest.defaultSeeds.density ?? "comfortable";
+
+  // Build a fast id→stack lookup for typography resolution.
+  const fontStackById = new Map<string, string>(
+    manifest.invariants.allowedFonts.map((f) => [f.id, f.stack]),
+  );
+
   const out: Record<VarName, string> = {};
 
   for (const [varName, def] of Object.entries(manifest.variables)) {
     const role = def.role;
     const baseVal = baseMode[role];
+    const roleDef = graph.roles[role];
 
-    if (graph.roles[role]?.kind === "typography") {
-      // typography is a font-stack pick resolved outside OKLCH; emit base verbatim for v1.
+    // --- SPACING BRANCH (v2) ---
+    // Must sit BEFORE the affected.has(role) check. Fired only for space-step roles, which only
+    // exist in v2 manifests (v1 manifests have no --space-* vars → this branch never fires for v1).
+    if (roleDef?.derivation.kind === "space-step") {
+      const step = roleDef.derivation.step;
+      // Cast: v2 profiles carry the spacing table; v1 profiles do not but this branch only fires
+      // for v2 manifests (which pin iv-profile-2 or later). If somehow mismatched, fall back to
+      // the base string so the output is still defined.
+      const spaceTable = (profile as unknown as RampProfileV2).space;
+      if (spaceTable) {
+        const px = spaceTable[resolvedDensity]?.[step];
+        if (px !== undefined) {
+          // Spacing is mode-stable (dimension kind): emit the same value for light and dark.
+          out[varName] = px;
+          continue;
+        }
+      }
+      // Fallback: base verbatim (should not happen for well-formed v2 manifests).
       if (baseVal !== undefined) out[varName] = baseVal;
+      continue;
+    }
+
+    // --- TYPOGRAPHY BRANCH ---
+    if (roleDef?.kind === "typography") {
+      // Resolve the axis for this typography role (display/body/mono) from the derivation.
+      const derivation = roleDef.derivation;
+      let resolvedStack: string | undefined;
+      // v1 vocab ignored picks (emitted base verbatim) — keep that byte-identical. Only a vocab that
+      // declares picksResolve (v2+) turns a draft pick into the allowlist stack.
+      if (graph.picksResolve && derivation.kind === "pick") {
+        const pickedId = draft.typography?.[derivation.axis];
+        if (pickedId !== undefined && pickedId !== null) {
+          // Draft sets a pick — resolve to the stack from allowedFonts.
+          resolvedStack = fontStackById.get(pickedId);
+        }
+        // No pick in draft (or pick not found) → fall through to base verbatim.
+        // This keeps v1 output byte-identical: v1 drafts set no typography picks.
+      }
+      if (resolvedStack !== undefined) {
+        out[varName] = resolvedStack;
+      } else if (baseVal !== undefined) {
+        out[varName] = baseVal;
+      }
       continue;
     }
 
@@ -194,14 +257,14 @@ function serializeMode(
 /** compile(draft, manifest) → CandidateTheme. Pure: same inputs → byte-identical output. */
 export function compile(draft: StyleSpec, manifest: AppManifest): CandidateTheme {
   const lightResult = compileMode("light", draft, manifest);
-  const light = serializeMode("light", lightResult.values, lightResult.affected, manifest);
+  const light = serializeMode("light", lightResult.values, lightResult.affected, manifest, draft);
   const result: CandidateTheme = {
     light,
     meta: { vocabVersion: manifest.vocabVersion, profileVersion: manifest.profileVersion },
   };
   if (manifest.modes.allowed.includes("dark")) {
     const darkResult = compileMode("dark", draft, manifest);
-    result.dark = serializeMode("dark", darkResult.values, darkResult.affected, manifest);
+    result.dark = serializeMode("dark", darkResult.values, darkResult.affected, manifest, draft);
   }
   return result;
 }

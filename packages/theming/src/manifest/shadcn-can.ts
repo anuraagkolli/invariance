@@ -80,3 +80,57 @@ export const SHADCN_CAN: AppManifest = {
     allowedFonts: [{ id: "sans", stack: "ui-sans-serif, system-ui, sans-serif" }],
   },
 };
+
+// ── v2 base: adds the density-driven spacing scale + resolved typography (display/body/mono). ──
+// APPEND-ONLY: SHADCN_CAN (above) is byte-identical and stays on iv-roles-1/iv-profile-1. v2 pins
+// iv-roles-2/iv-profile-2 and maps the new --space-* / --font-* vars. Shadow/border-weight are NOT
+// emitted here (they are canvas-applied aesthetics); they live on the StyleSpec + defaultSeeds only.
+const SPACE_VAR = { emit: { shape: "raw", space: null, precision: 0 } as const, confidence: "confirmed" as const };
+const FONT_VAR = { emit: { shape: "raw", space: null, precision: 0 } as const, confidence: "confirmed" as const };
+
+export const SHADCN_CAN_V2: AppManifest = {
+  ...SHADCN_CAN,
+  appId: "shadcn-can-v2",
+  manifestVersion: 1,
+  vocabVersion: "iv-roles-2",
+  profileVersion: "iv-profile-2",
+  variables: {
+    ...SHADCN_CAN.variables,
+    // Density-driven spacing scale (mode-stable; emitted from the profile spacing table).
+    "--space-2xs": { role: "space-2xs", ...SPACE_VAR },
+    "--space-xs": { role: "space-xs", ...SPACE_VAR },
+    "--space-sm": { role: "space-sm", ...SPACE_VAR },
+    "--space-md": { role: "space-md", ...SPACE_VAR },
+    "--space-lg": { role: "space-lg", ...SPACE_VAR },
+    "--space-xl": { role: "space-xl", ...SPACE_VAR },
+    "--space-2xl": { role: "space-2xl", ...SPACE_VAR },
+    // Typography: resolved from the draft's pick → allowedFonts stack (falls back to base below).
+    "--font-display": { role: "font-display", ...FONT_VAR },
+    "--font-mono": { role: "font-mono", ...FONT_VAR },
+  },
+  base: {
+    light: {
+      ...SHADCN_CAN.base.light,
+      // Font base fallbacks (so the vars emit even when a draft sets no pick).
+      "font-body": "ui-sans-serif, system-ui, sans-serif",
+      "font-display": "ui-sans-serif, system-ui, sans-serif",
+      "font-mono": "ui-monospace, monospace",
+    },
+  },
+  defaultSeeds: {
+    ...SHADCN_CAN.defaultSeeds,
+    density: "comfortable",
+    shadow: "soft",
+    borderWeight: "hairline",
+  },
+  invariants: {
+    ...SHADCN_CAN.invariants,
+    // A small font registry sufficient to exercise pick→stack resolution (the demo swaps in its real
+    // self-hosted faces in a later slice).
+    allowedFonts: [
+      { id: "sans", stack: "ui-sans-serif, system-ui, sans-serif" },
+      { id: "serif", stack: "ui-serif, Georgia, serif" },
+      { id: "mono", stack: "ui-monospace, monospace" },
+    ],
+  },
+};

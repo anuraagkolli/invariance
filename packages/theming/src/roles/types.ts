@@ -24,7 +24,8 @@ export type Derivation =
   | { kind: "foreground-of"; bg: RoleId; strategy: "maximize-contrast" | "minimum-legible" }
   | { kind: "accent-line"; seed: SeedId } // ring
   | { kind: "offset"; seed: "radius"; step: StepId } // radius-sm/md/lg/xl
-  | { kind: "pick"; axis: "display" | "body" | "mono" };
+  | { kind: "pick"; axis: "display" | "body" | "mono" }
+  | { kind: "space-step"; seed: "density"; step: StepId }; // space-2xs…space-2xl (v2)
 
 export type ContrastPair = { fg: RoleId; bg: RoleId; category: ContrastCategory };
 
@@ -32,4 +33,8 @@ export type RoleGraph = {
   seeds: SeedId[]; // StyleSpec INPUT axes — small
   roles: Record<RoleId, { kind: Kind; derivation: Derivation }>;
   contrastPairs: ContrastPair[];
+  // Capability: does this vocabulary resolve a StyleSpec typography PICK → the allowlist stack?
+  // v1 ignored picks (typography emitted base-verbatim); v2 makes them functional. Gating on the
+  // graph (not a version string) keeps v1 byte-identical and lets future versions opt in declaratively.
+  picksResolve?: boolean;
 };
