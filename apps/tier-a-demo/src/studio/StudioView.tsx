@@ -16,7 +16,7 @@ const EXAMPLES = Object.keys(SCRIPT);
 
 // The single-tenant customize loop (Part 4). Per-session mode toggle lives here.
 export function StudioView() {
-  const demo = useDemoSession(agent, DEMO_MANIFEST, "acme");
+  const demo = useDemoSession(agent, DEMO_MANIFEST, "stripe");
   const wrapper = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -28,7 +28,7 @@ export function StudioView() {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", height: "100%" }}>
       <aside style={{ display: "flex", flexDirection: "column", gap: 14, padding: 16, borderRight: "1px solid #e4e4e7", overflow: "auto", fontFamily: "system-ui" }}>
-        <h2 style={{ margin: 0 }}>Customize — Acme</h2>
+        <h2 style={{ margin: 0 }}>Customize the dashboard</h2>
         <PromptBox examples={EXAMPLES} onSubmit={demo.submit} />
         {demo.state.notice && (
           <p data-testid="notice" style={{ color: "#a16207", margin: 0 }}>

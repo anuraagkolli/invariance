@@ -6,28 +6,28 @@ import { SCRIPT } from "../src/demo/script.js";
 import { initialState, submitState, ackState, appliedSpec } from "../src/studio/session-state.js";
 
 const agent = new CannedAgent(SCRIPT);
-const SOFT_SAAS = "Make it feel like Linear — a soft, modern SaaS.";
+const STRIPE = "Make it match Stripe.";
 const ERROR = "Recolor the error state to a friendly green.";
 
 describe("appliedSpec selector", () => {
   it("returns draft when no outcome (initial state)", () => {
-    const s = initialState(DEMO_MANIFEST, "acme");
+    const s = initialState(DEMO_MANIFEST, "stripe");
     expect(appliedSpec(s)).toEqual(APP_DEFAULT_SPEC);
   });
 
   it("returns pendingSpec when there is a pending diff (pre-acknowledge)", async () => {
-    let s = initialState(DEMO_MANIFEST, "acme");
-    s = await submitState(s, agent, SOFT_SAAS, DEMO_MANIFEST);
+    let s = initialState(DEMO_MANIFEST, "stripe");
+    s = await submitState(s, agent, STRIPE, DEMO_MANIFEST);
     expect(s.outcome?.kind).toBe("diff");
     const spec = appliedSpec(s);
-    // The pending spec should have the Soft-SaaS primary and rounded radius
+    // The pending spec should have the Stripe primary and rounded radius
     expect(spec.colors?.primary).toBeDefined();
     expect(spec.radius).toBe(12);
   });
 
   it("returns draft after acknowledge (post-ack, no pending outcome)", async () => {
-    let s = initialState(DEMO_MANIFEST, "acme");
-    s = await submitState(s, agent, SOFT_SAAS, DEMO_MANIFEST);
+    let s = initialState(DEMO_MANIFEST, "stripe");
+    s = await submitState(s, agent, STRIPE, DEMO_MANIFEST);
     s = ackState(s);
     expect(s.outcome).toBeNull();
     const spec = appliedSpec(s);
@@ -37,7 +37,7 @@ describe("appliedSpec selector", () => {
   });
 
   it("returns draft (not a pending spec) when outcome is rejected", async () => {
-    let s = initialState(DEMO_MANIFEST, "acme");
+    let s = initialState(DEMO_MANIFEST, "stripe");
     s = await submitState(s, agent, ERROR, DEMO_MANIFEST);
     expect(s.outcome?.kind).toBe("rejected");
     // rejected has no pendingSpec; should return the unchanged draft

@@ -25,9 +25,9 @@ function brand(spec: Record<string, unknown>) {
   return compile(p.spec, DEMO_MANIFEST);
 }
 
-// Soft-SaaS brand (Acme) — Linear-inspired indigo
-const ACME = brand({
-  colors: { primary: "oklch(0.52 0.20 277)", accent: "oklch(0.70 0.12 277)", neutral: "oklch(0.985 0.004 277)" },
+// Stripe brand — indigo/roomy
+const STRIPE = brand({
+  colors: { primary: "oklch(0.55 0.21 280)", accent: "oklch(0.72 0.12 280)", neutral: "oklch(0.985 0.004 280)" },
   radius: 12,
   density: "spacious",
   typography: { display: "geist-sans", body: "geist-sans", mono: "geist-mono" },
@@ -35,9 +35,9 @@ const ACME = brand({
   borderWeight: "standard",
 });
 
-// Terminal brand (Globex) — Bloomberg-style green
-const GLOBEX = brand({
-  colors: { primary: "oklch(0.78 0.17 145)", accent: "oklch(0.80 0.14 85)", neutral: "oklch(0.96 0.006 240)" },
+// Bloomberg brand — amber terminal/dense
+const BLOOMBERG = brand({
+  colors: { primary: "oklch(0.78 0.15 70)", accent: "oklch(0.72 0.16 150)", neutral: "oklch(0.96 0.006 250)" },
   radius: 0,
   density: "comfortable",
   typography: { display: "ibm-plex-mono", body: "ibm-plex-mono", mono: "ibm-plex-mono" },
@@ -45,10 +45,10 @@ const GLOBEX = brand({
   borderWeight: "hairline",
 });
 
-const ACME_LIGHT = rgb255(ACME.light["--primary"]);
-const ACME_DARK = rgb255(ACME.dark!["--primary"]);
-const GLOBEX_LIGHT = rgb255(GLOBEX.light["--primary"]);
-const GLOBEX_DARK = rgb255(GLOBEX.dark!["--primary"]);
+const STRIPE_LIGHT = rgb255(STRIPE.light["--primary"]);
+const STRIPE_DARK = rgb255(STRIPE.dark!["--primary"]);
+const BLOOMBERG_LIGHT = rgb255(BLOOMBERG.light["--primary"]);
+const BLOOMBERG_DARK = rgb255(BLOOMBERG.dark!["--primary"]);
 
 let server: ViteDevServer;
 let browser: Browser;
@@ -85,74 +85,74 @@ describe("chromium: two-tenant side-by-side", () => {
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: "load" });
     await page.click('[data-testid="view-side"]');
-    await page.waitForSelector('[data-testid="scope-acme"]');
-    await page.waitForSelector('[data-testid="scope-globex"]');
+    await page.waitForSelector('[data-testid="scope-stripe"]');
+    await page.waitForSelector('[data-testid="scope-bloomberg"]');
 
     // brands auto-apply on mount → wait for each CTA to settle on its themed primary
-    await waitForCta(page, "cta-acme", ACME_LIGHT);
-    await waitForCta(page, "cta-globex", GLOBEX_LIGHT);
+    await waitForCta(page, "cta-stripe", STRIPE_LIGHT);
+    await waitForCta(page, "cta-bloomberg", BLOOMBERG_LIGHT);
 
     // (1) two wrappers, NO bleed: both themed correctly AND different simultaneously
-    const acmeLight = await ctaBg(page, "cta-acme");
-    const globexLight = await ctaBg(page, "cta-globex");
-    expect(close(acmeLight, ACME_LIGHT), "acme = Soft-SaaS indigo").toBe(true);
-    expect(close(globexLight, GLOBEX_LIGHT), "globex = terminal green").toBe(true);
-    expect(close(acmeLight, globexLight), "the two CTAs are different colors at the same time").toBe(false);
+    const stripeLight = await ctaBg(page, "cta-stripe");
+    const bloombergLight = await ctaBg(page, "cta-bloomberg");
+    expect(close(stripeLight, STRIPE_LIGHT), "stripe = Stripe indigo").toBe(true);
+    expect(close(bloombergLight, BLOOMBERG_LIGHT), "bloomberg = amber terminal").toBe(true);
+    expect(close(stripeLight, bloombergLight), "the two CTAs are different colors at the same time").toBe(false);
 
-    // (2) structural profile differs: acme=roomy, globex=dense
-    const acmeProfile = await page.evaluate(() => {
-      const scope = document.querySelector('[data-testid="scope-acme"]');
+    // (2) structural profile differs: stripe=roomy, bloomberg=dense
+    const stripeProfile = await page.evaluate(() => {
+      const scope = document.querySelector('[data-testid="scope-stripe"]');
       return scope?.querySelector('[data-profile]')?.getAttribute('data-profile') ?? null;
     });
-    const globexProfile = await page.evaluate(() => {
-      const scope = document.querySelector('[data-testid="scope-globex"]');
+    const bloombergProfile = await page.evaluate(() => {
+      const scope = document.querySelector('[data-testid="scope-bloomberg"]');
       return scope?.querySelector('[data-profile]')?.getAttribute('data-profile') ?? null;
     });
-    expect(acmeProfile, "acme profile=roomy").toBe("roomy");
-    expect(globexProfile, "globex profile=dense").toBe("dense");
-    expect(acmeProfile, "profiles differ").not.toBe(globexProfile);
+    expect(stripeProfile, "stripe profile=roomy").toBe("roomy");
+    expect(bloombergProfile, "bloomberg profile=dense").toBe("dense");
+    expect(stripeProfile, "profiles differ").not.toBe(bloombergProfile);
 
-    // (3) font families differ: acme has Geist, globex has IBM Plex Mono
+    // (3) font families differ: stripe has Geist, bloomberg has IBM Plex Mono
     // wait for fonts to load (font-display:block — first frame may have no glyphs)
     await page.waitForFunction(() => {
-      const acmeCta = document.querySelector('[data-testid="cta-acme"]');
-      if (!acmeCta) return false;
-      return getComputedStyle(acmeCta).fontFamily.toLowerCase().includes("geist") || document.fonts.check("12px Geist");
+      const stripeCta = document.querySelector('[data-testid="cta-stripe"]');
+      if (!stripeCta) return false;
+      return getComputedStyle(stripeCta).fontFamily.toLowerCase().includes("geist") || document.fonts.check("12px Geist");
     });
-    const acmeFont = await page.evaluate(() => {
-      const el = document.querySelector('[data-testid="cta-acme"]');
+    const stripeFont = await page.evaluate(() => {
+      const el = document.querySelector('[data-testid="cta-stripe"]');
       return el ? getComputedStyle(el).fontFamily : "";
     });
-    const globexFont = await page.evaluate(() => {
-      const el = document.querySelector('[data-testid="cta-globex"]');
+    const bloombergFont = await page.evaluate(() => {
+      const el = document.querySelector('[data-testid="cta-bloomberg"]');
       return el ? getComputedStyle(el).fontFamily : "";
     });
-    expect(acmeFont.toLowerCase(), "acme font contains Geist").toContain("geist");
-    expect(globexFont.toLowerCase(), "globex font differs from acme (IBM Plex Mono)").not.toContain("geist");
-    expect(acmeFont, "font families are different").not.toBe(globexFont);
+    expect(stripeFont.toLowerCase(), "stripe font contains Geist").toContain("geist");
+    expect(bloombergFont.toLowerCase(), "bloomberg font differs from stripe (IBM Plex Mono)").not.toContain("geist");
+    expect(stripeFont, "font families are different").not.toBe(bloombergFont);
 
-    // (3b) elevation differs: Soft-SaaS has a soft shadow; the Terminal is flat (none)
+    // (3b) elevation differs: Stripe has a soft shadow; Bloomberg is flat (none)
     const boxShadowOf = (id: string) =>
       page.evaluate((i) => getComputedStyle(document.querySelector(`[data-testid="${i}"]`)!).boxShadow, id);
-    expect(await boxShadowOf("cta-acme"), "Soft-SaaS CTA is elevated").not.toBe("none");
-    expect(await boxShadowOf("cta-globex"), "Terminal CTA is flat").toBe("none");
+    expect(await boxShadowOf("cta-stripe"), "Stripe CTA is elevated").not.toBe("none");
+    expect(await boxShadowOf("cta-bloomberg"), "Bloomberg CTA is flat").toBe("none");
 
-    // (4) on-page isolation: customizing Acme (Soften → radius 16) leaves Globex's CTA unchanged.
-    // Wait on Acme's --radius var ACTUALLY changing (a real settle signal, not a vacuous `|| true`).
-    const acmeRadiusBefore = await page.evaluate(() => (document.querySelector('[data-testid="scope-acme"]') as HTMLElement).style.getPropertyValue("--radius"));
-    await page.locator('[data-testid="example-acme"]', { hasText: "Soften" }).click();
+    // (4) on-page isolation: customizing Stripe (Soften → radius 16) leaves Bloomberg's CTA unchanged.
+    // Wait on Stripe's --radius var ACTUALLY changing (a real settle signal, not a vacuous `|| true`).
+    const stripeRadiusBefore = await page.evaluate(() => (document.querySelector('[data-testid="scope-stripe"]') as HTMLElement).style.getPropertyValue("--radius"));
+    await page.locator('[data-testid="example-stripe"]', { hasText: "Soften" }).click();
     await page.waitForFunction(
-      (prev) => (document.querySelector('[data-testid="scope-acme"]') as HTMLElement).style.getPropertyValue("--radius") !== prev,
-      acmeRadiusBefore,
+      (prev) => (document.querySelector('[data-testid="scope-stripe"]') as HTMLElement).style.getPropertyValue("--radius") !== prev,
+      stripeRadiusBefore,
     );
-    expect(close(await ctaBg(page, "cta-globex"), globexLight), "Globex unchanged while Acme is customized").toBe(true);
+    expect(close(await ctaBg(page, "cta-bloomberg"), bloombergLight), "Bloomberg unchanged while Stripe is customized").toBe(true);
 
     // (5) shared toggle swaps BOTH to their dark primaries (each differs from its own light)
     await page.click('[data-testid="shared-toggle"]');
-    await waitForCta(page, "cta-acme", ACME_DARK);
-    await waitForCta(page, "cta-globex", GLOBEX_DARK);
-    expect(close(await ctaBg(page, "cta-acme"), ACME_LIGHT), "acme actually swapped").toBe(false);
-    expect(close(await ctaBg(page, "cta-globex"), GLOBEX_LIGHT), "globex actually swapped").toBe(false);
+    await waitForCta(page, "cta-stripe", STRIPE_DARK);
+    await waitForCta(page, "cta-bloomberg", BLOOMBERG_DARK);
+    expect(close(await ctaBg(page, "cta-stripe"), STRIPE_LIGHT), "stripe actually swapped").toBe(false);
+    expect(close(await ctaBg(page, "cta-bloomberg"), BLOOMBERG_LIGHT), "bloomberg actually swapped").toBe(false);
 
     await page.close();
   });

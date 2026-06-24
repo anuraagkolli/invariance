@@ -7,13 +7,13 @@ import { APP_DEFAULT_SPEC, type Session } from "../src/demo/wiring.js";
 import { ackState, initialState, publishState, resetState, submitState } from "../src/studio/session-state.js";
 
 const agent = new CannedAgent(SCRIPT);
-const SOFT_SAAS = "Make it feel like Linear — a soft, modern SaaS.";
+const STRIPE = "Make it match Stripe.";
 const ERROR = "Recolor the error state to a friendly green.";
-const fresh = (): Session => ({ tenant: "acme", draft: APP_DEFAULT_SPEC, published: null });
+const fresh = (): Session => ({ tenant: "stripe", draft: APP_DEFAULT_SPEC, published: null });
 
 describe("runScriptedTurn", () => {
   it("scripted in-scope prompt → engine outcome; the locked-error prompt → seed_locked", async () => {
-    expect((await runScriptedTurn(agent, fresh(), SOFT_SAAS, DEMO_MANIFEST)).kind).toBe("diff");
+    expect((await runScriptedTurn(agent, fresh(), STRIPE, DEMO_MANIFEST)).kind).toBe("diff");
     const err = await runScriptedTurn(agent, fresh(), ERROR, DEMO_MANIFEST);
     expect(err.kind).toBe("rejected");
     if (err.kind === "rejected") expect(err.failures.some((f) => "code" in f && f.code === "seed_locked")).toBe(true);
@@ -25,10 +25,10 @@ describe("runScriptedTurn", () => {
 
 describe("session-state (pure reducers)", () => {
   it("submit→diff sets applied; ack advances the draft; reset returns to base", async () => {
-    let s = initialState(DEMO_MANIFEST, "acme");
+    let s = initialState(DEMO_MANIFEST, "stripe");
     const basePrimary = s.applied.light["--primary"];
 
-    s = await submitState(s, agent, SOFT_SAAS, DEMO_MANIFEST);
+    s = await submitState(s, agent, STRIPE, DEMO_MANIFEST);
     expect(s.outcome?.kind).toBe("diff");
     expect(s.applied.light["--primary"]).not.toBe(basePrimary); // preview moved to the candidate
 
@@ -42,8 +42,8 @@ describe("session-state (pure reducers)", () => {
   });
 
   it("a rejection AFTER publish leaves the published look untouched (the on-camera case)", async () => {
-    let s = initialState(DEMO_MANIFEST, "acme");
-    s = ackState(await submitState(s, agent, SOFT_SAAS, DEMO_MANIFEST)); // customize…
+    let s = initialState(DEMO_MANIFEST, "stripe");
+    s = ackState(await submitState(s, agent, STRIPE, DEMO_MANIFEST)); // customize…
     s = publishState(s); // …and publish (live)
     const live = s.applied;
     expect(s.published).toBe(true);
@@ -55,7 +55,7 @@ describe("session-state (pure reducers)", () => {
   });
 
   it("an unscripted prompt sets a notice, not a fake rejected, and holds the preview", async () => {
-    let s = ackState(await submitState(initialState(DEMO_MANIFEST, "acme"), agent, SOFT_SAAS, DEMO_MANIFEST));
+    let s = ackState(await submitState(initialState(DEMO_MANIFEST, "stripe"), agent, STRIPE, DEMO_MANIFEST));
     const held = s.applied;
     s = await submitState(s, agent, "totally unscripted", DEMO_MANIFEST);
     expect(s.outcome).toBeNull();
@@ -64,10 +64,10 @@ describe("session-state (pure reducers)", () => {
   });
 
   it("acknowledged gate: false initially, false after diff, true after ack, false after reset", async () => {
-    let s = initialState(DEMO_MANIFEST, "acme");
+    let s = initialState(DEMO_MANIFEST, "stripe");
     expect(s.acknowledged).toBe(false);
 
-    s = await submitState(s, agent, SOFT_SAAS, DEMO_MANIFEST);
+    s = await submitState(s, agent, STRIPE, DEMO_MANIFEST);
     expect(s.outcome?.kind).toBe("diff");
     expect(s.acknowledged).toBe(false); // diff re-locks the gate
 
@@ -80,10 +80,10 @@ describe("session-state (pure reducers)", () => {
 
   it("canPublish gate: false before ack, true after ack, false after publish, false after reset", async () => {
     const canPublish = (st: typeof s): boolean => st.acknowledged && !st.published;
-    let s = initialState(DEMO_MANIFEST, "acme");
+    let s = initialState(DEMO_MANIFEST, "stripe");
     expect(canPublish(s)).toBe(false);
 
-    s = await submitState(s, agent, SOFT_SAAS, DEMO_MANIFEST);
+    s = await submitState(s, agent, STRIPE, DEMO_MANIFEST);
     expect(canPublish(s)).toBe(false); // diff but not yet acknowledged
 
     s = ackState(s);
@@ -97,9 +97,9 @@ describe("session-state (pure reducers)", () => {
   });
 
   it("a no_change or rejected submit AFTER ack does NOT relock acknowledged", async () => {
-    let s = initialState(DEMO_MANIFEST, "acme");
+    let s = initialState(DEMO_MANIFEST, "stripe");
     // customize and acknowledge
-    s = ackState(await submitState(s, agent, SOFT_SAAS, DEMO_MANIFEST));
+    s = ackState(await submitState(s, agent, STRIPE, DEMO_MANIFEST));
     expect(s.acknowledged).toBe(true);
 
     // a rejection (locked error prompt) must not relock
@@ -108,8 +108,8 @@ describe("session-state (pure reducers)", () => {
     expect(s.acknowledged).toBe(true); // still acknowledged
 
     // a fresh customize+ack, then re-submit the same draft — no_change
-    s = ackState(await submitState(initialState(DEMO_MANIFEST, "acme"), agent, SOFT_SAAS, DEMO_MANIFEST));
-    s = await submitState(s, agent, SOFT_SAAS, DEMO_MANIFEST); // same spec → no_change
+    s = ackState(await submitState(initialState(DEMO_MANIFEST, "stripe"), agent, STRIPE, DEMO_MANIFEST));
+    s = await submitState(s, agent, STRIPE, DEMO_MANIFEST); // same spec → no_change
     expect(s.outcome?.kind).toBe("no_change");
     expect(s.acknowledged).toBe(true); // no_change must not relock
   });

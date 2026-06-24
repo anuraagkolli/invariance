@@ -44,7 +44,7 @@ export function TenantColumn({
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "8px 12px", fontFamily: "system-ui" }}>
-        <strong>{tenant}</strong>
+        <strong style={{ textTransform: "capitalize" }}>{tenant}</strong>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "flex-end" }}>
           {examples.map((ex) => (
             <button key={ex} data-testid={`example-${tenant}`} onClick={() => demo.submit(ex)} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 999, border: "1px solid #d4d4d8" }}>

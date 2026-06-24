@@ -16,22 +16,22 @@ async function driveBeat(session: Session, prompt: string): Promise<TurnResult> 
   const designed = await agent.design({ prompt, draft: session.draft, envelope });
   return runTurn(session, designed.specJson, DEMO_MANIFEST);
 }
-const fresh = (): Session => ({ tenant: "acme", draft: APP_DEFAULT_SPEC, published: null });
+const fresh = (): Session => ({ tenant: "stripe", draft: APP_DEFAULT_SPEC, published: null });
 function compileNeutral(neutral: string): CandidateTheme {
   const p = parseSpec({ colors: { neutral } }, DEMO_MANIFEST);
   if (!p.ok) throw new Error(`rejected: ${JSON.stringify(p.failures)}`);
   return compile(p.spec, DEMO_MANIFEST);
 }
 
-const SOFT_SAAS = "Make it feel like Linear — a soft, modern SaaS.";
+const STRIPE = "Make it match Stripe.";
 const SOFTEN = "Soften the corners.";
 const SATURATED = "Make the surfaces a bold, saturated orange.";
 const COMPACT = "Cram everything in — make it compact.";
 const RECOLOR_ERROR = "Recolor the error state to a friendly green.";
 
 describe("scripted beats fire their intended engine outcome (the governance proof)", () => {
-  it("beat #1 (Soft-SaaS jaw-drop) → accepted diff, with a populated dark var set", async () => {
-    const t = await driveBeat(fresh(), SOFT_SAAS);
+  it("beat #1 (Stripe jaw-drop) → accepted diff, with a populated dark var set", async () => {
+    const t = await driveBeat(fresh(), STRIPE);
     expect(t.kind).toBe("diff");
     if (t.kind !== "diff") return;
     expect(t.diff.some((d) => d.role === "primary")).toBe(true);
@@ -90,11 +90,11 @@ describe("the contrast beat is ROBUST (pinned margin + band) — a ramp tweak ca
 describe("the no_change outcome (the third TurnResult kind — Part 3's 'nothing moved' state)", () => {
   it("re-submitting an already-acknowledged value yields kind:no_change", async () => {
     let s = fresh();
-    const t1 = await driveBeat(s, SOFT_SAAS);
+    const t1 = await driveBeat(s, STRIPE);
     expect(t1.kind).toBe("diff");
     if (t1.kind !== "diff") return;
     s = acknowledge({ ...s, candidate: t1.candidate, pendingSpec: t1.pendingSpec });
-    const t2 = await driveBeat(s, SOFT_SAAS); // same delta onto the now-SaaS draft → empty diff
+    const t2 = await driveBeat(s, STRIPE); // same delta onto the now-Stripe draft → empty diff
     expect(t2.kind).toBe("no_change");
   });
 });
@@ -102,14 +102,14 @@ describe("the no_change outcome (the third TurnResult kind — Part 3's 'nothing
 describe("session accumulation (the page-held draft composes across acks)", () => {
   it("two acknowledged success beats compose into one draft", async () => {
     let s = fresh();
-    const t1 = await driveBeat(s, SOFT_SAAS);
+    const t1 = await driveBeat(s, STRIPE);
     if (t1.kind !== "diff") throw new Error("beat #1 should diff");
     s = acknowledge({ ...s, candidate: t1.candidate, pendingSpec: t1.pendingSpec });
     const t2 = await driveBeat(s, SOFTEN);
     if (t2.kind !== "diff") throw new Error("beat #2 should diff");
     s = acknowledge({ ...s, candidate: t2.candidate, pendingSpec: t2.pendingSpec });
     expect(s.draft.radius).toBe(16); // from Soften beat
-    expect(s.draft.colors?.primary).toBeDefined(); // from Soft-SaaS beat
-    expect(s.draft.colors?.neutral).toBeDefined(); // Soft-SaaS beat — composed, not overwritten
+    expect(s.draft.colors?.primary).toBeDefined(); // from Stripe beat
+    expect(s.draft.colors?.neutral).toBeDefined(); // Stripe beat — composed, not overwritten
   });
 });

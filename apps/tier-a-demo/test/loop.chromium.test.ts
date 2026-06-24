@@ -19,10 +19,10 @@ function parseCssRgb(s: string): [number, number, number] {
 const close = (a: [number, number, number], b: [number, number, number], tol = 3): boolean =>
   a.every((v, i) => Math.abs(v - b[i]) <= tol);
 
-// The Soft-SaaS beat's expected emitted primary (same inputs as SCRIPT's Soft-SaaS turn), and the base.
+// The Stripe beat's expected emitted primary (same inputs as SCRIPT's Stripe turn), and the base.
 const parsed = parseSpec(
   {
-    colors: { primary: "oklch(0.52 0.20 277)", accent: "oklch(0.70 0.12 277)", neutral: "oklch(0.985 0.004 277)" },
+    colors: { primary: "oklch(0.55 0.21 280)", accent: "oklch(0.72 0.12 280)", neutral: "oklch(0.985 0.004 280)" },
     radius: 12,
     density: "spacious",
     typography: { display: "geist-sans", body: "geist-sans", mono: "geist-mono" },
@@ -82,8 +82,8 @@ describe("chromium e2e: the customize loop", () => {
       });
     const baseGeom = await ctaGeom();
 
-    // click the Soft-SaaS example chip (fills the input) → Send → the preview re-themes
-    await page.locator('[data-testid="example"]', { hasText: "Linear" }).click();
+    // click the Stripe example chip (fills the input) → Send → the preview re-themes
+    await page.locator('[data-testid="example"]', { hasText: "Stripe" }).click();
     await page.locator('[data-testid="send"]').click();
     await page.waitForFunction(
       (t) => {
@@ -96,10 +96,10 @@ describe("chromium e2e: the customize loop", () => {
       },
       THEMED,
     );
-    expect(close(await ctaBg(), THEMED), "themed Soft-SaaS primary").toBe(true);
+    expect(close(await ctaBg(), THEMED), "themed Stripe primary").toBe(true);
     expect(close(await ctaBg(), BASE)).toBe(false);
 
-    // vibe-shift assertions: the dashboard now reflects the Soft-SaaS look
+    // vibe-shift assertions: the dashboard now reflects the Stripe look
     // (1) fontFamily contains "Geist" (was system-ui before theming)
     await page.waitForFunction(() => {
       const panel = document.querySelector('[data-testid="panel"]') ?? document.querySelector('[data-profile]') ?? document.querySelector('[data-testid="scope"]');
@@ -110,14 +110,14 @@ describe("chromium e2e: the customize loop", () => {
       const el = document.querySelector('[data-testid="panel"]') ?? document.querySelector('[data-profile]') ?? document.querySelector('[data-testid="scope"]');
       return el ? getComputedStyle(el).fontFamily : "";
     });
-    expect(panelFont.toLowerCase(), "font is now Geist after Soft-SaaS").toContain("geist");
+    expect(panelFont.toLowerCase(), "font is now Geist after Stripe").toContain("geist");
 
-    // (2) data-profile on the scope is "roomy" (Soft-SaaS: radius=12, shadow=soft → roomy)
+    // (2) data-profile on the scope is "roomy" (Stripe: radius=12, shadow=soft → roomy)
     const profile = await page.evaluate(() => {
       const el = document.querySelector('[data-profile]');
       return el?.getAttribute('data-profile') ?? null;
     });
-    expect(profile, "profile=roomy after Soft-SaaS").toBe("roomy");
+    expect(profile, "profile=roomy after Stripe").toBe("roomy");
 
     // (3) geometry shifted too: corner radius up (base 8 → 12) and padding up (comfortable → spacious).
     // Wait for the radius transition to settle past the base value, then assert both grew.
