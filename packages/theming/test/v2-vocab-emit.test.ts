@@ -76,9 +76,10 @@ describe("compile v2 — typography pick resolution", () => {
     expect(c["--font-display"]).toBe("ui-sans-serif, system-ui, sans-serif");
     expect(c["--font-mono"]).toBe("ui-monospace, monospace");
   });
-  it("a different pick resolves to a different stack", () => {
+  it("a different pick resolves to a different stack (body → --font-body in v2)", () => {
     const c = compile(spec({ typography: { body: "serif" } }), SHADCN_CAN_V2).light;
-    expect(c["--font-sans"]).toBe("ui-serif, Georgia, serif"); // --font-sans → font-body role
+    expect(c["--font-body"]).toBe("ui-serif, Georgia, serif"); // v2 renamed --font-sans → --font-body
+    expect(c["--font-sans"]).toBeUndefined(); // the legacy var name is gone in v2
   });
 });
 

@@ -88,6 +88,10 @@ export const SHADCN_CAN: AppManifest = {
 const SPACE_VAR = { emit: { shape: "raw", space: null, precision: 0 } as const, confidence: "confirmed" as const };
 const FONT_VAR = { emit: { shape: "raw", space: null, precision: 0 } as const, confidence: "confirmed" as const };
 
+// v2 renames the body-font var to --font-body (v1 keeps --font-sans) so the emitted set is a
+// consistent --font-display / --font-body / --font-mono — the names the canvas consumes.
+const { "--font-sans": _legacyBodyFontVar, ...V1_VARS_NO_FONT } = SHADCN_CAN.variables;
+
 export const SHADCN_CAN_V2: AppManifest = {
   ...SHADCN_CAN,
   appId: "shadcn-can-v2",
@@ -95,7 +99,8 @@ export const SHADCN_CAN_V2: AppManifest = {
   vocabVersion: "iv-roles-2",
   profileVersion: "iv-profile-2",
   variables: {
-    ...SHADCN_CAN.variables,
+    ...V1_VARS_NO_FONT,
+    "--font-body": { role: "font-body", ...FONT_VAR },
     // Density-driven spacing scale (mode-stable; emitted from the profile spacing table).
     "--space-2xs": { role: "space-2xs", ...SPACE_VAR },
     "--space-xs": { role: "space-xs", ...SPACE_VAR },
