@@ -1,0 +1,10 @@
+Self-hosted fonts in this directory are licensed under the SIL Open Font License, Version 1.1.
+
+  Geist, Geist Mono       © 2023 Vercel, Inc.        https://github.com/vercel/geist-font
+  IBM Plex Mono, Serif    © 2017 IBM Corp.           https://github.com/IBM/plex
+
+woff2 (latin subset) vendored via the Fontsource CDN (https://fontsource.org). The full SIL OFL 1.1
+license text is available at https://openfontlicense.org and in each upstream repository above.
+
+Under OFL 1.1 these fonts may be bundled, embedded, and redistributed with this software; they may
+not be sold by themselves, and Reserved Font Names must not be applied to modified versions.

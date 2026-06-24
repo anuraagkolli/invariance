@@ -1,3 +1,15 @@
+/* Self-hosted fonts (SIL OFL 1.1) — vendored under public/fonts so the recording is deterministic and
+   offline. font-display:block: never show a fallback-then-swap flicker mid-take (warm fonts before recording).
+   Geist / Geist Mono © Vercel; IBM Plex Mono / Serif © IBM. See public/fonts/OFL.txt. */
+@font-face { font-family: "Geist"; src: url("/fonts/geist-sans-400.woff2") format("woff2"); font-weight: 400; font-display: block; }
+@font-face { font-family: "Geist"; src: url("/fonts/geist-sans-500.woff2") format("woff2"); font-weight: 500; font-display: block; }
+@font-face { font-family: "Geist"; src: url("/fonts/geist-sans-700.woff2") format("woff2"); font-weight: 700; font-display: block; }
+@font-face { font-family: "Geist Mono"; src: url("/fonts/geist-mono-400.woff2") format("woff2"); font-weight: 400; font-display: block; }
+@font-face { font-family: "IBM Plex Mono"; src: url("/fonts/ibm-plex-mono-400.woff2") format("woff2"); font-weight: 400; font-display: block; }
+@font-face { font-family: "IBM Plex Mono"; src: url("/fonts/ibm-plex-mono-500.woff2") format("woff2"); font-weight: 500; font-display: block; }
+@font-face { font-family: "IBM Plex Serif"; src: url("/fonts/ibm-plex-serif-400.woff2") format("woff2"); font-weight: 400; font-display: block; }
+@font-face { font-family: "IBM Plex Serif"; src: url("/fonts/ibm-plex-serif-600.woff2") format("woff2"); font-weight: 600; font-display: block; }
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,7 +20,10 @@ body {
 }
 
 /* Smooth re-theming for the recording: when a scoped wrapper's --* vars change (a new theme or a
-   light/dark toggle), the resolved colors transition rather than snapping. Scoped to the previews. */
+   light/dark toggle), the resolved values transition rather than snapping. Scoped to the previews.
+   Includes box-shadow + border-width (canvas-applied aesthetics) and font is intentionally NOT
+   transitioned (a family swap should be instant, not a blur). */
 [data-testid^="scope"] * {
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease,
+    border-width 0.3s ease, padding 0.3s ease, border-radius 0.3s ease;
 }
