@@ -6,7 +6,7 @@ import { SCRIPT } from "../src/demo/script.js";
 import { initialState, submitState, ackState, appliedSpec } from "../src/studio/session-state.js";
 
 const agent = new CannedAgent(SCRIPT);
-const INDIGO = "Make it feel like Acme — deep indigo, a little more rounded.";
+const SOFT_SAAS = "Make it feel like Linear — a soft, modern SaaS.";
 const ERROR = "Recolor the error state to a friendly green.";
 
 describe("appliedSpec selector", () => {
@@ -17,23 +17,23 @@ describe("appliedSpec selector", () => {
 
   it("returns pendingSpec when there is a pending diff (pre-acknowledge)", async () => {
     let s = initialState(DEMO_MANIFEST, "acme");
-    s = await submitState(s, agent, INDIGO, DEMO_MANIFEST);
+    s = await submitState(s, agent, SOFT_SAAS, DEMO_MANIFEST);
     expect(s.outcome?.kind).toBe("diff");
     const spec = appliedSpec(s);
-    // The pending spec should have the indigo primary and rounded radius
+    // The pending spec should have the Soft-SaaS primary and rounded radius
     expect(spec.colors?.primary).toBeDefined();
-    expect(spec.radius).toBe(14);
+    expect(spec.radius).toBe(12);
   });
 
   it("returns draft after acknowledge (post-ack, no pending outcome)", async () => {
     let s = initialState(DEMO_MANIFEST, "acme");
-    s = await submitState(s, agent, INDIGO, DEMO_MANIFEST);
+    s = await submitState(s, agent, SOFT_SAAS, DEMO_MANIFEST);
     s = ackState(s);
     expect(s.outcome).toBeNull();
     const spec = appliedSpec(s);
     // After ack, the draft IS the acknowledged spec
     expect(spec.colors?.primary).toBeDefined();
-    expect(spec.radius).toBe(14);
+    expect(spec.radius).toBe(12);
   });
 
   it("returns draft (not a pending spec) when outcome is rejected", async () => {

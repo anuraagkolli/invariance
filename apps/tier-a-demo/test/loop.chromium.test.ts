@@ -19,8 +19,18 @@ function parseCssRgb(s: string): [number, number, number] {
 const close = (a: [number, number, number], b: [number, number, number], tol = 3): boolean =>
   a.every((v, i) => Math.abs(v - b[i]) <= tol);
 
-// the indigo beat's expected emitted primary (same inputs as SCRIPT's indigo turn), and the base.
-const parsed = parseSpec({ colors: { primary: "oklch(0.35 0.12 270)" }, radius: 14 }, DEMO_MANIFEST);
+// The Soft-SaaS beat's expected emitted primary (same inputs as SCRIPT's Soft-SaaS turn), and the base.
+const parsed = parseSpec(
+  {
+    colors: { primary: "oklch(0.52 0.20 277)", accent: "oklch(0.70 0.12 277)", neutral: "oklch(0.985 0.004 277)" },
+    radius: 12,
+    density: "spacious",
+    typography: { display: "geist-sans", body: "geist-sans", mono: "geist-mono" },
+    shadow: "soft",
+    borderWeight: "standard",
+  },
+  DEMO_MANIFEST,
+);
 if (!parsed.ok) throw new Error("setup");
 const THEME = compile(parsed.spec, DEMO_MANIFEST);
 const THEMED = rgb255(THEME.light["--primary"]);
@@ -42,7 +52,7 @@ afterAll(async () => {
 });
 
 describe("chromium e2e: the customize loop", () => {
-  it("a prompt re-themes the preview; a rejection AFTER publish does not disturb it", async () => {
+  it("a prompt re-themes the preview; vibe assertions prove the shift; a rejection AFTER publish does not disturb it", async () => {
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: "load" });
     await page.waitForSelector('[data-testid="cta"]');
@@ -64,8 +74,16 @@ describe("chromium e2e: the customize loop", () => {
     );
     expect(close(await ctaBg(), BASE), "starts at base").toBe(true);
 
-    // click the indigo example (fills the input) → Send → the preview re-themes (applied advances on the diff)
-    await page.locator('[data-testid="example"]', { hasText: "deep indigo" }).click();
+    // capture base geometry — the vibe shift must move RADIUS + SPACING, not just color
+    const ctaGeom = async (): Promise<{ radius: number; pad: number }> =>
+      page.evaluate(() => {
+        const s = getComputedStyle(document.querySelector('[data-testid="cta"]')!);
+        return { radius: Number.parseFloat(s.borderTopLeftRadius), pad: Number.parseFloat(s.paddingTop) };
+      });
+    const baseGeom = await ctaGeom();
+
+    // click the Soft-SaaS example chip (fills the input) → Send → the preview re-themes
+    await page.locator('[data-testid="example"]', { hasText: "Linear" }).click();
     await page.locator('[data-testid="send"]').click();
     await page.waitForFunction(
       (t) => {
@@ -78,8 +96,38 @@ describe("chromium e2e: the customize loop", () => {
       },
       THEMED,
     );
-    expect(close(await ctaBg(), THEMED), "themed indigo").toBe(true);
+    expect(close(await ctaBg(), THEMED), "themed Soft-SaaS primary").toBe(true);
     expect(close(await ctaBg(), BASE)).toBe(false);
+
+    // vibe-shift assertions: the dashboard now reflects the Soft-SaaS look
+    // (1) fontFamily contains "Geist" (was system-ui before theming)
+    await page.waitForFunction(() => {
+      const panel = document.querySelector('[data-testid="panel"]') ?? document.querySelector('[data-profile]') ?? document.querySelector('[data-testid="scope"]');
+      if (!panel) return false;
+      return getComputedStyle(panel).fontFamily.toLowerCase().includes("geist");
+    });
+    const panelFont = await page.evaluate(() => {
+      const el = document.querySelector('[data-testid="panel"]') ?? document.querySelector('[data-profile]') ?? document.querySelector('[data-testid="scope"]');
+      return el ? getComputedStyle(el).fontFamily : "";
+    });
+    expect(panelFont.toLowerCase(), "font is now Geist after Soft-SaaS").toContain("geist");
+
+    // (2) data-profile on the scope is "roomy" (Soft-SaaS: radius=12, shadow=soft → roomy)
+    const profile = await page.evaluate(() => {
+      const el = document.querySelector('[data-profile]');
+      return el?.getAttribute('data-profile') ?? null;
+    });
+    expect(profile, "profile=roomy after Soft-SaaS").toBe("roomy");
+
+    // (3) geometry shifted too: corner radius up (base 8 → 12) and padding up (comfortable → spacious).
+    // Wait for the radius transition to settle past the base value, then assert both grew.
+    await page.waitForFunction((base) => {
+      const s = getComputedStyle(document.querySelector('[data-testid="cta"]')!);
+      return Number.parseFloat(s.borderTopLeftRadius) > base + 1;
+    }, baseGeom.radius);
+    const themedGeom = await ctaGeom();
+    expect(themedGeom.radius, "corner radius increased").toBeGreaterThan(baseGeom.radius);
+    expect(themedGeom.pad, "padding increased (spacious density)").toBeGreaterThan(baseGeom.pad);
 
     // publish is disabled until acknowledged (the governance beat)
     expect(await page.locator('[data-testid="publish"]').isDisabled(), "publish disabled before acknowledge").toBe(true);
@@ -93,7 +141,8 @@ describe("chromium e2e: the customize loop", () => {
     expect(close(published, THEMED)).toBe(true);
 
     // a governance rejection AFTER publish → the panel shows it, the published preview is UNCHANGED
-    await page.locator('[data-testid="example"]', { hasText: "error state" }).click();
+    // Use the compact-density prompt (target_size_floor) — the new beat
+    await page.locator('[data-testid="example"]', { hasText: "compact" }).click();
     await page.locator('[data-testid="send"]').click();
     await page.waitForSelector('[data-testid="rejection"]');
     expect(close(await ctaBg(), published), "rejection did not disturb the published look").toBe(true);

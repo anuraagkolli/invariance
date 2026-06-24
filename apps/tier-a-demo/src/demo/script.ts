@@ -3,32 +3,59 @@ import type { GateClassification } from "./wiring.js";
 export type CannedTurn = { classification: GateClassification; spec: unknown };
 
 // The recorded narrative, keyed by the exact prompt the UI will send (clickable example prompts).
-// Success values are the Part-1-confirmed seeds; the rejection beats use values the spike proved fire.
+// Destination specs are engine-validated (verify ok in light+dark, profiles differ roomy/dense).
+// None set `mode` — the Terminal's dark look comes from the shared dark toggle, not the spec.
 export const SCRIPT: Record<string, CannedTurn> = {
-  "Make it feel like Acme — deep indigo, a little more rounded.": {
+  "Make it feel like Linear — a soft, modern SaaS.": {
     classification: "in_scope_styling",
-    spec: { colors: { primary: "oklch(0.35 0.12 270)" }, radius: 14 },
+    spec: {
+      colors: { primary: "oklch(0.52 0.20 277)", accent: "oklch(0.70 0.12 277)", neutral: "oklch(0.985 0.004 277)" },
+      radius: 12,
+      density: "spacious",
+      typography: { display: "geist-sans", body: "geist-sans", mono: "geist-mono" },
+      shadow: "soft",
+      borderWeight: "standard",
+    },
+  }, // whole-vibe jaw-drop; profile=roomy
+  "Soften the corners.": {
+    classification: "in_scope_styling",
+    spec: { radius: 16 },
   },
-  "Warmer, lighter surfaces.": {
+  "Switch to the geometric sans.": {
     classification: "in_scope_styling",
-    spec: { colors: { neutral: "oklch(0.95 0.03 60)", accent: "oklch(0.7 0.1 50)" } },
+    spec: { typography: { display: "geist-sans", body: "geist-sans" } },
+  },
+  "Tighten the density.": {
+    classification: "in_scope_styling",
+    spec: { density: "comfortable" },
   },
   "Make the surfaces a bold, saturated orange.": {
     classification: "in_scope_styling",
-    spec: { colors: { neutral: "oklch(0.45 0.18 30)" } }, // → contrast_floor on muted-fg (secondary beat)
+    spec: { colors: { neutral: "oklch(0.45 0.18 30)" } }, // → contrast_floor
+  },
+  "Cram everything in — make it compact.": {
+    classification: "in_scope_styling",
+    spec: { density: "compact" }, // → target_size_floor (the new beat)
   },
   "Recolor the error state to a friendly green.": {
     classification: "in_scope_styling",
-    spec: { colors: { destructive: "oklch(0.6 0.15 150)" } }, // → seed_locked (hero beat)
+    spec: { colors: { destructive: "oklch(0.6 0.15 150)" } }, // → seed_locked
   },
 };
 
-// Globex — a genuinely contrasting brand under the SAME manifest (emerald + sharp corners). Validated
-// AA through the real engine (test/globex-brand.test.ts), so the side-by-side proves "two brands, one
-// set of invariants," not "two themes we eyeballed."
+// Globex — a Bloomberg-style terminal brand under the SAME manifest. Validated AA through the real
+// engine (test/destinations.test.ts), so the side-by-side proves "two brands, one set of invariants"
+// — and that profile differs (dense vs roomy), not just hue.
 export const GLOBEX_SCRIPT: Record<string, CannedTurn> = {
-  "Match Globex — emerald, crisp corners.": {
+  "Make it a Bloomberg-style terminal.": {
     classification: "in_scope_styling",
-    spec: { colors: { primary: "oklch(0.5 0.13 160)", accent: "oklch(0.68 0.1 160)" }, radius: 2 },
-  },
+    spec: {
+      colors: { primary: "oklch(0.78 0.17 145)", accent: "oklch(0.80 0.14 85)", neutral: "oklch(0.96 0.006 240)" },
+      radius: 0,
+      density: "comfortable",
+      typography: { display: "ibm-plex-mono", body: "ibm-plex-mono", mono: "ibm-plex-mono" },
+      shadow: "flat",
+      borderWeight: "hairline",
+    },
+  }, // profile=dense
 };

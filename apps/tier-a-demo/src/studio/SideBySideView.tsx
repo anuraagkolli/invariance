@@ -5,8 +5,8 @@ import { TenantColumn } from "./TenantColumn.js";
 
 const ACME_AGENT = new CannedAgent(SCRIPT);
 const GLOBEX_AGENT = new CannedAgent(GLOBEX_SCRIPT);
-const ACME_BRAND = "Make it feel like Acme — deep indigo, a little more rounded.";
-const GLOBEX_BRAND = "Match Globex — emerald, crisp corners.";
+const ACME_BRAND = "Make it feel like Linear — a soft, modern SaaS.";
+const GLOBEX_BRAND = "Make it a Bloomberg-style terminal.";
 
 // The climax: two tenants, two independent sessions, ONE shared dark toggle (mode lives here, not per
 // session) — both brands customized from the SAME manifest, holding accessibility in both modes.

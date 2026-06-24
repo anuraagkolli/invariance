@@ -6,9 +6,9 @@ import { ackState, initialState, submitState } from "../src/studio/session-state
 
 const acmeAgent = new CannedAgent(SCRIPT);
 const globexAgent = new CannedAgent(GLOBEX_SCRIPT);
-const INDIGO = "Make it feel like Acme — deep indigo, a little more rounded.";
+const SOFT_SAAS = "Make it feel like Linear — a soft, modern SaaS.";
 const ERROR = "Recolor the error state to a friendly green.";
-const GLOBEX = "Match Globex — emerald, crisp corners.";
+const GLOBEX = "Make it a Bloomberg-style terminal.";
 const snap = (s: unknown) => JSON.stringify(s);
 
 // The demo-scale form of the product's "one tenant can't observe another" invariant: two sessions
@@ -19,13 +19,13 @@ describe("two-tenant session isolation", () => {
     const globex = initialState(DEMO_MANIFEST, "globex");
     const globexBefore = snap(globex);
 
-    acme = ackState(await submitState(acme, acmeAgent, INDIGO, DEMO_MANIFEST));
+    acme = ackState(await submitState(acme, acmeAgent, SOFT_SAAS, DEMO_MANIFEST));
     expect(acme.session.draft.colors?.primary).toBeDefined();
     expect(snap(globex)).toBe(globexBefore);
   });
 
   it("a REJECTED turn on Acme also leaves Globex byte-unchanged (and holds Acme's own preview)", async () => {
-    let acme = ackState(await submitState(initialState(DEMO_MANIFEST, "acme"), acmeAgent, INDIGO, DEMO_MANIFEST));
+    let acme = ackState(await submitState(initialState(DEMO_MANIFEST, "acme"), acmeAgent, SOFT_SAAS, DEMO_MANIFEST));
     const globex = ackState(await submitState(initialState(DEMO_MANIFEST, "globex"), globexAgent, GLOBEX, DEMO_MANIFEST));
     const globexBefore = snap(globex);
     const acmeAppliedBefore = acme.applied;
