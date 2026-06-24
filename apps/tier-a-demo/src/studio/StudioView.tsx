@@ -4,9 +4,11 @@ import { CannedAgent } from "../demo/canned-agent.js";
 import { DEMO_MANIFEST } from "../demo/manifest.js";
 import { SCRIPT } from "../demo/script.js";
 import { applyScoped } from "../preview/apply-scoped.js";
+import { structuralProfile } from "@invariance/theming/spec";
 import { OutcomePanel } from "./OutcomePanel.js";
 import { PromptBox } from "./PromptBox.js";
 import { SessionControls } from "./SessionControls.js";
+import { appliedSpec } from "./session-state.js";
 import { useDemoSession } from "./useDemoSession.js";
 
 const agent = new CannedAgent(SCRIPT);
@@ -21,9 +23,11 @@ export function StudioView() {
     if (wrapper.current) applyScoped(wrapper.current, demo.state.applied, demo.state.mode);
   }, [demo.state.applied, demo.state.mode]);
 
+  const s = appliedSpec(demo.state);
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", height: "100%", fontFamily: "system-ui" }}>
-      <aside style={{ display: "flex", flexDirection: "column", gap: 14, padding: 16, borderRight: "1px solid #e4e4e7", overflow: "auto" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", height: "100%" }}>
+      <aside style={{ display: "flex", flexDirection: "column", gap: 14, padding: 16, borderRight: "1px solid #e4e4e7", overflow: "auto", fontFamily: "system-ui" }}>
         <h2 style={{ margin: 0 }}>Customize — Acme</h2>
         <PromptBox examples={EXAMPLES} onSubmit={demo.submit} />
         {demo.state.notice && (
@@ -39,7 +43,11 @@ export function StudioView() {
       </aside>
       <main style={{ overflow: "auto" }}>
         <div ref={wrapper} data-testid="scope" style={{ background: "hsl(var(--background))", minHeight: "100%" }}>
-          <AnalyticsDashboard />
+          <AnalyticsDashboard
+            profile={structuralProfile(s)}
+            shadow={s.shadow ?? "soft"}
+            borderWeight={s.borderWeight ?? "hairline"}
+          />
         </div>
       </main>
     </div>

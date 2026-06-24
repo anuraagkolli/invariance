@@ -13,7 +13,7 @@ const GLOBEX_BRAND = "Match Globex — emerald, crisp corners.";
 export function SideBySideView() {
   const [mode, setMode] = useState<"light" | "dark">("light");
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "system-ui" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 8, borderBottom: "1px solid #e4e4e7" }}>
         <strong>Two tenants · one platform · one set of invariants</strong>
         <button data-testid="shared-toggle" onClick={() => setMode((m) => (m === "light" ? "dark" : "light"))} style={{ padding: "6px 12px" }}>

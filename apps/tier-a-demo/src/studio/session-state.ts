@@ -1,5 +1,6 @@
 import { type CandidateTheme, compile } from "@invariance/theming/compile";
 import type { AppManifest } from "@invariance/theming/manifest";
+import type { StyleSpec } from "@invariance/theming/spec";
 import { APP_DEFAULT_SPEC, type Agent, type Session, type TurnResult, acknowledge } from "../demo/wiring.js";
 import { runScriptedTurn } from "../demo/run-turn.js";
 
@@ -74,4 +75,12 @@ export function resetState(state: DemoState, manifest: AppManifest): DemoState {
 
 export function toggleModeState(state: DemoState): DemoState {
   return { ...state, mode: state.mode === "light" ? "dark" : "light" };
+}
+
+// Pure selector: returns the spec currently driving the preview.
+// Pre-acknowledge: if there's a pending diff, returns the pendingSpec (what the diff would promote).
+// Post-acknowledge / no pending diff: returns the session draft (the committed baseline).
+export function appliedSpec(state: DemoState): StyleSpec {
+  if (state.outcome?.kind === "diff") return state.outcome.pendingSpec;
+  return state.session.draft;
 }
