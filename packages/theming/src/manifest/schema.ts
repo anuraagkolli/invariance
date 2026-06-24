@@ -61,6 +61,12 @@ export const AppManifest = z
       chromaCap: z.number(),
       locks: z.array(z.string()), // (SeedId | RoleId)[]
       allowedFonts: z.array(z.object({ id: z.string(), stack: z.string() })),
+      // Optional accessibility floor on interactive target size (WCAG 2.2 §2.5.8). When set, verify
+      // rejects a theme whose resolved control min-dimension (controlContentPx + 2× the button padding
+      // token) drops below minTapTarget. Absent ⇒ the rule no-ops (existing fixtures unaffected).
+      legibilityFloor: z
+        .object({ minTapTarget: z.number(), controlContentPx: z.number().optional() })
+        .optional(),
     }),
   })
   .superRefine((m, ctx) => {

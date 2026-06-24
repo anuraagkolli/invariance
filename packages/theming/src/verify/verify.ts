@@ -20,7 +20,8 @@ export type VerifyFailureCode =
   | 'locked_drift'
   | 'chroma_cap'
   | 'mode_not_allowed'
-  | 'unsafe_value';
+  | 'unsafe_value'
+  | 'target_size_floor';
 
 export type VerifyFailure = {
   code: VerifyFailureCode;
@@ -223,6 +224,31 @@ export function verify(theme: CandidateTheme, manifest: AppManifest): Verdict {
     if (!allowed.includes(mode)) continue;
     const vars = mode === 'light' ? theme.light : theme.dark!;
     checkMode(manifest, graph, tier, mode, vars, failures);
+  }
+
+  // (6) target_size_floor — WCAG 2.2 §2.5.8 interactive target size. Spacing is mode-stable, so this
+  // is a once-per-theme check (light vars). The resolved control min-dimension is the button's content
+  // height plus its vertical padding on both sides; the padding rides the --space-xs token (the demo's
+  // interactive controls use --space-xs vertically — the floor and the canvas must agree on this token).
+  const floor = manifest.invariants.legibilityFloor;
+  if (floor) {
+    const padVar = varForRole(manifest, 'space-xs');
+    const padPx = padVar ? Number.parseFloat(theme.light[padVar] ?? '') : Number.NaN;
+    if (Number.isFinite(padPx)) {
+      const contentPx = floor.controlContentPx ?? 0;
+      const target = contentPx + 2 * padPx;
+      if (target < floor.minTapTarget) {
+        failures.push({
+          code: 'target_size_floor',
+          mode: 'light',
+          role: 'space-xs',
+          varName: padVar ?? undefined,
+          required: floor.minTapTarget,
+          actual: target,
+          message: `Interactive targets would be ${target}px (content ${contentPx}px + 2×${padPx}px padding), below the WCAG 2.2 §2.5.8 minimum target size of ${floor.minTapTarget}px. Try a more comfortable density.`,
+        });
+      }
+    }
   }
 
   return failures.length === 0 ? { ok: true } : { ok: false, failures };

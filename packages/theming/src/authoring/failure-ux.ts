@@ -100,6 +100,13 @@ function verifyTemplate(f: VerifyFailure): FailureMessage {
         detail: `In ${f.mode} mode, ${f.role ?? "a value"}${f.varName ? ` (${f.varName})` : ""} did not pass the safe-value check, so the change was rejected.`,
         suggestion: "Use a plain color or number value.",
       };
+    case "target_size_floor":
+      return {
+        code: f.code,
+        headline: "That would make the layout too cramped to stay accessible.",
+        detail: `At that density, interactive targets would be about ${f.actual ?? "?"}px — below the WCAG 2.2 §2.5.8 target-size minimum of ${f.required ?? "?"}px.`,
+        suggestion: "Try a more comfortable density so buttons stay easy to tap.",
+      };
   }
 }
 

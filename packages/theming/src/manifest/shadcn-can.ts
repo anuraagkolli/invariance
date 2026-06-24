@@ -132,5 +132,8 @@ export const SHADCN_CAN_V2: AppManifest = {
       { id: "serif", stack: "ui-serif, Georgia, serif" },
       { id: "mono", stack: "ui-monospace, monospace" },
     ],
+    // WCAG 2.2 §2.5.8 target-size floor. controlContentPx + 2×(--space-xs) must be ≥ 24px:
+    // compact xs=4 → 22px (REJECTED); comfortable xs=6 → 26px (ok); spacious xs=8 → 30px (ok).
+    legibilityFloor: { minTapTarget: 24, controlContentPx: 14 },
   },
 };
