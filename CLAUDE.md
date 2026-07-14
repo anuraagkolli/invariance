@@ -73,6 +73,17 @@ apps/console        # developer dashboard + the SINGLE invariants surface: manif
 
 ## Current state (2026-06-14)
 
+> **Tier-A recorded demo — BUILT (2026-06-23, branch `tier-a-demo`, unmerged).** `apps/tier-a-demo` is a
+> client-side Vite/React demo running the verified `@invariance/theming` engine in-browser for the
+> embedded-dashboard use case: a prompt ("Make it match Stripe") shifts a dashboard's *whole design
+> language* (color + radius + density→spacing + fonts + elevation + border + layout structure), then
+> refuses ungoverned changes (contrast floor, WCAG 2.2 §2.5.8 target-size floor, seed lock); climax is a
+> **Stripe vs Bloomberg** side-by-side. Engine gained an **append-only** `iv-roles-2`/`iv-profile-2`
+> (spacing scale + resolved font stacks) + a `target_size_floor` verifier rule; `iv-roles-1`/`SHADCN_CAN`
+> stayed byte-identical (117-test oracle passes, no regen). Governance-bearing axes are engine-emitted;
+> aesthetic axes (shadow/border/font-size) are canvas-applied. Run + narrative: **`apps/tier-a-demo/README.md`**.
+> The rest of this section describes the earlier legacy stack (Nebula/Console/Streamline).
+
 Showcase demo is **Nebula** (`apps/nebula`, Next.js + Tailwind); **Streamline** (`apps/demo`,
 Vite) is kept as the platform integration test (its `guardrails-catalog` e2e). The **Console**
 is the single developer surface for invariants: *data* invariants (manifest policies) are

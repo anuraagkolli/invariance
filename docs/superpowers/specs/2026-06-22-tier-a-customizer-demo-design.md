@@ -1,7 +1,8 @@
 # Tier-A Customizer — Recorded Sales Demo (Design)
 
 **Date:** 2026-06-22
-**Status:** Design (brainstormed, approved in chat — pending written-spec review).
+**Status:** ✅ **BUILT** (`apps/tier-a-demo`, branch `tier-a-demo`) — but the demo **evolved past this
+document**; see the as-built note below.
 **Depends on:** the verified `@invariance/theming` engine + control-plane theming stages
 (`docs/DESIGN.md`, `docs/verify/2026-06-21-engine-verification.md`).
 
@@ -12,6 +13,32 @@
 > sketched in Appendix A** — same seams, built once a prospect's needs say what's load-bearing.
 > Building that substrate now would be the enterprise-first trap: production plumbing before validated
 > demand.
+
+---
+
+## Status — AS BUILT (2026-06-23)
+
+This document is the **original design** (a lock-led, AA, color + radius demo). The built demo kept its
+spine — the magic loop, the governance-refusal hero, the two-tenant side-by-side — but **evolved in two
+big ways** in response to review. Treat the sections below as design history; the current source of
+truth for what exists and how to run it is **`apps/tier-a-demo/README.md`**.
+
+1. **"Whole different vibe," not a recolor.** A single prompt now shifts the *entire design language* —
+   color + radius **+ density-driven spacing + typography (real fonts) + elevation + border + layout
+   structure**. This required an **append-only engine v2**: `iv-roles-2` / `iv-profile-2` (a spacing
+   scale + resolved font stacks) and a new `target_size_floor` verifier rule (WCAG 2.2 §2.5.8, 24px) —
+   with `iv-roles-1` / `SHADCN_CAN` left byte-identical (the 117-test oracle still passes, no regen).
+   Governance-bearing axes (spacing, fonts) are engine-emitted; purely aesthetic axes (shadow, border,
+   font-size) are canvas-applied. See [[emit-governed-axes-only]] / `docs/DESIGN.md` scope.
+2. **Named client brands for a concrete use case.** The two tenants are **Stripe** (violet, Geist,
+   rounded, roomy, sidebar) vs **Bloomberg** (amber + green, IBM Plex Mono, sharp, dense, top-nav
+   terminal) — framing the *embedded-analytics-vendor* pitch ("your client wants the dashboard to
+   match their brand"). The old abstract "Soft-SaaS / Terminal" naming and the §2 beat table's exact
+   prompts are superseded by the built `demo/script.ts` (7 Studio prompts + 3 governance refusals:
+   `contrast_floor`, `target_size_floor`, `seed_locked`).
+
+Everything else in this spec (the lock-led-AA mechanism spike, the pure-var canvas, the scoped in-page
+applier, chromium as the visual-truth gate, page-held session, the two-plane framing) held and shipped.
 
 ---
 
