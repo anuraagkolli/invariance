@@ -114,12 +114,12 @@ describe("applyInit", () => {
     ]);
 
     const layout = await readFile(join(root, "app", "layout.tsx"), "utf8");
-    expect(layout).toContain('import { headers } from "next/headers"');
+    expect(layout).toContain('import { headers } from "next/headers";');
     expect(layout).toContain('import { renderThemeCss, themeFromCookieHeader } from "@invariance/design"');
     expect(layout).toContain('import { invarianceConfig } from "../invariance.config"');
     expect(layout).toContain("export default async function RootLayout");
-    expect(layout).toContain('const cookieHeader = (await headers()).get("cookie")');
-    expect(layout).toMatch(/<html lang="en">\n\s*<head>\{ssrCss \? <style id="inv-ssr-theme"/);
+    expect(layout).toContain('const cookieHeader = (await headers()).get("cookie");');
+    expect(layout).toMatch(/\n    <html lang="en">\n      <head>\{ssrCss \? <style id="inv-ssr-theme"/);
     // The SSR lines sit inside the default export, before its return.
     const fn = layout.indexOf("export default async function");
     expect(layout.indexOf("const ssrCss")).toBeGreaterThan(fn);
@@ -141,7 +141,7 @@ describe("applyInit", () => {
     expect(report.edits.map((e) => e.file)).toContain(join(root, "src", "invariance.config.ts"));
 
     const layout = await readFile(join(root, "src", "app", "layout.tsx"), "utf8");
-    expect(layout).toContain("import { invarianceConfig } from '../invariance.config'");
+    expect(layout).toContain("import { invarianceConfig } from '../invariance.config'\n");
     expect(layout).toContain("function Helper() {\n  return (<span />)");
     expect(layout).toMatch(/<link rel="icon" href="\/favicon.ico" \/>\n\s+\{ssrCss \? <style id="inv-ssr-theme"[^\n]*\n\s+<\/head>/);
     expect(layout.match(/export default async function/g)).toHaveLength(1);

@@ -125,13 +125,14 @@ export async function injectSsrInlining(layoutFile: string, configFile: string):
   if (!hasHead && !htmlOpen) return { status: "skipped", reason: "root layout renders no <html>/<head>" };
 
   const q = /^import[^\n]*'/m.test(original) ? "'" : '"';
+  const semi = /^import[^\n]*;[ \t]*$/m.test(original) ? ";" : "";
   let configSpec = relative(dirname(layoutFile), configFile).split(sep).join("/").replace(/\.(ts|js)$/, "");
   if (!configSpec.startsWith(".")) configSpec = `./${configSpec}`;
 
   let src = original;
-  src = addImportAfterLast(src, `import { headers } from ${q}next/headers${q}`);
-  src = addImportAfterLast(src, `import { renderThemeCss, themeFromCookieHeader } from ${q}@invariance/design${q}`);
-  src = addImportAfterLast(src, `import { invarianceConfig } from ${q}${configSpec}${q}`);
+  src = addImportAfterLast(src, `import { headers } from ${q}next/headers${q}${semi}`);
+  src = addImportAfterLast(src, `import { renderThemeCss, themeFromCookieHeader } from ${q}@invariance/design${q}${semi}`);
+  src = addImportAfterLast(src, `import { invarianceConfig } from ${q}${configSpec}${q}${semi}`);
 
   const fnIdx = src.search(/export\s+default\s+(async\s+)?function\b/);
   const head = src.slice(0, fnIdx);
@@ -140,8 +141,8 @@ export async function injectSsrInlining(layoutFile: string, configFile: string):
     returnRe,
     (_m, nl: string) =>
       `${nl}// Inline the user's saved theme so first paint is themed (no flash).` +
-      `${nl}const cookieHeader = (await headers()).get(${q}cookie${q})` +
-      `${nl}const ssrCss = renderThemeCss(themeFromCookieHeader(cookieHeader, invarianceConfig), invarianceConfig)` +
+      `${nl}const cookieHeader = (await headers()).get(${q}cookie${q})${semi}` +
+      `${nl}const ssrCss = renderThemeCss(themeFromCookieHeader(cookieHeader, invarianceConfig), invarianceConfig)${semi}` +
       `\n${nl}return (`,
   );
   src = head + tail;
@@ -150,7 +151,7 @@ export async function injectSsrInlining(layoutFile: string, configFile: string):
   if (hasHead) {
     src = src.replace(/([ \t]*)<\/head>/, (_m, indent: string) => `${indent}  ${styleTag}\n${indent}</head>`);
   } else {
-    src = src.replace(/<html\b[^>]*>/, (open) => `${open}\n        <head>${styleTag}</head>`);
+    src = src.replace(/([ \t]*)(<html\b[^>]*>)/, (_m, indent: string, open: string) => `${indent}${open}\n${indent}  <head>${styleTag}</head>`);
   }
 
   await writeFile(layoutFile, src);
