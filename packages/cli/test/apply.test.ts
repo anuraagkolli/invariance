@@ -195,6 +195,8 @@ describe("review fixes", () => {
     expect(await cfg("export const invarianceConfig = { slots: { app: 'x' }, app: 'real' }\n")).toBe("real");
     expect(await cfg("export const invarianceConfig = {\n  // } kept for docs\n  /* { */ hint: '}',\n  app: 'acme' as const,\n}\n")).toBe("acme");
     expect(await cfg("export const invarianceConfig = { app: `acme-${env}` }\n")).toBeNull();
+    expect(await cfg(`export const invarianceConfig = { hint: "{ app: 'fake',", app: 'real' }\n`)).toBe("real");
+    expect(await cfg(`export const invarianceConfig = { "hint": 'x', "app": 'quoted' }\n`)).toBe("quoted");
     expect(await cfg("export const invarianceConfig = { app: process.env.APP! }\n")).toBeNull();
     expect(await cfg("export default { app: 'x' }\n")).toBeNull();
   });

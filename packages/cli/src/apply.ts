@@ -118,11 +118,12 @@ export function readConfigAppId(file: string): string | null {
   const src = readFileSync(file, "utf8");
   const decl = /export\s+const\s+invarianceConfig\b[^=]*=\s*\{/.exec(src);
   if (!decl) return null;
-  // Collect the object's own (depth-1) text. Comments are dropped and string
-  // literals copied whole, so braces inside either never affect depth, and
-  // nested `app` keys can't match.
+  // Collect the object's own (depth-1) text. Comments are dropped and each
+  // string literal becomes an opaque `\0<n>\0` token, so neither braces nor
+  // `app:`-looking text inside them can match, and nested keys stay out.
   let depth = 1;
   let own = "";
+  const literals: string[] = [];
   let i = decl.index + decl[0].length;
   while (i < src.length && depth > 0) {
     const c = src[i]!;
@@ -143,7 +144,7 @@ export function readConfigAppId(file: string): string | null {
       let j = i + 1;
       while (j < src.length && src[j] !== c) j += src[j] === "\\" ? 2 : 1;
       if (j >= src.length) return null;
-      if (depth === 1) own += src.slice(i, j + 1);
+      if (depth === 1) own += `\0${literals.push(src.slice(i, j + 1)) - 1}\0`;
       i = j + 1;
       continue;
     }
@@ -153,8 +154,13 @@ export function readConfigAppId(file: string): string | null {
     i++;
   }
   if (depth !== 0) return null;
-  const m = /(?:^|[,\s])(["']?)app\1\s*:\s*(["'`])([^"'`$\\]+)\2(?:\s+as\s+const)?\s*(?:,|$)/.exec(own);
-  return m ? m[3]! : null;
+  const tok = (n: string | undefined): string => (n === undefined ? "" : literals[Number(n)]!);
+  for (const m of own.matchAll(/(?:^|,)\s*(?:app|\0(\d+)\0)\s*:\s*\0(\d+)\0(?:\s+as\s+const)?\s*(?=,|$)/g)) {
+    if (m[1] !== undefined && !/^(["'])app\1$/.test(tok(m[1]))) continue;
+    const value = /^(["'`])([^"'`$\\]+)\1$/.exec(tok(m[2]));
+    return value ? value[2]! : null;
+  }
+  return null;
 }
 
 /** Emit a minimal `@invariance/design` config the SSR helpers read (app id = cookie name). */
