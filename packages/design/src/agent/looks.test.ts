@@ -3,7 +3,7 @@ import { buildLookContext, parseLooks, applyLookPicks } from './looks'
 import { applyLayoutPreset } from './layout-profile'
 import { applyPreview } from './pipeline-io'
 import { createThemeStore } from '../context/theme-store'
-import { resolveVariant } from '../runtime/resolve-overrides'
+import { resolveVariant, allowedPageVariants } from '../runtime/resolve-overrides'
 import { verifyV2 } from '../verify/compiled-tests'
 import { THEME_PACKS } from '../registries/theme-packs'
 import type { InvarianceConfig, ThemeJsonV2 } from '../config/types'
@@ -62,6 +62,13 @@ describe('applyLookPicks + resolveVariant', () => {
     applyLookPicks(c, [{ axis: 'card', id: 'polaroid', section: 'row-trending' }], ctx)
     expect(resolveVariant(c, config, 'card', { page: '/', slots: ['row-trending'] })).toBe('polaroid')
     expect(resolveVariant(c, config, 'card', { page: '/', slots: ['row-new'] })).toBe('caption')
+    expect(c.page_variants).toEqual({ '/': { 'card@row-trending': 'polaroid' } })
+  })
+  it('a page-wide pick beats app-wide section picks on that page', () => {
+    const c = blank({ variants: { 'card@row-trending': 'polaroid' } })
+    applyLookPicks(c, [{ axis: 'card', id: 'caption', thisPageOnly: true }], ctx)
+    expect(resolveVariant(c, config, 'card', { page: '/', slots: ['row-trending'] })).toBe('caption')
+    expect(resolveVariant(c, config, 'card', { page: '/series', slots: ['row-trending'] })).toBe('polaroid')
   })
   it('a page-only pick wins on that page and nowhere else', () => {
     const c = blank()
@@ -88,6 +95,12 @@ describe('verifyV2 variantsAllowed with scopes', () => {
     expect(check.passed).toBe(false)
     expect(check.message).toContain('card@row')
     expect(check.message).toContain('/locked: page is locked')
+  })
+})
+
+describe('allowedPageVariants', () => {
+  it('drops picks for a page that has since been locked', () => {
+    expect(allowedPageVariants({ '/locked': { card: 'poster' }, '/': { card: 'caption' } }, config)).toEqual({ '/': { card: 'caption' } })
   })
 })
 

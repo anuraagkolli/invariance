@@ -63,9 +63,9 @@ export interface VariantScope {
   slots?: readonly string[]
 }
 
-// Component variant for an axis. The most specific pick wins: `axis@slot` for
-// each enclosing slot (innermost first), then the bare axis; at each key the
-// page's picks beat the app-wide ones. A pick counts only when the developer
+// Component variant for an axis. The page's picks beat the app-wide ones; within
+// each, `axis@slot` for the enclosing slots (innermost first) beats the bare
+// axis. A pick counts only when the developer
 // allows it (`frontend.variants[axis].options`); otherwise the axis default,
 // then the caller's fallback. An axis the config doesn't declare can't vary.
 export function resolveVariant(
@@ -79,8 +79,8 @@ export function resolveVariant(
   if (theme && isV2Theme(theme)) {
     const pageVariants = scope?.page !== undefined ? theme.page_variants?.[scope.page] : undefined
     const keys = [...(scope?.slots ?? []).map((slot) => `${axis}@${slot}`), axis]
-    for (const key of keys) {
-      for (const source of [pageVariants, theme.variants]) {
+    for (const source of [pageVariants, theme.variants]) {
+      for (const key of keys) {
         const picked = source?.[key]
         if (picked !== undefined && allowed.options.includes(picked)) return picked
       }
@@ -103,7 +103,8 @@ export function allowedVariants(
   return Object.keys(out).length > 0 ? out : undefined
 }
 
-// allowedVariants for every page of `page_variants`; pages left empty are dropped.
+// allowedVariants for every page of `page_variants`; locked pages (level 0)
+// and pages left empty are dropped.
 export function allowedPageVariants(
   pageVariants: Record<string, Record<string, string>> | undefined,
   config: InvarianceConfig,
@@ -111,6 +112,8 @@ export function allowedPageVariants(
   if (!pageVariants) return undefined
   const out: Record<string, Record<string, string>> = {}
   for (const [page, variants] of Object.entries(pageVariants)) {
+    const level = config.frontend?.pages?.[page]?.level
+    if (level !== undefined && level < 1) continue
     const kept = allowedVariants(variants, config)
     if (kept) out[page] = kept
   }

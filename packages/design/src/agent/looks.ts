@@ -72,19 +72,18 @@ export function parseLooks(raw: unknown, ctx: LookContext | undefined): { ok: tr
 const withoutAxis = (v: VariantsSection | undefined, axis: string): VariantsSection =>
   Object.fromEntries(Object.entries(v ?? {}).filter(([k]) => variantAxis(k) !== axis))
 
-// Write the Designer's picks onto the candidate. A section pick sets only
-// `axis@section`; an app-wide or page-wide pick for an axis replaces the
+// Write the Designer's picks onto the candidate. Sections are slots on the
+// current page, so a section pick is stored with that page's picks and sets
+// only `axis@section`; an app-wide or page-wide pick for an axis replaces the
 // narrower picks for that axis it covers, so "all cards poster" really is all.
 export function applyLookPicks(candidate: ThemeJsonV2, picks: LookPick[], ctx: LookContext): void {
   let variants: VariantsSection = { ...(candidate.variants ?? {}) }
   const pageVariants: Record<string, VariantsSection> = { ...(candidate.page_variants ?? {}) }
   for (const pick of picks) {
     const key = pick.section ? `${pick.axis}@${pick.section}` : pick.axis
-    if (pick.thisPageOnly) {
+    if (pick.section || pick.thisPageOnly) {
       const onPage = pick.section ? { ...(pageVariants[ctx.page] ?? {}) } : withoutAxis(pageVariants[ctx.page], pick.axis)
       pageVariants[ctx.page] = { ...onPage, [key]: pick.id }
-    } else if (pick.section) {
-      variants[key] = pick.id
     } else {
       variants = { ...withoutAxis(variants, pick.axis), [key]: pick.id }
       for (const page of Object.keys(pageVariants)) pageVariants[page] = withoutAxis(pageVariants[page], pick.axis)
