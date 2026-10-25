@@ -142,6 +142,7 @@ function mergeSectionsIntoV2(current: ThemeJsonV2, mutation: SectionsMutation): 
   if (layout !== undefined) candidate.layout = layout
   const components = merged(current.components, mutation.components)
   if (components !== undefined) candidate.components = components
+  if (current.variants !== undefined) candidate.variants = current.variants
   return candidate
 }
 

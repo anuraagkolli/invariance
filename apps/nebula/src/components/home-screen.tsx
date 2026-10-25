@@ -57,33 +57,15 @@ const ROW_META: Record<string, { description: string; aliases: string[] }> = {
 // name the layout references. The m.slot wrapper is Row's root element and the
 // heading m.text rides inside it (the heading is part of the row, not a
 // separately ordered section).
-function Row({ name, row }: { name: string; row: TitleRow }) {
+function Row({ name, row, index }: { name: string; row: TitleRow; index: number }) {
   const meta = ROW_META[row.slot]!
   const shape = shapeForRow(row.id)
+  // Everything the row needs rides in slotProps so an F4-swapped library row
+  // (GridRow, ListRow, SpotlightRow…) renders the same data AND its heading.
+  const rowProps = { titles: row.titles, shape, heading: row.heading, headingName: `heading-${row.id}`, index }
   return (
-    <m.slot
-      name={name}
-      level={4}
-      description={meta.description}
-      aliases={meta.aliases}
-      // Forward titles + shape as slotProps so the F4 branch can pass them to
-      // whatever library component is swapped in (e.g. GridRow). Without this,
-      // the swapped component receives no data and renders an empty container.
-      props={{ titles: row.titles, shape }}
-    >
-      <section className="flex flex-col gap-3">
-        <h2
-          className="font-display text-lg text-textPrimary sm:text-xl"
-          style={{
-            textTransform: 'var(--inv-display-transform)' as React.CSSProperties['textTransform'],
-            letterSpacing: 'var(--inv-display-tracking)',
-            fontWeight: 'var(--inv-display-weight)' as React.CSSProperties['fontWeight'],
-          }}
-        >
-          <m.text name={`heading-${row.id}`}>{row.heading}</m.text>
-        </h2>
-        <CarouselRow titles={row.titles} shape={shape} />
-      </section>
+    <m.slot name={name} level={4} description={meta.description} aliases={meta.aliases} props={rowProps}>
+      <CarouselRow {...rowProps} />
     </m.slot>
   )
 }
@@ -140,8 +122,8 @@ export function HomeScreen() {
         {/* Only the carousel rows are reorderable (F3). Hero/header/sidebar/
             footer stay outside m.sections — not reorderable. */}
         <m.sections>
-          {rows.map((row) => (
-            <Row key={row.id} name={row.slot} row={row} />
+          {rows.map((row, i) => (
+            <Row key={row.id} name={row.slot} row={row} index={i} />
           ))}
         </m.sections>
       </div>

@@ -6,6 +6,7 @@ import { compileTheme } from '../compiler/compile'
 import { verifyV2 } from '../verify/compiled-tests'
 import { ThemeJsonV2Schema } from '../config/schema'
 import type { AnyThemeJson, InvarianceConfig, ThemeJsonV2 } from '../config/types'
+import { allowedVariants } from './resolve-overrides'
 
 // reconcile-theme — recompile-keep-vibe when invariants change.
 //
@@ -37,6 +38,16 @@ export type ReconcileResult =
 export function reconcileStoredTheme(raw: AnyThemeJson, config: InvarianceConfig): ReconcileResult {
   const prepared = prepareStoredTheme(raw, config)
   if (prepared.ok) return { action: 'keep', theme: prepared.theme }
+
+  // A variant pick the config no longer allows shouldn't cost the user every
+  // other edit: strip just the disallowed picks and re-verify before anything else.
+  const pruned = pruneDisallowedVariants(raw, config)
+  if (pruned) {
+    const retry = prepareStoredTheme(pruned, config)
+    if (retry.ok) {
+      return { action: 'recompiled', theme: pruned, reason: 'Removed component looks the app no longer allows.' }
+    }
+  }
 
   // Failed verification. Recover the upgraded v2 to inspect provenance.
   const { theme: upgraded } = upgradeThemeJson(raw)
@@ -77,6 +88,9 @@ export function reconcileStoredTheme(raw: AnyThemeJson, config: InvarianceConfig
     if (upgraded.content !== undefined) candidate.content = upgraded.content
     if (upgraded.layout !== undefined) candidate.layout = upgraded.layout
     if (upgraded.components !== undefined) candidate.components = upgraded.components
+    // Drop only the variants the current config no longer allows; keep the rest.
+    const variants = allowedVariants(upgraded.variants, config)
+    if (variants) candidate.variants = variants
   }
 
   // Re-verify and schema-check the recompiled candidate; if it still fails, drop.
@@ -91,4 +105,13 @@ export function reconcileStoredTheme(raw: AnyThemeJson, config: InvarianceConfig
     ? `Recompiled to respect locked ${lockedKeys.join(', ')} — the vibe was kept.`
     : 'Recompiled to satisfy updated design invariants — the vibe was kept.'
   return { action: 'recompiled', theme: candidate, reason }
+}
+
+function pruneDisallowedVariants(raw: AnyThemeJson, config: InvarianceConfig): ThemeJsonV2 | null {
+  const { theme: upgraded } = upgradeThemeJson(raw)
+  if (!isV2Theme(upgraded) || upgraded.variants === undefined) return null
+  const variants = allowedVariants(upgraded.variants, config)
+  if (variants && Object.keys(variants).length === Object.keys(upgraded.variants).length) return null
+  const { variants: _dropped, ...rest } = upgraded
+  return variants ? { ...rest, variants } : rest
 }

@@ -3,7 +3,7 @@ const path = require('path')
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Workspace packages export TS source -> Next must transpile them.
-  transpilePackages: ['@invariance/design', '@invariance/server'],
+  transpilePackages: ['@invariance/design', '@invariance/kit', '@invariance/server'],
   output: 'standalone',
   experimental: {
     // js-yaml: pulled by @invariance/design (server). quickjs-emscripten: the

@@ -271,6 +271,7 @@ export async function runSlotEdit(input: SlotEditInput): Promise<SlotEditOutcome
   if (input.currentV2.content !== undefined) candidate.content = input.currentV2.content
   if (input.currentV2.layout !== undefined) candidate.layout = input.currentV2.layout
   if (input.currentV2.components !== undefined) candidate.components = input.currentV2.components
+  if (input.currentV2.variants !== undefined) candidate.variants = input.currentV2.variants
 
   const verification = verifyV2(candidate, input.config, input.constraints)
   if (!verification.passed) {

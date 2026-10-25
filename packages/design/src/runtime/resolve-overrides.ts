@@ -1,4 +1,4 @@
-import type { AnyThemeJson, LayoutPage } from '../config/types'
+import type { AnyThemeJson, InvarianceConfig, LayoutPage } from '../config/types'
 import { isV2Theme } from '../config/types'
 
 // Pure resolution helpers for render-driven F2 (content) and F3 (layout).
@@ -49,4 +49,33 @@ export function orderSectionKeys(keys: string[], layout: LayoutPage | undefined)
   }
 
   return ordered.filter((k) => !hidden.has(k))
+}
+
+// Component variant for an axis. The theme's pick wins only when the developer
+// allows it (`frontend.variants[axis].options`); otherwise the axis default,
+// then the caller's fallback. An axis the config doesn't declare can't vary.
+export function resolveVariant(
+  theme: AnyThemeJson | null,
+  config: InvarianceConfig,
+  axis: string,
+): string | undefined {
+  const allowed = config.frontend?.variants?.[axis]
+  if (!allowed) return undefined
+  const picked = theme && isV2Theme(theme) ? theme.variants?.[axis] : undefined
+  if (picked !== undefined && allowed.options.includes(picked)) return picked
+  return allowed.default
+}
+
+// Keep only the theme variants the config allows (used when re-saving a stored
+// theme under a config that has since narrowed its variant options).
+export function allowedVariants(
+  variants: Record<string, string> | undefined,
+  config: InvarianceConfig,
+): Record<string, string> | undefined {
+  if (!variants) return undefined
+  const out: Record<string, string> = {}
+  for (const [axis, id] of Object.entries(variants)) {
+    if (config.frontend?.variants?.[axis]?.options.includes(id)) out[axis] = id
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
