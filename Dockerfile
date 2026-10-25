@@ -1,44 +1,29 @@
-# Nebula demo (apps/demo) — single-instance deploy image for Render / Railway /
-# Fly / any Docker host. The demo's /api stores are file-backed, so it needs a
-# real persistent filesystem (mount a volume at /data), NOT serverless lambdas.
-#
-# The default LLM is an open-source model behind /api/llm; point LLM_BASE_URL
-# (runtime env) at an Ollama/OpenAI-compatible endpoint reachable FROM the
-# container:
-#
-#   docker build -t nebula-demo .
-#   docker run -p 4321:4321 -e LLM_BASE_URL=http://host.docker.internal:11434/v1 \
-#     -v nebula-data:/data nebula-demo
-#
-# Claude instead: the provider flag is inlined into the client bundle at BUILD
-# time, the key is runtime —
-#   docker build --build-arg NEXT_PUBLIC_LLM_PROVIDER=anthropic -t nebula-demo .
-#   docker run ... -e ANTHROPIC_API_KEY=sk-... nebula-demo
+# Control-plane image. Build from the repo root (workspace context):
+#   docker build -t invariance-control-plane .
+# Workspace packages ship TS source directly (no build step), so the image
+# runs src/main.ts under tsx — same as `pnpm dev`, minus the dev deps.
+FROM node:22-slim
 
-FROM node:20-alpine AS builder
-RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
-ARG NEXT_PUBLIC_LLM_PROVIDER=
-ENV NEXT_PUBLIC_LLM_PROVIDER=$NEXT_PUBLIC_LLM_PROVIDER
 WORKDIR /repo
-COPY . .
-RUN pnpm install --frozen-lockfile
-RUN pnpm build
+RUN corepack enable
 
-FROM node:20-alpine AS runner
-WORKDIR /app
+# Manifests first so dependency layers cache across source-only changes.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/control-plane/package.json apps/control-plane/
+COPY packages/schema/package.json packages/schema/
+RUN pnpm install --frozen-lockfile --prod --filter @invariance/control-plane...
+
+COPY packages/schema packages/schema
+COPY apps/control-plane apps/control-plane
+
 ENV NODE_ENV=production
-ENV PORT=4321
-ENV HOSTNAME=0.0.0.0
-# File-backed stores (theme history, dev-config) live here — mount a volume.
-ENV INVARIANCE_DATA_DIR=/data
+ENV PORT=4400
+EXPOSE 4400
 
-# Standalone output is traced from the monorepo root, so it carries the
-# repo-relative layout: the server entry is apps/demo/server.js.
-COPY --from=builder /repo/apps/demo/.next/standalone ./
-COPY --from=builder /repo/apps/demo/.next/static ./apps/demo/.next/static
-COPY --from=builder /repo/apps/demo/public ./apps/demo/public
-
-RUN mkdir -p /data && chown -R node:node /data /app
-USER node
-EXPOSE 4321
-CMD ["node", "apps/demo/server.js"]
+# Config comes from the environment:
+#   DATABASE_URL                          postgres registry (omit -> in-memory)
+#   INVARIANCE_SIGNING_{PRIVATE_KEY,PUBLIC_KEY,KEY_ID}   persistent keypair
+#   INVARIANCE_LLM_BASE_URL / _MODEL / _API_KEY          OpenAI-compat authoring
+#   ANTHROPIC_API_KEY                                    or Anthropic authoring
+#   INVARIANCE_AUTHORING_MAX_ATTEMPTS                    repair-loop budget
+CMD ["pnpm", "--filter", "@invariance/control-plane", "start"]

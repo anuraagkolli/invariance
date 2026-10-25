@@ -5,20 +5,7 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
-    "dev": {
-      "persistent": true,
-      "cache": false
-    },
-    "test": {
-      "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
-    },
-    "lint": {
-      "outputs": []
-    },
-    "validate": {
-      "dependsOn": ["build"],
-      "outputs": []
-    }
+    "test": { "dependsOn": ["^build"] },
+    "typecheck": { "dependsOn": ["^build"] }
   }
 }

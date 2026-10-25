@@ -1,0 +1,39 @@
+# Render Blueprint for the control plane (free plan).
+# Connect the repo at https://dashboard.render.com -> New -> Blueprint, or:
+#   render blueprint launch
+# Secrets (sync: false) are prompted for in the dashboard on first deploy.
+#
+# Free-plan caveat: the service spins down after ~15 idle minutes and cold
+# starts take ~30-60s. Clients fail open to base behavior on pointer-fetch
+# timeouts, so the demo app stays usable — customization just waits a beat.
+services:
+  - type: web
+    name: invariance-control-plane
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - key: PORT
+        value: "4400"
+      - key: INVARIANCE_AUTHORING_MAX_ATTEMPTS
+        value: "5"
+      # Neon connection string (use the pooled URL).
+      - key: DATABASE_URL
+        sync: false
+      # Persistent signing keypair; see docs/DEPLOY.md to generate one.
+      - key: INVARIANCE_SIGNING_PRIVATE_KEY
+        sync: false
+      - key: INVARIANCE_SIGNING_PUBLIC_KEY
+        sync: false
+      - key: INVARIANCE_SIGNING_KEY_ID
+        sync: false
+      # Authoring backend: OpenAI-compatible endpoint (tunneled local Ollama,
+      # OpenRouter, ...). Leave unset to disable natural-language authoring.
+      - key: INVARIANCE_LLM_BASE_URL
+        sync: false
+      - key: INVARIANCE_LLM_MODEL
+        sync: false
+      - key: INVARIANCE_LLM_API_KEY
+        sync: false
