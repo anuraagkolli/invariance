@@ -120,3 +120,29 @@ describe('reconcileStoredTheme', () => {
     }
   })
 })
+
+describe('reconcileStoredTheme — variants', () => {
+  const variantConfig: InvarianceConfig = {
+    app: 'test',
+    frontend: { variants: { card: { options: ['poster', 'polaroid'], default: 'poster' } } },
+  }
+
+  it('strips only disallowed variants from a theme without styleSpec instead of dropping it', () => {
+    const raw: ThemeJsonV2 = {
+      version: 2,
+      base_app_version: 'v1',
+      theme: { slots: { '--x': '#ffffff' } },
+      variants: { card: 'polaroid', hero: 'split' },
+    }
+    const result = reconcileStoredTheme(raw, variantConfig)
+    expect(result.action).toBe('recompiled')
+    if (result.action !== 'recompiled') return
+    expect(result.theme.variants).toEqual({ card: 'polaroid' })
+    expect(result.theme.theme?.slots).toEqual({ '--x': '#ffffff' })
+  })
+
+  it('keeps a theme whose variants are all allowed', () => {
+    const raw: ThemeJsonV2 = { version: 2, base_app_version: 'v1', variants: { card: 'polaroid' } }
+    expect(reconcileStoredTheme(raw, variantConfig).action).toBe('keep')
+  })
+})

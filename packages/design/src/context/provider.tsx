@@ -159,7 +159,10 @@ export function InvarianceProvider({
   // applied theme against the new config so the vibe is kept while the new
   // invariants win — live, no reload. Keyed on a canonical hash of the DERIVED
   // constraints so it ignores unrelated config churn (e.g. page-level edits).
-  const constraintsHash = useMemo(() => canonicalStringify(deriveConstraints(config)), [config])
+  const constraintsHash = useMemo(
+    () => canonicalStringify({ constraints: deriveConstraints(config), variants: config.frontend?.variants ?? null }),
+    [config],
+  )
   useEffect(() => {
     const current = themeStore.getTheme()
     if (!current) return // nothing applied yet (mount: async load hasn't run) — no-op

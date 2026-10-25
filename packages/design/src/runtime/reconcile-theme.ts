@@ -39,6 +39,16 @@ export function reconcileStoredTheme(raw: AnyThemeJson, config: InvarianceConfig
   const prepared = prepareStoredTheme(raw, config)
   if (prepared.ok) return { action: 'keep', theme: prepared.theme }
 
+  // A variant pick the config no longer allows shouldn't cost the user every
+  // other edit: strip just the disallowed picks and re-verify before anything else.
+  const pruned = pruneDisallowedVariants(raw, config)
+  if (pruned) {
+    const retry = prepareStoredTheme(pruned, config)
+    if (retry.ok) {
+      return { action: 'recompiled', theme: pruned, reason: 'Removed component looks the app no longer allows.' }
+    }
+  }
+
   // Failed verification. Recover the upgraded v2 to inspect provenance.
   const { theme: upgraded } = upgradeThemeJson(raw)
   const styleSpec = isV2Theme(upgraded) ? upgraded.theme?.styleSpec : undefined
@@ -95,4 +105,13 @@ export function reconcileStoredTheme(raw: AnyThemeJson, config: InvarianceConfig
     ? `Recompiled to respect locked ${lockedKeys.join(', ')} — the vibe was kept.`
     : 'Recompiled to satisfy updated design invariants — the vibe was kept.'
   return { action: 'recompiled', theme: candidate, reason }
+}
+
+function pruneDisallowedVariants(raw: AnyThemeJson, config: InvarianceConfig): ThemeJsonV2 | null {
+  const { theme: upgraded } = upgradeThemeJson(raw)
+  if (!isV2Theme(upgraded) || upgraded.variants === undefined) return null
+  const variants = allowedVariants(upgraded.variants, config)
+  if (variants && Object.keys(variants).length === Object.keys(upgraded.variants).length) return null
+  const { variants: _dropped, ...rest } = upgraded
+  return variants ? { ...rest, variants } : rest
 }

@@ -146,7 +146,7 @@ export function SpotlightRow({ titles = [], shape = 'standard', ...frame }: RowC
           </button>
         </Reveal>
         <div className={`grid gap-sm ${shape === 'wide' ? 'grid-cols-2' : 'grid-cols-3 sm:grid-cols-4'} content-start`}>
-          {rest.slice(0, shape === 'wide' ? 4 : 8).map((title, i) => (
+          {rest.map((title, i) => (
             <Reveal key={title.id} index={i + 1}>
               <TitleCard title={title} shape={shape} />
             </Reveal>
