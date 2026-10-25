@@ -10,8 +10,8 @@ import { useSearch } from './search-context'
 const NAV_PRIMARY = [
   { label: 'Home', icon: '◇', href: '/', match: '/' },
   { label: 'Search', icon: '⌕', action: 'search' as const },
-  { label: 'My List', icon: '+', href: '#' },
-  { label: 'Movies', icon: '▦', href: '#' },
+  { label: 'My List', icon: '+', href: '/my-list', match: '/my-list' },
+  { label: 'Movies', icon: '▦', href: '/movies', match: '/movies' },
   { label: 'Series', icon: '☰', href: '/series', match: '/series' },
 ]
 
