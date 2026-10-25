@@ -386,6 +386,27 @@ function accentChromaWithinCap(
   }
 }
 
+// --- variantsAllowed ---
+// Every component variant a theme selects must be declared by the developer
+// (frontend.variants[axis].options). Variant ids select shipped recipes, so this
+// is the look-invariant over component anatomy.
+function variantsAllowed(theme: ThemeJsonV2, config: InvarianceConfig): TestResult {
+  const picked = theme.variants ?? {}
+  const violations: string[] = []
+  for (const [axis, id] of Object.entries(picked)) {
+    const allowed = config.frontend?.variants?.[axis]
+    if (!allowed) violations.push(`${axis}: axis not declared`)
+    else if (!allowed.options.includes(id)) violations.push(`${axis}: '${id}' not in [${allowed.options.join(', ')}]`)
+  }
+  return {
+    name: 'variantsAllowed',
+    passed: violations.length === 0,
+    message: violations.length === 0 ? 'All component variants allowed' : `Disallowed variants: ${violations.join('; ')}`,
+    severity: 'error',
+    autoFixable: false,
+  }
+}
+
 // Entry point: runs all v6 checks and aggregates exactly like the v5 engine.
 // Warnings do not fail the result (consistent with verify/engine.ts pass criteria).
 export function verifyV2(
@@ -402,6 +423,7 @@ export function verifyV2(
     accentChromaWithinCap(t, constraints),
     fontInRegistry(t),
     varRefsResolve(t),
+    variantsAllowed(theme, config),
   ]
 
   return {

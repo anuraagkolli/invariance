@@ -198,3 +198,18 @@ describe('verifyV2', () => {
     expect(check?.severity).toBe('warning')
   })
 })
+
+describe('variantsAllowed', () => {
+  const vConfig = { app: 'demo', frontend: { variants: { card: { options: ['poster', 'polaroid'] } } } }
+  const check = (variants: Record<string, string>, cfg: typeof vConfig | typeof config = vConfig) =>
+    verifyV2({ ...goodTheme, variants }, cfg, {}).results.find((r) => r.name === 'variantsAllowed')!
+
+  it('passes declared variants', () => {
+    expect(check({ card: 'polaroid' }).passed).toBe(true)
+  })
+  it('fails a variant outside options or on an undeclared axis', () => {
+    expect(check({ card: 'tilt' }).passed).toBe(false)
+    expect(check({ hero: 'split' }).passed).toBe(false)
+    expect(check({ card: 'poster' }, config).passed).toBe(false)
+  })
+})

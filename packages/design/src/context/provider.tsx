@@ -213,3 +213,8 @@ export function useInvariance(): InvarianceContextValue {
   }
   return ctx
 }
+
+// Non-throwing variant for components that must also render outside a provider.
+export function useInvarianceOptional(): InvarianceContextValue | null {
+  return useContext(InvarianceContext)
+}

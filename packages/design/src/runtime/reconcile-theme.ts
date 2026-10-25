@@ -6,6 +6,7 @@ import { compileTheme } from '../compiler/compile'
 import { verifyV2 } from '../verify/compiled-tests'
 import { ThemeJsonV2Schema } from '../config/schema'
 import type { AnyThemeJson, InvarianceConfig, ThemeJsonV2 } from '../config/types'
+import { allowedVariants } from './resolve-overrides'
 
 // reconcile-theme — recompile-keep-vibe when invariants change.
 //
@@ -77,6 +78,9 @@ export function reconcileStoredTheme(raw: AnyThemeJson, config: InvarianceConfig
     if (upgraded.content !== undefined) candidate.content = upgraded.content
     if (upgraded.layout !== undefined) candidate.layout = upgraded.layout
     if (upgraded.components !== undefined) candidate.components = upgraded.components
+    // Drop only the variants the current config no longer allows; keep the rest.
+    const variants = allowedVariants(upgraded.variants, config)
+    if (variants) candidate.variants = variants
   }
 
   // Re-verify and schema-check the recompiled candidate; if it still fails, drop.

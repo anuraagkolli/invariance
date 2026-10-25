@@ -31,29 +31,24 @@ const SERIES_ROWS: GenreRow[] = GENRES.map((genre) => ({
 // One genre row: an m.slot (level 4 → F4 swap target) wrapping a heading m.text
 // and a CarouselRow, mirroring the home Row pattern so F3 reorder/hide and F4
 // swap work identically on this surface.
-function SeriesRow({ row }: { row: GenreRow }) {
+function SeriesRow({ row, index }: { row: GenreRow; index: number }) {
+  const rowProps = {
+    titles: row.titles,
+    shape: 'standard' as const,
+    heading: row.genre,
+    headingName: `series-heading-${row.slot}`,
+    index,
+  }
   return (
     <m.slot
       name={row.slot}
       level={4}
       description={`${row.genre} series carousel`}
       aliases={[row.genre.toLowerCase(), `${row.genre.toLowerCase()} row`]}
-      // Forward titles so the F4-swapped library component (e.g. GridRow) gets data.
-      props={{ titles: row.titles, shape: 'standard' }}
+      // Forward everything so the F4-swapped library component renders data + heading.
+      props={rowProps}
     >
-      <section className="flex flex-col gap-3">
-        <h2
-          className="font-display text-lg text-textPrimary sm:text-xl"
-          style={{
-            textTransform: 'var(--inv-display-transform)' as React.CSSProperties['textTransform'],
-            letterSpacing: 'var(--inv-display-tracking)',
-            fontWeight: 'var(--inv-display-weight)' as React.CSSProperties['fontWeight'],
-          }}
-        >
-          <m.text name={`series-heading-${row.slot}`}>{row.genre}</m.text>
-        </h2>
-        <CarouselRow titles={row.titles} shape="standard" />
-      </section>
+      <CarouselRow {...rowProps} />
     </m.slot>
   )
 }
@@ -89,8 +84,8 @@ export function SeriesScreen() {
         {/* Same reorderable-sections pattern as home: each child keyed by its
             m.slot name so F3 ordering/hiding applies on /series too. */}
         <m.sections>
-          {SERIES_ROWS.map((row) => (
-            <SeriesRow key={row.slot} row={row} />
+          {SERIES_ROWS.map((row, i) => (
+            <SeriesRow key={row.slot} row={row} index={i} />
           ))}
         </m.sections>
       </div>

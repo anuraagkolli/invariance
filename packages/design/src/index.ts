@@ -23,6 +23,8 @@ export type {
   LayoutSection,
   ComponentsSection,
   ComponentSelection,
+  VariantsSection,
+  VariantAxisConfig,
 } from './config/types'
 export type { Level } from './levels/index'
 export { LEVELS } from './levels/index'
@@ -62,7 +64,10 @@ export { googleFontsUrlFor, ensureFontsLoaded } from './fonts/loader'
 
 // Render-driven F2/F3 resolution helpers — contracts of the render behavior,
 // exposed so the panel/verifier can reason about overrides without re-deriving.
-export { resolveTextOverride, orderSectionKeys, layoutForPage } from './runtime/resolve-overrides'
+export { resolveTextOverride, orderSectionKeys, layoutForPage, resolveVariant } from './runtime/resolve-overrides'
+export { useVariant } from './primitives/use-variant'
+export { themeProfile, THEME_PROFILES, applyLayoutPreset } from './agent/layout-profile'
+export type { ThemeProfile } from './agent/layout-profile'
 
 // Theme Compiler (v6)
 export { compileTheme, InvalidStyleSpecError } from './compiler/compile'
@@ -86,7 +91,7 @@ export { THEME_PACKS } from './registries/theme-packs'
 export type { ThemePack } from './registries/theme-packs'
 
 // theme.json v2 + version-agnostic types and runtime
-export { ThemeJsonV2Schema } from './config/schema'
+export { ThemeJsonV2Schema, InvarianceConfigSchema } from './config/schema'
 export type { ThemeJsonV2, ThemeSectionV2, AnyThemeJson } from './config/types'
 export { isV2Theme } from './config/types'
 export { upgradeThemeJson } from './config/upgrade'

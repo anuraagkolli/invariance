@@ -12,6 +12,7 @@ import {
   applyAnyTheme,
   ensureFontsLoaded,
   useInvariance,
+  applyLayoutPreset,
   type ThemeJsonV2,
 } from '@invariance/design'
 
@@ -243,6 +244,19 @@ function GauntletViewer() {
     }
     if (pack || sidebarBlue || overrides || f4swap) {
       applyAnyTheme(tokenTheme, invarianceConfig)
+    }
+
+    // --- pack structure: the same profile preset the panel's one-tap packs
+    // apply (row renderers + hero/card/button/header/motion variants), pushed
+    // via the store because variants and F4 swaps are render-driven. ---
+    if (!overrides && !f4swap) {
+      const structured: ThemeJsonV2 = { ...tokenTheme }
+      if (pack) applyLayoutPreset(structured, { version: 2, base_app_version: 'v1' }, pack.spec, invarianceConfig)
+      // Presets key row swaps by the home route; this viewer renders the home
+      // composition at /gauntlet, so mirror them onto this path.
+      const home = structured.components?.pages?.['/']
+      if (home) structured.components = { pages: { ...structured.components!.pages, '/gauntlet': home } }
+      themeStore.setTheme(structured)
     }
 
     // --- F2/F3 overrides via the store so the primitives resolve them ---

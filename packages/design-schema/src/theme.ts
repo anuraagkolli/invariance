@@ -41,7 +41,12 @@ export interface InvarianceConfig {
      *  relayouts (e.g. retro → grid galleries). App-specific by nature (keys are
      *  page paths + slot/component names this app registers); kept here, in the
      *  app's own config, so the generic design package stays app-agnostic. */
-    layout_profiles?: Record<string, { layout?: LayoutSection; components?: ComponentsSection }>
+    layout_profiles?: Record<string, { layout?: LayoutSection; components?: ComponentsSection; variants?: VariantsSection }>
+    /** Look-invariant over component anatomy: per variant AXIS (e.g. 'card',
+     *  'button', 'hero'), the variants a theme may select and the default when
+     *  it selects none. A theme's `variants` entry outside `options` is rejected
+     *  by the verifier; an axis absent here cannot be varied at all. */
+    variants?: Record<string, VariantAxisConfig>
   }
 }
 
@@ -90,6 +95,16 @@ export interface ComponentSelection {
   props?: Record<string, unknown>
 }
 
+export interface VariantAxisConfig {
+  options: string[]
+  default?: string
+}
+
+// Theme-selected component variants, global across pages: axis -> variant id
+// (e.g. { card: 'polaroid', button: 'brutal' }). Ids are enum-like kebab names
+// that select app/kit-shipped recipes — never raw CSS.
+export type VariantsSection = Record<string, string>
+
 export interface ComponentsSection {
   pages: Record<string, Record<string, ComponentSelection>>
 }
@@ -121,6 +136,7 @@ export interface ThemeJsonV2 {
   content?: ContentSection
   layout?: LayoutSection
   components?: ComponentsSection
+  variants?: VariantsSection
 }
 
 // Union of all supported schema versions. Storage backends and the runtime

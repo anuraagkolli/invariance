@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveTextOverride, orderSectionKeys, layoutForPage } from './resolve-overrides'
+import { resolveTextOverride, orderSectionKeys, layoutForPage, resolveVariant, allowedVariants } from './resolve-overrides'
 import type { AnyThemeJson, ThemeJson, ThemeJsonV2, LayoutPage } from '../config/types'
 
 // A v2 theme carrying content + layout sections keyed by page path.
@@ -120,5 +120,25 @@ describe('layoutForPage', () => {
       layout: { pages: { '/': { sections: ['a'] } } },
     }
     expect(layoutForPage(v1 as AnyThemeJson, '/')).toBeUndefined()
+  })
+})
+
+describe('resolveVariant', () => {
+  const config = { app: 'a', frontend: { variants: { card: { options: ['poster', 'polaroid'], default: 'poster' } } } }
+  const theme = (variants: Record<string, string>) => ({ version: 2 as const, base_app_version: 'v1', variants })
+
+  it('returns an allowed theme pick, else the axis default', () => {
+    expect(resolveVariant(theme({ card: 'polaroid' }), config, 'card')).toBe('polaroid')
+    expect(resolveVariant(theme({ card: 'tilt' }), config, 'card')).toBe('poster')
+    expect(resolveVariant(null, config, 'card')).toBe('poster')
+  })
+
+  it('never varies an undeclared axis', () => {
+    expect(resolveVariant(theme({ hero: 'split' }), config, 'hero')).toBeUndefined()
+  })
+
+  it('allowedVariants filters to declared options', () => {
+    expect(allowedVariants({ card: 'polaroid', hero: 'split' }, config)).toEqual({ card: 'polaroid' })
+    expect(allowedVariants({ card: 'tilt' }, config)).toBeUndefined()
   })
 })

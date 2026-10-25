@@ -71,11 +71,26 @@ const PageConfigSchema = z.object({
   required: z.array(z.string()).optional(),
 })
 
+// Variant axis + id names: enum-like kebab identifiers. They select shipped
+// recipes by name, so nothing about them can carry CSS.
+const VARIANT_NAME = /^[a-z][a-z0-9-]*$/
+const VariantNameSchema = z.string().regex(VARIANT_NAME, 'variant names must be kebab-case identifiers')
+
+const VariantAxisConfigSchema = z
+  .object({
+    options: z.array(VariantNameSchema).min(1),
+    default: VariantNameSchema.optional(),
+  })
+  .refine((v) => v.default === undefined || v.options.includes(v.default), {
+    message: 'variant default must be one of its options',
+  })
+
 const FrontendConfigSchema = z.object({
   design: DesignConfigSchema.optional(),
   structure: StructureConfigSchema.optional(),
   accessibility: AccessibilityConfigSchema.optional(),
   pages: z.record(z.string(), PageConfigSchema).optional(),
+  variants: z.record(VariantNameSchema, VariantAxisConfigSchema).optional(),
 })
 
 export const InvarianceConfigSchema = z.object({
@@ -193,6 +208,8 @@ const ThemeSectionV2Schema = z.object({
   styleSpec: StyleSpecSchema.optional(),
 })
 
+export const VariantsSectionSchema = z.record(VariantNameSchema, VariantNameSchema)
+
 export const ThemeJsonV2Schema = z.object({
   version: z.literal(2),
   base_app_version: z.string(),
@@ -200,4 +217,5 @@ export const ThemeJsonV2Schema = z.object({
   content: ContentSectionSchema.optional(),
   layout: LayoutSectionSchema.optional(),
   components: ComponentsSectionSchema.optional(),
+  variants: VariantsSectionSchema.optional(),
 })

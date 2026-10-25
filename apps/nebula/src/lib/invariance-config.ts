@@ -1,14 +1,58 @@
 import type { InvarianceConfig } from '@invariance/design'
+import { kitVariantAxes } from '@invariance/kit/variants'
 
 // The home carousels, by slot name (mirrors home-screen.tsx ROWS). Used to build
 // pack layout presets that swap every row to the wide grid.
 const HOME_ROWS = ['row-trending', 'row-continue', 'row-originals', 'row-new', 'row-acclaimed']
 
-// A structural preset that turns the home carousels into grids (the F4 swap the
-// rows already support — CarouselRow → GridRow, registered in providers.tsx).
-const gridHome = (): { components: { pages: Record<string, Record<string, { component: string }>> } } => ({
-  components: { pages: { '/': Object.fromEntries(HOME_ROWS.map((s) => [s, { component: 'GridRow' }])) } },
-})
+// Nebula's own variant axis: the hero anatomy (hero.tsx ships each one).
+export const HERO_LOOKS = ['billboard', 'split', 'centered', 'marquee'] as const
+export type HeroLook = (typeof HERO_LOOKS)[number]
+
+type RowComponent = 'CarouselRow' | 'GridRow' | 'ListRow' | 'SpotlightRow'
+type Preset = NonNullable<NonNullable<InvarianceConfig['frontend']>['layout_profiles']>[string]
+
+// Every home row gets an explicit renderer so switching profiles never leaves
+// a previous profile's swap behind (presets merge per slot over the current theme).
+function homeRows(base: RowComponent, overrides: Partial<Record<string, RowComponent>> = {}): Preset['components'] {
+  return {
+    pages: { '/': Object.fromEntries(HOME_ROWS.map((s) => [s, { component: overrides[s] ?? base }])) },
+  }
+}
+
+// A whole-page look per theme profile (themeProfile in @invariance/design maps
+// a StyleSpec to one). Each picks row renderers (F4) and component variants
+// (hero/card/button/section-header/motion) — all developer-shipped recipes.
+const PROFILES: Record<string, Preset> = {
+  standard: {
+    components: homeRows('CarouselRow'),
+    variants: { hero: 'billboard', card: 'poster', button: 'solid', 'section-header': 'plain', motion: 'subtle' },
+  },
+  brutal: {
+    components: homeRows('GridRow'),
+    variants: { hero: 'marquee', card: 'framed', button: 'brutal', 'section-header': 'numbered', motion: 'snappy' },
+  },
+  terminal: {
+    components: homeRows('ListRow', { 'row-originals': 'GridRow' }),
+    variants: { hero: 'split', card: 'caption', button: 'outline', 'section-header': 'label', motion: 'none' },
+  },
+  editorial: {
+    components: homeRows('CarouselRow', { 'row-trending': 'SpotlightRow', 'row-acclaimed': 'SpotlightRow' }),
+    variants: { hero: 'centered', card: 'caption', button: 'ghost', 'section-header': 'rule', motion: 'subtle' },
+  },
+  glass: {
+    components: homeRows('CarouselRow', { 'row-acclaimed': 'SpotlightRow' }),
+    variants: { hero: 'billboard', card: 'glass', button: 'glow', 'section-header': 'plain', motion: 'springy' },
+  },
+  cinematic: {
+    components: homeRows('CarouselRow', { 'row-trending': 'SpotlightRow' }),
+    variants: { hero: 'centered', card: 'tilt', button: 'pill', 'section-header': 'outline', motion: 'springy' },
+  },
+  soft: {
+    components: homeRows('GridRow', { 'row-originals': 'CarouselRow' }),
+    variants: { hero: 'split', card: 'polaroid', button: 'pill', 'section-header': 'label', motion: 'playful' },
+  },
+}
 
 // Relational constraints only — no palette mode. The compiler guarantees AA at
 // every level, so the config just floors contrast and caps accent chroma.
@@ -25,12 +69,18 @@ export const invarianceConfig: InvarianceConfig = {
       },
     },
     pages: { '/': { level: 4 }, '/series': { level: 4 } },
-    // A theme restyles AND relayouts: any theme whose StyleSpec reads "compact"
-    // (retro/brutalist/terminal — pack or free-text prompt) resolves to the
-    // 'grid' profile, which lays the home out as grids instead of scroll-snap
-    // carousels (the F4 renderer swap is already live). 'standard' keeps carousels.
+    // Look-invariant over component anatomy: the variants a theme may pick.
+    variants: {
+      ...kitVariantAxes(),
+      hero: { options: [...HERO_LOOKS], default: 'billboard' },
+    },
+    // A theme restyles AND restructures: its StyleSpec resolves to a profile
+    // (brutal, terminal, editorial, glass, cinematic, soft, standard) whose
+    // preset swaps row renderers and picks hero/card/button/header/motion
+    // variants. `grid` stays as the legacy fallback for blocky specs.
     layout_profiles: {
-      grid: gridHome(),
+      ...PROFILES,
+      grid: { components: homeRows('GridRow') },
     },
   },
 }
