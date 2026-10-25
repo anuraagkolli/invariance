@@ -39,12 +39,13 @@ export const MOVIE_ROWS: MovieRow[] = [
     heading: 'New This Year',
     description: 'Grid of the newest releases',
     aliases: ['new movies', 'new releases', 'newest'],
-    titles: TITLES.filter((t) => t.year >= 2024).slice(0, 12),
+    titles: TITLES.filter((t) => t.year >= 2024).sort((a, b) => b.year - a.year).slice(0, 12),
     grid: true,
   },
 ]
 
-function MoviesRow({ row, index }: { row: MovieRow; index: number }) {
+// `name` keys the row for m.sections (F3 reorder/hide).
+function MoviesRow({ row, index }: { name: string; row: MovieRow; index: number }) {
   const rowProps = { titles: row.titles, shape: 'standard' as const, heading: row.heading, headingName: `${row.slot}-heading`, index }
   const Row = row.grid ? GridRow : CarouselRow
   return (
@@ -76,7 +77,7 @@ export function MoviesScreen() {
       <div className="flex flex-col gap-section px-2xl py-xl">
         <m.sections>
           {MOVIE_ROWS.map((row, i) => (
-            <MoviesRow key={row.slot} row={row} index={i} />
+            <MoviesRow key={row.slot} name={row.slot} row={row} index={i} />
           ))}
         </m.sections>
       </div>

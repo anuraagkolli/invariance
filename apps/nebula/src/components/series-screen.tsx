@@ -31,7 +31,8 @@ const SERIES_ROWS: GenreRow[] = GENRES.map((genre) => ({
 // One genre row: an m.slot (level 4 → F4 swap target) wrapping a heading m.text
 // and a CarouselRow, mirroring the home Row pattern so F3 reorder/hide and F4
 // swap work identically on this surface.
-function SeriesRow({ row, index }: { row: GenreRow; index: number }) {
+// `name` keys the row for m.sections (F3 reorder/hide).
+function SeriesRow({ row, index }: { name: string; row: GenreRow; index: number }) {
   const rowProps = {
     titles: row.titles,
     shape: 'standard' as const,
@@ -85,7 +86,7 @@ export function SeriesScreen() {
             m.slot name so F3 ordering/hiding applies on /series too. */}
         <m.sections>
           {SERIES_ROWS.map((row, i) => (
-            <SeriesRow key={row.slot} row={row} index={i} />
+            <SeriesRow key={row.slot} name={row.slot} row={row} index={i} />
           ))}
         </m.sections>
       </div>
