@@ -40,6 +40,12 @@ describe('invarianceConfig variant profiles', () => {
     expect(InvarianceConfigSchema.safeParse(invarianceConfig).success).toBe(true)
   })
 
+  it('declares the four routes, with /my-list locked', () => {
+    const pages = invarianceConfig.frontend!.pages!
+    expect(Object.keys(pages)).toEqual(['/', '/series', '/movies', '/my-list'])
+    expect(pages['/my-list']!.level).toBe(0)
+  })
+
   it('declares a preset for every theme profile, using only allowed variants and shipped rows', () => {
     const fe = invarianceConfig.frontend!
     const rows = new Set(['CarouselRow', 'GridRow', 'ListRow', 'SpotlightRow'])

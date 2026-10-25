@@ -1,3 +1,4 @@
+import type { LookContext } from './looks'
 // Structured-outputs wire dialect: NO minimum/maximum/minLength, enum allowed,
 // additionalProperties: false required on every object. Bounds that the dialect
 // cannot express are enforced by zod after receipt.
@@ -37,8 +38,10 @@ export function slotEditWireSchema(targetVars: readonly string[]) {
 // all other numeric ranges are enforced by StyleSpecSchema (zod) after receipt.
 // pairingIds must be the full registry list at call time so the model can only
 // pick valid ids — wrong ids would silently compile to the default pairing.
-export function styleSpecWireSchema(pairingIds: readonly string[]) {
-  return {
+// With a LookContext the Designer may also pick component looks by name (axis
+// and id enums; pairs and scopes are re-checked by parseLooks after receipt).
+export function styleSpecWireSchema(pairingIds: readonly string[], looks?: LookContext) {
+  const base = {
     type: 'object',
     additionalProperties: false,
     required: ['mode', 'accentHue', 'accentChroma', 'neutralTint', 'neutralTintStrength',
@@ -61,4 +64,18 @@ export function styleSpecWireSchema(pairingIds: readonly string[]) {
       rationale: { type: 'string' },
     },
   } as const
+  if (!looks) return base
+  const ids = [...new Set(Object.values(looks.axes).flat())]
+  const item = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['axis', 'id'],
+    properties: {
+      axis: { type: 'string', enum: Object.keys(looks.axes) },
+      id: { type: 'string', enum: ids },
+      ...(looks.sections.length > 0 ? { section: { type: 'string', enum: looks.sections } } : {}),
+      ...(looks.pageAllowed ? { this_page_only: { type: 'boolean' } } : {}),
+    },
+  }
+  return { ...base, properties: { ...base.properties, looks: { type: 'array', items: item } } }
 }

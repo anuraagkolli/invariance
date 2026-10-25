@@ -13,6 +13,7 @@ import { verifyV2 } from '../verify/compiled-tests'
 import { deriveConstraints } from '../config/derive-constraints'
 import { loadCurrentV2, persistAndApply, applyPreview } from './pipeline-io'
 import { applyLayoutPreset } from './layout-profile'
+import { buildLookContext, applyLookPicks } from './looks'
 import type { UsageHandler } from './api'
 import type { SaveThemeMeta } from '../storage/types'
 
@@ -143,6 +144,7 @@ function mergeSectionsIntoV2(current: ThemeJsonV2, mutation: SectionsMutation): 
   const components = merged(current.components, mutation.components)
   if (components !== undefined) candidate.components = components
   if (current.variants !== undefined) candidate.variants = current.variants
+  if (current.page_variants !== undefined) candidate.page_variants = current.page_variants
   return candidate
 }
 
@@ -196,6 +198,7 @@ export async function runPipeline(
     // Designer retry loop — budget: 1 initial + 2 retries (shared by spec-invalid
     // and verify-fail). Non-retryable failures (transport) abort immediately.
     const MAX_RETRIES = 2
+    const looks = buildLookContext(context.config, context.registry, currentV2)
     let retryFeedback: string[] | undefined
     let lastError = 'Could not produce a valid theme after multiple attempts. Try a simpler request.'
 
@@ -209,6 +212,7 @@ export async function runPipeline(
           // undefined is never assigned to an optional field explicitly.
           ...(currentSpec !== undefined ? { currentSpec } : {}),
           constraints,
+          ...(looks ? { looks } : {}),
           apiKey: context.apiKey,
           ...agentOpts,
           ...(context.models?.designer ? { model: context.models.designer } : {}),
@@ -262,6 +266,8 @@ export async function runPipeline(
       // over the user's current structure. So a free-text "make it retro" can
       // relayout, not just restyle — same path the one-tap packs take.
       applyLayoutPreset(candidate, currentV2, spec, context.config)
+      // Looks the user asked for by name land on top of the profile's set.
+      if (looks && designerResult.looks) applyLookPicks(candidate, designerResult.looks, looks)
 
       // Verify — failures are retryable via the Designer (same budget).
       onProgress?.('verifying')

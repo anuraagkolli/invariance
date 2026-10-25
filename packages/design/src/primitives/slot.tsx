@@ -1,12 +1,13 @@
 'use client'
 
-import React, { useEffect, type ReactNode } from 'react'
+import React, { useEffect, useMemo, type ReactNode } from 'react'
 
 import type { Level } from '../levels/index'
 import type { SlotRegistration } from '../context/registry'
 import { useInvariance } from '../context/provider'
 import { useCurrentPage } from '../context/use-current-page'
 import { ErrorBoundary } from './error-boundary'
+import { VariantScopeContext, useVariantScope } from './variant-scope'
 
 /**
  * The registry entry for a slot. `pageName` is the current page (the URL
@@ -78,6 +79,9 @@ export function Slot({
   // '/' on server + first client render → the F4 swap can't cause a hydration
   // mismatch; the page-keyed component swap applies one frame after mount.
   const page = useCurrentPage()
+  // Components inside this slot resolve `axis@<name>` variant picks first.
+  const parentScope = useVariantScope()
+  const scope = useMemo(() => [name, ...parentScope], [name, parentScope])
 
   useEffect(() => {
     registry.register(
@@ -96,11 +100,13 @@ export function Slot({
       const SwappedComponent = componentLibrary[selection.component]
       if (SwappedComponent) {
         return (
-          <div data-inv-slot={name} data-inv-section={name} style={{ display: 'contents' }}>
-            <ErrorBoundary slotName={name} onReset={() => themeStore.clear()}>
-              <SwappedComponent {...(slotProps ?? {})} {...(selection.props ?? {})} />
-            </ErrorBoundary>
-          </div>
+          <VariantScopeContext.Provider value={scope}>
+            <div data-inv-slot={name} data-inv-section={name} style={{ display: 'contents' }}>
+              <ErrorBoundary slotName={name} onReset={() => themeStore.clear()}>
+                <SwappedComponent {...(slotProps ?? {})} {...(selection.props ?? {})} />
+              </ErrorBoundary>
+            </div>
+          </VariantScopeContext.Provider>
         )
       }
     }
@@ -109,8 +115,10 @@ export function Slot({
   // F1 styling flows exclusively through --inv-* variables on :root; the wrapper
   // stays layout-transparent so flex/grid parent-child relationships hold.
   return (
-    <div data-inv-slot={name} data-inv-section={name} data-inv-level={level} style={{ display: 'contents' }}>
-      {children}
-    </div>
+    <VariantScopeContext.Provider value={scope}>
+      <div data-inv-slot={name} data-inv-section={name} data-inv-level={level} style={{ display: 'contents' }}>
+        {children}
+      </div>
+    </VariantScopeContext.Provider>
   )
 }

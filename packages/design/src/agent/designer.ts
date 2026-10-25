@@ -7,11 +7,14 @@ import type { UsageHandler } from './api'
 import { DESIGNER_MODEL } from './models'
 import { styleSpecWireSchema } from './wire-schemas'
 import { buildDesignerPrompt, selectFewShotPacks } from './designer-prompt'
+import { parseLooks, type LookContext, type LookPick } from './looks'
 
 export interface DesignerInput {
   request: string
   currentSpec?: StyleSpec
   constraints: DesignConstraints
+  // The app's component looks; when present the Designer may pick them directly.
+  looks?: LookContext
   apiKey: string
   fetchFn?: typeof fetch
   baseUrl?: string
@@ -22,7 +25,7 @@ export interface DesignerInput {
 }
 
 export type DesignerResult =
-  | { ok: true; spec: StyleSpec }
+  | { ok: true; spec: StyleSpec; looks?: LookPick[] }
   | { ok: false; error: string; retryable: boolean }
 
 // Calls the Designer LLM to produce a StyleSpec from a user's vibe request.
@@ -49,6 +52,7 @@ export async function callDesigner(input: DesignerInput, retryFeedback?: string[
     constraints: input.constraints,
     fewShot: selectFewShotPacks(input.request, THEME_PACKS, 3),
     ...(input.currentSpec ? { currentSpec: input.currentSpec } : {}),
+    ...(input.looks ? { looks: input.looks } : {}),
   })
 
   const userContent = retryFeedback?.length
@@ -59,7 +63,7 @@ export async function callDesigner(input: DesignerInput, retryFeedback?: string[
     apiKey: input.apiKey, model: input.model ?? DESIGNER_MODEL, system,
     messages: [{ role: 'user', content: userContent }],
     temperature: 0.7, maxTokens: 2048,
-    outputSchema: styleSpecWireSchema(pairingIds),
+    outputSchema: styleSpecWireSchema(pairingIds, input.looks),
     ...(input.fetchFn ? { fetchFn: input.fetchFn } : {}),
     ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
     ...(input.onUsage ? { onUsage: input.onUsage } : {}),
@@ -85,6 +89,9 @@ export async function callDesigner(input: DesignerInput, retryFeedback?: string[
     return { ok: false, error: issues.join('; '), retryable: true }
   }
 
+  const looks = parseLooks((raw as { looks?: unknown } | null)?.looks, input.looks)
+  if (!looks.ok) return { ok: false, error: looks.error, retryable: true }
+
   // exactOptionalPropertyTypes: spread-strip undefined from optional fields so
   // zod's `undefined`-inclusive optional type matches StyleSpec's exact optional.
   const data = parsed.data
@@ -105,5 +112,5 @@ export async function callDesigner(input: DesignerInput, retryFeedback?: string[
     rationale: data.rationale,
     ...(data.secondaryHue !== undefined ? { secondaryHue: data.secondaryHue } : {}),
   }
-  return { ok: true, spec }
+  return looks.picks.length > 0 ? { ok: true, spec, looks: looks.picks } : { ok: true, spec }
 }

@@ -54,6 +54,32 @@ describe('callDesigner', () => {
   })
 })
 
+describe('callDesigner looks', () => {
+  const looks = { axes: { card: ['poster', 'polaroid'] }, page: '/', sections: ['row-trending'], pageAllowed: true, current: { app: {}, page: {} } }
+  it('returns validated look picks alongside the spec', async () => {
+    const r = await callDesigner({
+      request: 'polaroid cards in trending', constraints: {}, looks, apiKey: 'k',
+      fetchFn: modelSays({ ...validSpec, looks: [{ axis: 'card', id: 'polaroid', section: 'row-trending' }] }),
+    })
+    expect(r).toEqual({ ok: true, spec: validSpec, looks: [{ axis: 'card', id: 'polaroid', section: 'row-trending' }] })
+  })
+  it('a disallowed look is a retryable error', async () => {
+    const r = await callDesigner({
+      request: 'x', constraints: {}, looks, apiKey: 'k',
+      fetchFn: modelSays({ ...validSpec, looks: [{ axis: 'card', id: 'tilt' }] }),
+    })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.retryable).toBe(true)
+  })
+  it('the wire schema and prompt list the looks only when given', () => {
+    const ids = FONT_PAIRINGS.map((p) => p.id)
+    expect(JSON.stringify(styleSpecWireSchema(ids, looks))).toContain('row-trending')
+    expect(JSON.stringify(styleSpecWireSchema(ids))).not.toContain('looks')
+    expect(buildDesignerPrompt({ constraints: {}, fewShot: [], looks })).toContain('COMPONENT LOOKS')
+    expect(buildDesignerPrompt({ constraints: {}, fewShot: [] })).not.toContain('COMPONENT LOOKS')
+  })
+})
+
 describe('styleSpecWireSchema', () => {
   it('obeys the dialect and pins fontPairing to the registry', () => {
     const s = styleSpecWireSchema(FONT_PAIRINGS.map((p) => p.id))

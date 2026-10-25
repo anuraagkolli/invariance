@@ -68,7 +68,8 @@ export const invarianceConfig: InvarianceConfig = {
         allowed_modes: ['light', 'dark'],
       },
     },
-    pages: { '/': { level: 4 }, '/series': { level: 4 } },
+    // /my-list is locked: app-wide looks reach it, page-scoped picks can't.
+    pages: { '/': { level: 4 }, '/series': { level: 4 }, '/movies': { level: 4 }, '/my-list': { level: 0 } },
     // Look-invariant over component anatomy: the variants a theme may pick.
     variants: {
       ...kitVariantAxes(),

@@ -7,6 +7,7 @@ import { contrastPairs } from '../compiler/contrast-pairs'
 import { FONT_PAIRINGS, DEFAULT_MONO_STACK } from '../registries/font-pairings'
 import type { ThemeJsonV2, InvarianceConfig } from '../config/types'
 import type { TestResult, VerificationResult } from './types'
+import { variantAxis } from '../runtime/resolve-overrides'
 
 // --- styleSpecValid ---
 // Absent styleSpec = pass (precision-edit-only themes have none).
@@ -389,14 +390,23 @@ function accentChromaWithinCap(
 // --- variantsAllowed ---
 // Every component variant a theme selects must be declared by the developer
 // (frontend.variants[axis].options). Variant ids select shipped recipes, so this
-// is the look-invariant over component anatomy.
+// is the look-invariant over component anatomy. Page-scoped picks also need
+// the page to allow customization (level >= 1).
 function variantsAllowed(theme: ThemeJsonV2, config: InvarianceConfig): TestResult {
-  const picked = theme.variants ?? {}
   const violations: string[] = []
-  for (const [axis, id] of Object.entries(picked)) {
-    const allowed = config.frontend?.variants?.[axis]
-    if (!allowed) violations.push(`${axis}: axis not declared`)
-    else if (!allowed.options.includes(id)) violations.push(`${axis}: '${id}' not in [${allowed.options.join(', ')}]`)
+  const check = (picked: Record<string, string>, where: string) => {
+    for (const [key, id] of Object.entries(picked)) {
+      const axis = variantAxis(key)
+      const allowed = config.frontend?.variants?.[axis]
+      if (!allowed) violations.push(`${where}${key}: axis not declared`)
+      else if (!allowed.options.includes(id)) violations.push(`${where}${key}: '${id}' not in [${allowed.options.join(', ')}]`)
+    }
+  }
+  check(theme.variants ?? {}, '')
+  for (const [page, picked] of Object.entries(theme.page_variants ?? {})) {
+    const level = config.frontend?.pages?.[page]?.level
+    if (level !== undefined && level < 1) violations.push(`${page}: page is locked`)
+    check(picked, `${page} `)
   }
   return {
     name: 'variantsAllowed',

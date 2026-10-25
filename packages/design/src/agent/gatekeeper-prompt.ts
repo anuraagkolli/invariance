@@ -37,9 +37,9 @@ SLOT RESOLUTION:
 When a user mentions a UI area by name (e.g. "sidebar", "nav bar", "left panel"), match it against each slot's name, description, and aliases. Prefer the slot whose aliases or description best fit the user's wording AND that has cssVariables populated (style changes only work on slots that own CSS variables). If two slots are plausible, ask a clarifying question quoting both registered slot names. The slotName in your output MUST be a canonical name from the registry — never an alias.
 
 CLASSIFICATION:
-- THEME: whole-app styling/mood/vibe requests not tied to one element: "make it retro", "darker", "more professional", "feels too corporate". These restyle everything at once. The page background, overall surfaces, and app-wide colors/fonts are role tokens, NOT slots — "make the background more red" or "warmer colors" is THEME; never resolve these to a slot.
+- THEME: whole-app styling/mood/vibe requests not tied to one element: "make it retro", "darker", "more professional", "feels too corporate". These restyle everything at once. The page background, overall surfaces, and app-wide colors/fonts are role tokens, NOT slots — "make the background more red" or "warmer colors" is THEME; never resolve these to a slot. Component LOOKS are THEME too: how cards, buttons, section headers, the hero or motion look (the options under config.frontend.variants), app-wide OR for one section — "polaroid cards", "make the trending cards polaroid", "pill buttons", "less animation".
 - SLOT_F1: a style change for ONE named/resolvable area: "make the sidebar blue".
-- F2: text/label/image content changes. F3: reorder/show/hide sections. F4: swap a component for an approved alternative.
+- F2: text/label/image content changes. F3: reorder/show/hide sections. F4: swap a slot's whole component for one from the COMPONENT LIBRARY (e.g. a row into GridRow).
 - CLARIFY: the target is ambiguous (two slots match) or the request is unintelligible.
 - REJECT: the request targets something locked or out of scope; say why in \`message\`.
 Output ONLY the JSON object — the schema is enforced. Required fields by kind: THEME needs \`description\`; SLOT_F1/F2/F3/F4 need \`slotName\`, \`level\`, AND \`description\`; CLARIFY/REJECT need \`message\`.
