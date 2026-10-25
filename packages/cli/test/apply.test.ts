@@ -149,11 +149,49 @@ describe("applyInit", () => {
   });
 
   it("leaves an unrecognised layout untouched and reports why", async () => {
-    const odd = `export const RootLayout = ({ children }) => children\nexport default RootLayout\n`;
+    const odd = `import "./globals.css"\nexport const RootLayout = ({ children }) => children\nexport default RootLayout\n`;
     const root = await nextApp({ layout: odd });
     const report = await applyInit(root, "acme", ROLES);
     expect(report.skipped).toEqual([{ what: "SSR theme inlining", reason: "no `export default function` root layout" }]);
     expect(await readFile(join(root, "app", "layout.tsx"), "utf8")).toBe(odd);
+  });
+});
+
+describe("review fixes", () => {
+  it("ignores a globals.css the layout doesn't import", async () => {
+    const noImport = CNA_LAYOUT.replace('import "./globals.css";\n', "");
+    const root = await nextApp({ layout: noImport });
+    expect(locateNextApp(root).globalsCssFile).toBeNull();
+    const report = await applyInit(root, "acme-next", ROLES);
+    expect(report.skipped).toContainEqual({ what: "globals.css", reason: "root layout imports no local stylesheet" });
+    expect(await readFile(join(root, "app", "globals.css"), "utf8")).not.toContain(GEN_START);
+  });
+
+  it("refuses to rewrite a generated block whose end marker is missing", async () => {
+    const root = await nextApp();
+    const file = join(root, "app", "globals.css");
+    const damaged = `${GEN_START}\n:root {\n  --inv-accent: red;\n}\n.button { color: red; }\n`;
+    await writeFile(file, damaged);
+    expect(await patchGlobalsCss(file, ROLES)).toBe("malformed");
+    const report = await applyInit(root, "acme-next", ROLES);
+    expect(report.skipped.map((s) => s.what)).toContain("globals.css");
+    expect(await readFile(file, "utf8")).toBe(damaged);
+  });
+
+  it("leaves the layout alone when an existing config declares a different app id", async () => {
+    const root = await nextApp();
+    await writeFile(join(root, "invariance.config.ts"), "export const invarianceConfig = { app: 'legacy' }\n");
+    const report = await applyInit(root, "storefront", ROLES);
+    expect(report.skipped).toContainEqual({
+      what: "SSR theme inlining",
+      reason: 'invariance.config.ts declares app "legacy", not "storefront"; the theme cookie name would not match',
+    });
+    expect(await readFile(join(root, "app", "layout.tsx"), "utf8")).toBe(CNA_LAYOUT);
+
+    const ok = await applyInit(root, "legacy", ROLES);
+    expect(ok.skipped).toEqual([]);
+    expect(ok.edits).toContainEqual({ file: join(root, "invariance.config.ts"), status: "unchanged" });
+    expect(await readFile(join(root, "app", "layout.tsx"), "utf8")).toContain("inv-ssr-theme");
   });
 });
 

@@ -19,7 +19,11 @@ export interface NextAppFiles {
   globalsCssFile: string | null;
 }
 
-/** Locate the App Router root layout and the global stylesheet it imports. */
+/**
+ * Locate the App Router root layout and the local stylesheet it imports. A
+ * stylesheet the layout doesn't import is never picked: tokens written there
+ * would never reach the browser.
+ */
 export function locateNextApp(root: string): NextAppFiles {
   const layoutRel = LAYOUT_CANDIDATES.find((p) => existsSync(join(root, p)));
   if (!layoutRel) return { layoutFile: null, globalsCssFile: null };
@@ -32,8 +36,7 @@ export function locateNextApp(root: string): NextAppFiles {
     const file = resolve(dirname(layoutFile), spec);
     if (existsSync(file)) return { layoutFile, globalsCssFile: file };
   }
-  const beside = join(dirname(layoutFile), "globals.css");
-  return { layoutFile, globalsCssFile: existsSync(beside) ? beside : null };
+  return { layoutFile, globalsCssFile: null };
 }
 
 /** The compiled role tokens as a marker-delimited `:root` block. */
@@ -51,14 +54,16 @@ export type EditStatus = "created" | "updated" | "unchanged";
  * generated block is replaced in place; otherwise it is appended. The app's own
  * CSS (including its own :root) is preserved verbatim.
  */
-export async function patchGlobalsCss(file: string, roles: Record<string, string>): Promise<EditStatus> {
+export async function patchGlobalsCss(file: string, roles: Record<string, string>): Promise<EditStatus | "malformed"> {
   const block = renderRootBlock(roles);
   const existing = await readFile(file, "utf8");
   const start = existing.indexOf(GEN_START);
   let next: string;
   if (start !== -1) {
     const end = existing.indexOf(GEN_END, start);
-    const tail = end !== -1 ? existing.slice(end + GEN_END.length).replace(/^\n/, "") : "";
+    // No end marker: we can't tell where our block stops, so touch nothing.
+    if (end === -1) return "malformed";
+    const tail = existing.slice(end + GEN_END.length).replace(/^\n/, "");
     next = existing.slice(0, start) + block + tail;
   } else {
     const sepNl = existing === "" || existing.endsWith("\n") ? (existing === "" ? "" : "\n") : "\n\n";
@@ -74,6 +79,12 @@ export function configModuleFile(layoutFile: string): string {
   const ext = /\.(tsx|ts)$/.test(layoutFile) ? "ts" : "js";
   // Beside the app/ directory: `<root>/invariance.config.ts` or `<root>/src/invariance.config.ts`.
   return join(dirname(dirname(layoutFile)), `invariance.config.${ext}`);
+}
+
+/** The `app` id an existing config module declares, or null if none is recognisable. */
+export function readConfigAppId(file: string): string | null {
+  const m = /\bapp\s*:\s*(["'`])([^"'`]+)\1/.exec(readFileSync(file, "utf8"));
+  return m ? m[2]! : null;
 }
 
 /** Emit a minimal `@invariance/design` config the SSR helpers read (app id = cookie name). */
@@ -173,12 +184,32 @@ export async function applyInit(root: string, appId: string, roles: Record<strin
   }
 
   if (globalsCssFile) {
-    report.edits.push({ file: globalsCssFile, status: await patchGlobalsCss(globalsCssFile, roles) });
+    const status = await patchGlobalsCss(globalsCssFile, roles);
+    if (status === "malformed") {
+      report.skipped.push({
+        what: "globals.css",
+        reason: `${relative(root, globalsCssFile)} has an INVARIANCE-GENERATED:start marker with no end marker; fix or remove it and re-run`,
+      });
+    } else {
+      report.edits.push({ file: globalsCssFile, status });
+    }
   } else {
     report.skipped.push({ what: "globals.css", reason: "root layout imports no local stylesheet" });
   }
 
   const configFile = configModuleFile(layoutFile);
+  if (existsSync(configFile)) {
+    const existingApp = readConfigAppId(configFile);
+    if (existingApp !== appId) {
+      report.skipped.push({
+        what: "SSR theme inlining",
+        reason: existingApp
+          ? `${relative(root, configFile)} declares app "${existingApp}", not "${appId}"; the theme cookie name would not match`
+          : `${relative(root, configFile)} exists but declares no recognisable \`app\` id`,
+      });
+      return report;
+    }
+  }
   const ssr = await injectSsrInlining(layoutFile, configFile);
   if (ssr.status === "skipped") {
     report.skipped.push({ what: "SSR theme inlining", reason: ssr.reason });
