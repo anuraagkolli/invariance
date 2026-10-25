@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ROLE_TOKENS } from "@invariance/design/server";
 import { initDetailed } from "../src/cli";
-import { GEN_END, GEN_START, applyInit, locateNextApp, patchGlobalsCss, renderRootBlock } from "../src/apply";
+import { GEN_END, GEN_START, applyInit, locateNextApp, patchGlobalsCss, readConfigAppId, renderRootBlock } from "../src/apply";
 
 // create-next-app's default root layout: no <head>, sync default export.
 const CNA_LAYOUT = `import type { Metadata } from "next";
@@ -158,13 +158,36 @@ describe("applyInit", () => {
 });
 
 describe("review fixes", () => {
-  it("ignores a globals.css the layout doesn't import", async () => {
+  it("ignores a globals.css nothing imports", async () => {
     const noImport = CNA_LAYOUT.replace('import "./globals.css";\n', "");
     const root = await nextApp({ layout: noImport });
     expect(locateNextApp(root).globalsCssFile).toBeNull();
     const report = await applyInit(root, "acme-next", ROLES);
     expect(report.skipped).toContainEqual({ what: "globals.css", reason: "root layout imports no local stylesheet" });
     expect(await readFile(join(root, "app", "globals.css"), "utf8")).not.toContain(GEN_START);
+  });
+
+  it("falls back to a stylesheet a page imports when the root layout imports none", async () => {
+    const noImport = CNA_LAYOUT.replace('import "./globals.css";\n', "");
+    const root = await nextApp({ layout: noImport });
+    await writeFile(join(root, "app", "page.tsx"), `import "./globals.css";\nexport default function Page() { return <main />; }\n`);
+    expect(locateNextApp(root).globalsCssFile).toBe(join(root, "app", "globals.css"));
+    await applyInit(root, "acme-next", ROLES);
+    expect(await readFile(join(root, "app", "globals.css"), "utf8")).toContain(GEN_START);
+  });
+
+  it("reads the app id from the exported invarianceConfig only", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "invariance-cfg-"));
+    const cfg = async (body: string): Promise<string | null> => {
+      const file = join(dir, "invariance.config.ts");
+      await writeFile(file, body);
+      return readConfigAppId(file);
+    };
+    expect(await cfg("const metadata = { app: 'storefront' }\nexport const invarianceConfig = { app: 'legacy' }\n")).toBe("legacy");
+    expect(await cfg("export const invarianceConfig: InvarianceConfig = { 'app': \"storefront\" }\n")).toBe("storefront");
+    expect(await cfg("export const invarianceConfig = { slots: { app: 'x' }, app: 'real' }\n")).toBe("real");
+    expect(await cfg("export const invarianceConfig = { app: process.env.APP! }\n")).toBeNull();
+    expect(await cfg("export default { app: 'x' }\n")).toBeNull();
   });
 
   it("refuses to rewrite a generated block whose end marker is missing", async () => {

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
@@ -19,22 +19,48 @@ export interface NextAppFiles {
   globalsCssFile: string | null;
 }
 
+function importedStylesheet(moduleFile: string): string | null {
+  const src = readFileSync(moduleFile, "utf8");
+  for (const m of src.matchAll(/^\s*import\s+["']([^"']+\.css)["']/gm)) {
+    const spec = m[1]!;
+    if (!spec.startsWith(".")) continue;
+    const file = resolve(dirname(moduleFile), spec);
+    if (existsSync(file)) return file;
+  }
+  return null;
+}
+
+/** Other layouts/pages under the app dir, shallowest first, so the root page wins. */
+function routeModules(appDir: string, rootLayout: string): string[] {
+  const out: Array<{ file: string; depth: number }> = [];
+  const walk = (dir: string, depth: number): void => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) {
+        if (e.name !== "node_modules") walk(p, depth + 1);
+      } else if (/^(layout|page)\.(tsx|jsx|ts|js)$/.test(e.name) && p !== rootLayout) {
+        out.push({ file: p, depth });
+      }
+    }
+  };
+  walk(appDir, 0);
+  return out.sort((a, b) => a.depth - b.depth || a.file.localeCompare(b.file)).map((m) => m.file);
+}
+
 /**
- * Locate the App Router root layout and the local stylesheet it imports. A
- * stylesheet the layout doesn't import is never picked: tokens written there
- * would never reach the browser.
+ * Locate the App Router root layout and the local stylesheet the app loads:
+ * the one the root layout imports, else one imported by another layout/page.
+ * A stylesheet nothing imports is never picked: its tokens would never reach
+ * the browser.
  */
 export function locateNextApp(root: string): NextAppFiles {
   const layoutRel = LAYOUT_CANDIDATES.find((p) => existsSync(join(root, p)));
   if (!layoutRel) return { layoutFile: null, globalsCssFile: null };
   const layoutFile = join(root, layoutRel);
 
-  const src = readFileSync(layoutFile, "utf8");
-  for (const m of src.matchAll(/^\s*import\s+["']([^"']+\.css)["']/gm)) {
-    const spec = m[1]!;
-    if (!spec.startsWith(".")) continue;
-    const file = resolve(dirname(layoutFile), spec);
-    if (existsSync(file)) return { layoutFile, globalsCssFile: file };
+  for (const mod of [layoutFile, ...routeModules(dirname(layoutFile), layoutFile)]) {
+    const css = importedStylesheet(mod);
+    if (css) return { layoutFile, globalsCssFile: css };
   }
   return { layoutFile, globalsCssFile: null };
 }
@@ -81,10 +107,26 @@ export function configModuleFile(layoutFile: string): string {
   return join(dirname(dirname(layoutFile)), `invariance.config.${ext}`);
 }
 
-/** The `app` id an existing config module declares, or null if none is recognisable. */
+/**
+ * The `app` id on the exported `invarianceConfig` object literal (the binding
+ * the patched layout imports), or null if it can't be determined statically.
+ */
 export function readConfigAppId(file: string): string | null {
-  const m = /\bapp\s*:\s*(["'`])([^"'`]+)\1/.exec(readFileSync(file, "utf8"));
-  return m ? m[2]! : null;
+  const src = readFileSync(file, "utf8");
+  const decl = /export\s+const\s+invarianceConfig\b[^=]*=\s*\{/.exec(src);
+  if (!decl) return null;
+  // Keep only the object's own (depth-1) text so nested `app` keys can't match.
+  let depth = 1;
+  let own = "";
+  for (let i = decl.index + decl[0].length; i < src.length && depth > 0; i++) {
+    const c = src[i]!;
+    if (c === "{") depth++;
+    else if (c === "}") depth--;
+    else if (depth === 1) own += c;
+  }
+  if (depth !== 0) return null;
+  const m = /(?:^|[,\s])(["']?)app\1\s*:\s*(["'`])([^"'`$]+)\2\s*(?:,|$)/.exec(own);
+  return m ? m[3]! : null;
 }
 
 /** Emit a minimal `@invariance/design` config the SSR helpers read (app id = cookie name). */
