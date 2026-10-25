@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import type { StyleSpec } from "@invariance/design/server";
 import { draftManifest, type JsonLlm } from "./draft";
 import { renderGuide } from "./guide";
+import { applyInit, type ApplyReport } from "./apply";
 import { declareRoleTokens, inferDesign } from "./infer-spec";
 import { llmFromEnv } from "./llm";
 import { scanRepo } from "./scan";
@@ -84,13 +85,17 @@ export interface InitOutcome {
   /** The default StyleSpec inferred from the app's observed colours. The manifest
    *  declares the role tokens compiled from it; the Designer refines it later. */
   styleSpec: StyleSpec;
+  /** Present only with `--apply`: the source edits made to the host app. */
+  applied?: ApplyReport;
 }
 
 /**
  * `invariance init [--app <id>] [--no-ai]`: scan the repo, draft the App
  * Manifest (model-refined when one is configured, deterministic otherwise),
  * and emit INVARIANCE.md with framework-specific SDK wiring. Files are
- * written for review/commit — init never edits existing source.
+ * written for review/commit. Without `--apply`, init never edits existing source;
+ * with it, init also writes the role-token baseline into globals.css and SSR theme
+ * inlining into the Next.js root layout (see apply.ts).
  */
 export async function init(flags: Record<string, string>, cwd = process.cwd()): Promise<string> {
   return (await initDetailed(flags, cwd)).manifestFile;
@@ -113,13 +118,14 @@ export async function initDetailed(
 
   // Infer a default StyleSpec from the app's observed colours and compile it,
   // then declare the 38 role tokens in the manifest so the app is theme-ready.
-  // (Analysis only — init never edits source.)
   const { styleSpec, roles } = inferDesign(scan, cwd);
   const manifest = declareRoleTokens(draft.manifest, roles);
 
   await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
   const guideFile = resolve(cwd, "INVARIANCE.md");
   await writeFile(guideFile, renderGuide(scan, manifest));
+
+  const applied = flags.apply === "true" ? await applyInit(cwd, appId, roles) : undefined;
 
   return {
     manifestFile,
@@ -131,6 +137,7 @@ export async function initDetailed(
       endpoints: manifest.endpoints.length,
       components: manifest.components.length,
     },
+    ...(applied ? { applied } : {}),
   };
 }
 
@@ -169,8 +176,10 @@ export async function dev(flags: Record<string, string>): Promise<DevServer> {
 export const USAGE = `invariance — control-plane tooling
 
 Usage:
-  invariance init [--app <id>] [--no-ai]                scan the repo, draft the manifest,
-                                                        and emit INVARIANCE.md wiring guide
+  invariance init [--app <id>] [--no-ai] [--apply]      scan the repo, draft the manifest,
+                                                        and emit INVARIANCE.md wiring guide;
+                                                        --apply also themes a Next.js app
+                                                        (globals.css :root + SSR inlining)
   invariance manifest publish [--file <path>]           publish a manifest version
                               [--registry <url>] [--app <id>]
   invariance dev [--port <port>] [--manifest <path>]    run a local control plane
@@ -199,6 +208,13 @@ export async function run(argv: string[]): Promise<number> {
           console.log(
             "tip: set INVARIANCE_LLM_BASE_URL (or ANTHROPIC_API_KEY) and re-run for a model-refined draft",
           );
+        }
+        if (outcome.applied) {
+          for (const e of outcome.applied.edits) console.log(`${e.status.padEnd(9)} ${e.file}`);
+          for (const s of outcome.applied.skipped) console.log(`skipped   ${s.what}: ${s.reason}`);
+          if (outcome.applied.edits.some((e) => e.status !== "unchanged")) {
+            console.log("note: the app now imports @invariance/design — add it as a dependency");
+          }
         }
         console.log("\nnext: review both files, then follow INVARIANCE.md");
         return 0;
