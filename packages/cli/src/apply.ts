@@ -17,6 +17,8 @@ const LAYOUT_CANDIDATES = ["app", join("src", "app")].flatMap((dir) =>
 export interface NextAppFiles {
   layoutFile: string | null;
   globalsCssFile: string | null;
+  /** A stylesheet only a nested layout/page imports (so not loaded on every route). */
+  routeOnlyCss?: { css: string; importer: string };
 }
 
 function importedStylesheet(moduleFile: string): string | null {
@@ -48,19 +50,20 @@ function routeModules(appDir: string, rootLayout: string): string[] {
 }
 
 /**
- * Locate the App Router root layout and the local stylesheet the app loads:
- * the one the root layout imports, else one imported by another layout/page.
- * A stylesheet nothing imports is never picked: its tokens would never reach
- * the browser.
+ * Locate the App Router root layout and the local stylesheet it imports — the
+ * only one loaded on every route. A stylesheet that only a nested layout/page
+ * imports is reported, not picked: the baseline would be missing elsewhere.
  */
 export function locateNextApp(root: string): NextAppFiles {
   const layoutRel = LAYOUT_CANDIDATES.find((p) => existsSync(join(root, p)));
   if (!layoutRel) return { layoutFile: null, globalsCssFile: null };
   const layoutFile = join(root, layoutRel);
 
-  for (const mod of [layoutFile, ...routeModules(dirname(layoutFile), layoutFile)]) {
-    const css = importedStylesheet(mod);
-    if (css) return { layoutFile, globalsCssFile: css };
+  const css = importedStylesheet(layoutFile);
+  if (css) return { layoutFile, globalsCssFile: css };
+  for (const importer of routeModules(dirname(layoutFile), layoutFile)) {
+    const routeCss = importedStylesheet(importer);
+    if (routeCss) return { layoutFile, globalsCssFile: null, routeOnlyCss: { css: routeCss, importer } };
   }
   return { layoutFile, globalsCssFile: null };
 }
@@ -115,17 +118,42 @@ export function readConfigAppId(file: string): string | null {
   const src = readFileSync(file, "utf8");
   const decl = /export\s+const\s+invarianceConfig\b[^=]*=\s*\{/.exec(src);
   if (!decl) return null;
-  // Keep only the object's own (depth-1) text so nested `app` keys can't match.
+  // Collect the object's own (depth-1) text. Comments are dropped and string
+  // literals copied whole, so braces inside either never affect depth, and
+  // nested `app` keys can't match.
   let depth = 1;
   let own = "";
-  for (let i = decl.index + decl[0].length; i < src.length && depth > 0; i++) {
+  let i = decl.index + decl[0].length;
+  while (i < src.length && depth > 0) {
     const c = src[i]!;
+    if (c === "/" && src[i + 1] === "/") {
+      const nl = src.indexOf("\n", i);
+      i = nl === -1 ? src.length : nl;
+      own += depth === 1 ? " " : "";
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "*") {
+      const close = src.indexOf("*/", i + 2);
+      if (close === -1) return null;
+      i = close + 2;
+      own += depth === 1 ? " " : "";
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      let j = i + 1;
+      while (j < src.length && src[j] !== c) j += src[j] === "\\" ? 2 : 1;
+      if (j >= src.length) return null;
+      if (depth === 1) own += src.slice(i, j + 1);
+      i = j + 1;
+      continue;
+    }
     if (c === "{") depth++;
     else if (c === "}") depth--;
     else if (depth === 1) own += c;
+    i++;
   }
   if (depth !== 0) return null;
-  const m = /(?:^|[,\s])(["']?)app\1\s*:\s*(["'`])([^"'`$]+)\2\s*(?:,|$)/.exec(own);
+  const m = /(?:^|[,\s])(["']?)app\1\s*:\s*(["'`])([^"'`$\\]+)\2(?:\s+as\s+const)?\s*(?:,|$)/.exec(own);
   return m ? m[3]! : null;
 }
 
@@ -219,7 +247,7 @@ export interface ApplyReport {
 /** Apply the themeable baseline to a Next.js App Router app. */
 export async function applyInit(root: string, appId: string, roles: Record<string, string>): Promise<ApplyReport> {
   const report: ApplyReport = { edits: [], skipped: [] };
-  const { layoutFile, globalsCssFile } = locateNextApp(root);
+  const { layoutFile, globalsCssFile, routeOnlyCss } = locateNextApp(root);
   if (!layoutFile) {
     report.skipped.push({ what: "apply", reason: "no Next.js App Router root layout (app/layout.* or src/app/layout.*)" });
     return report;
@@ -235,6 +263,13 @@ export async function applyInit(root: string, appId: string, roles: Record<strin
     } else {
       report.edits.push({ file: globalsCssFile, status });
     }
+  } else if (routeOnlyCss) {
+    report.skipped.push({
+      what: "globals.css",
+      reason:
+        `${relative(root, routeOnlyCss.css)} is only imported by ${relative(root, routeOnlyCss.importer)}, so other routes ` +
+        `would miss the baseline; import a global stylesheet from the root layout and re-run`,
+    });
   } else {
     report.skipped.push({ what: "globals.css", reason: "root layout imports no local stylesheet" });
   }

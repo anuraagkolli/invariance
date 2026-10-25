@@ -167,13 +167,20 @@ describe("review fixes", () => {
     expect(await readFile(join(root, "app", "globals.css"), "utf8")).not.toContain(GEN_START);
   });
 
-  it("falls back to a stylesheet a page imports when the root layout imports none", async () => {
+  it("reports, but doesn't patch, a stylesheet only a page imports", async () => {
     const noImport = CNA_LAYOUT.replace('import "./globals.css";\n', "");
     const root = await nextApp({ layout: noImport });
     await writeFile(join(root, "app", "page.tsx"), `import "./globals.css";\nexport default function Page() { return <main />; }\n`);
-    expect(locateNextApp(root).globalsCssFile).toBe(join(root, "app", "globals.css"));
-    await applyInit(root, "acme-next", ROLES);
-    expect(await readFile(join(root, "app", "globals.css"), "utf8")).toContain(GEN_START);
+    expect(locateNextApp(root)).toEqual({
+      layoutFile: join(root, "app", "layout.tsx"),
+      globalsCssFile: null,
+      routeOnlyCss: { css: join(root, "app", "globals.css"), importer: join(root, "app", "page.tsx") },
+    });
+    const report = await applyInit(root, "acme-next", ROLES);
+    expect(report.skipped.find((s) => s.what === "globals.css")?.reason).toMatch(
+      /^app\/globals\.css is only imported by app\/page\.tsx/,
+    );
+    expect(await readFile(join(root, "app", "globals.css"), "utf8")).not.toContain(GEN_START);
   });
 
   it("reads the app id from the exported invarianceConfig only", async () => {
@@ -186,6 +193,8 @@ describe("review fixes", () => {
     expect(await cfg("const metadata = { app: 'storefront' }\nexport const invarianceConfig = { app: 'legacy' }\n")).toBe("legacy");
     expect(await cfg("export const invarianceConfig: InvarianceConfig = { 'app': \"storefront\" }\n")).toBe("storefront");
     expect(await cfg("export const invarianceConfig = { slots: { app: 'x' }, app: 'real' }\n")).toBe("real");
+    expect(await cfg("export const invarianceConfig = {\n  // } kept for docs\n  /* { */ hint: '}',\n  app: 'acme' as const,\n}\n")).toBe("acme");
+    expect(await cfg("export const invarianceConfig = { app: `acme-${env}` }\n")).toBeNull();
     expect(await cfg("export const invarianceConfig = { app: process.env.APP! }\n")).toBeNull();
     expect(await cfg("export default { app: 'x' }\n")).toBeNull();
   });
