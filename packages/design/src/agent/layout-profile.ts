@@ -74,9 +74,14 @@ export function applyLayoutPreset(
   const components = mergeSectionPages(current.components, preset?.components)
   if (layout) candidate.layout = layout
   if (components) candidate.components = components
-  // A preset's variants are a whole look, so they REPLACE the previous theme's
-  // (retro's brutal buttons must not leak into a pastel theme). No preset
-  // variants = carry the user's current selection forward.
-  const variants = preset?.variants ?? current.variants
+  // A preset's variants are a whole look, so moving to a new profile REPLACES
+  // the previous picks, page-scoped ones included (retro's brutal buttons must
+  // not leak into a pastel theme). Staying in the same profile ("warmer",
+  // "just the buttons") keeps the user's picks; no preset = carry them forward.
+  const currentSpec = current.theme?.styleSpec
+  const sameProfile = currentSpec !== undefined && spec !== undefined && themeProfile(currentSpec) === themeProfile(spec)
+  const replace = preset?.variants !== undefined && !sameProfile
+  const variants = replace ? preset?.variants : (current.variants ?? preset?.variants)
   if (variants && Object.keys(variants).length > 0) candidate.variants = { ...variants }
+  if (!replace && current.page_variants !== undefined) candidate.page_variants = current.page_variants
 }

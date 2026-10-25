@@ -14,7 +14,7 @@ import { runPipeline, type PipelineStage, type PipelineResult, type PendingPrevi
 import { applyPack, availablePacks } from '../agent/apply-pack'
 import { loadCurrentV2, persistAndApply } from '../agent/pipeline-io'
 import type { ConvTurn } from '../agent/gatekeeper'
-import type { ThemeJsonV2 } from '../config/types'
+import type { AnyThemeJson, ThemeJsonV2 } from '../config/types'
 import { applyAnyTheme } from '../runtime/apply'
 import { beginSmoothThemeTransition } from '../runtime/smooth-transition'
 import { upgradeThemeJson } from '../config/upgrade'
@@ -370,6 +370,9 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
   // The committed theme captured just before a preview run, so Discard can
   // revert the live DOM to exactly what was on screen before.
   const previewBaseRef = useRef<ThemeJsonV2 | null>(null)
+  // The in-memory store value before the preview (null = nothing applied), so
+  // Discard restores the committed anatomy, not just the tokens.
+  const previewStoreRef = useRef<AnyThemeJson | null>(null)
 
   // The store/apply slice the commit + revert helpers need (a structural subset
   // of the full invariance context).
@@ -497,6 +500,9 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
     const base = previewBaseRef.current
     beginSmoothThemeTransition()
     clearInvTokens()
+    const committed = previewStoreRef.current
+    if (committed) themeStore.setTheme(committed)
+    else themeStore.clear()
     if (base) applyAnyTheme(base, config)
     setConvHistory((prev) => [
       ...prev,
@@ -560,6 +566,7 @@ export function CustomizationOverlay({ onClose }: CustomizationOverlayProps) {
 
     // Snapshot the committed theme so a Discard (or a close) can revert the live
     // DOM to exactly this. Captured before the run paints the preview on top.
+    previewStoreRef.current = themeStore.getTheme()
     previewBaseRef.current = await loadCurrentV2(ioContext())
 
     let result: PipelineResult

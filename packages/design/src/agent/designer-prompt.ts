@@ -1,3 +1,4 @@
+import type { LookContext } from './looks'
 import type { StyleSpec, DesignConstraints } from '../compiler/style-spec'
 import { ROLE_TOKENS } from '../compiler/roles'
 import type { ThemePack } from '../registries/theme-packs'
@@ -23,6 +24,7 @@ export interface DesignerPromptInput {
   constraints: DesignConstraints
   fewShot: ThemePack[]
   currentSpec?: StyleSpec
+  looks?: LookContext
 }
 
 // Build the Designer system prompt. Section order:
@@ -40,7 +42,7 @@ export interface DesignerPromptInput {
 // test asserts exactly 3 occurrences of /"rationale"/ in the full prompt,
 // one per JSON block.
 export function buildDesignerPrompt(input: DesignerPromptInput): string {
-  const { constraints, fewShot, currentSpec } = input
+  const { constraints, fewShot, currentSpec, looks } = input
 
   // Section 1: role + mission
   const sections: string[] = []
@@ -83,6 +85,23 @@ framing (layout rhythm):
   standard  balanced default.
   spacious  wide sidebar, large cards, tall hero, airy rhythm — editorial/calm/premium/coastal.`,
   )
+
+  // Section 2c: component looks the app ships (only when the app declares any)
+  if (looks) {
+    const axisLines = Object.entries(looks.axes).map(([axis, ids]) => `  ${axis}: ${ids.join(', ')}`).join('\n')
+    const scopeLines = [
+      looks.sections.length > 0 ? `Sections on this page (set "section" to change only that one): ${looks.sections.join(', ')}` : '',
+      looks.pageAllowed ? `Set "this_page_only": true to change only this page (${looks.page}).` : '',
+      `Current looks — app-wide: ${JSON.stringify(looks.current.app)}; this page: ${JSON.stringify(looks.current.page)}`,
+    ].filter(Boolean).join('\n')
+    sections.push(
+      `COMPONENT LOOKS (optional "looks" array of {axis, id} — the app's own designs, picked by name):
+${axisLines}
+${scopeLines}
+
+Your spec already brings a matching set of looks for its overall vibe, so leave "looks" out unless the user names a component (cards, buttons, hero, section headers, motion/animation). When the request is ONLY about component looks, copy CURRENT DESIGN unchanged so nothing else moves.`,
+    )
+  }
 
   // Section 3: developer constraint block (only when values are present)
   const constraintLines: string[] = []
@@ -135,7 +154,8 @@ framing (layout rhythm):
   }
 
   // Section 8: closing instruction
-  sections.push('Output ONLY the StyleSpec JSON object — no prose, no markdown fences, no explanation.')
+  sections.push('Output ONLY the StyleSpec JSON object — no prose, no markdown fences, no explanation.'
+    + (looks ? ' Add the "looks" array to it only when the request calls for specific component looks.' : ''))
 
   return sections.join('\n\n')
 }

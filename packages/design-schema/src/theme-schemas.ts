@@ -208,7 +208,10 @@ const ThemeSectionV2Schema = z.object({
   styleSpec: StyleSpecSchema.optional(),
 })
 
-export const VariantsSectionSchema = z.record(VariantNameSchema, VariantNameSchema)
+// Theme variant keys: an axis, or `axis@slot` scoping the pick to one slot.
+const VARIANT_KEY = /^[a-z][a-z0-9-]*(@[A-Za-z0-9][A-Za-z0-9._-]*)?$/
+const VariantKeySchema = z.string().regex(VARIANT_KEY, 'variant keys must be axis or axis@slot')
+export const VariantsSectionSchema = z.record(VariantKeySchema, VariantNameSchema)
 
 export const ThemeJsonV2Schema = z.object({
   version: z.literal(2),
@@ -218,4 +221,5 @@ export const ThemeJsonV2Schema = z.object({
   layout: LayoutSectionSchema.optional(),
   components: ComponentsSectionSchema.optional(),
   variants: VariantsSectionSchema.optional(),
+  page_variants: z.record(z.string(), VariantsSectionSchema).optional(),
 })

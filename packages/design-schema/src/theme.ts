@@ -100,9 +100,10 @@ export interface VariantAxisConfig {
   default?: string
 }
 
-// Theme-selected component variants, global across pages: axis -> variant id
-// (e.g. { card: 'polaroid', button: 'brutal' }). Ids are enum-like kebab names
-// that select app/kit-shipped recipes — never raw CSS.
+// Theme-selected component variants: key -> variant id (e.g. { card: 'polaroid',
+// button: 'brutal' }). A key is an axis, or `axis@slot` to target the components
+// inside one slot (e.g. 'card@row-trending'). Ids are enum-like kebab names that
+// select app/kit-shipped recipes — never raw CSS.
 export type VariantsSection = Record<string, string>
 
 export interface ComponentsSection {
@@ -137,6 +138,9 @@ export interface ThemeJsonV2 {
   layout?: LayoutSection
   components?: ComponentsSection
   variants?: VariantsSection
+  /** Per-page variant picks (page path -> VariantsSection); they win over
+   *  `variants` on that page only. */
+  page_variants?: Record<string, VariantsSection>
 }
 
 // Union of all supported schema versions. Storage backends and the runtime

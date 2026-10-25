@@ -6,7 +6,7 @@ import { compileTheme } from '../compiler/compile'
 import { verifyV2 } from '../verify/compiled-tests'
 import { ThemeJsonV2Schema } from '../config/schema'
 import type { AnyThemeJson, InvarianceConfig, ThemeJsonV2 } from '../config/types'
-import { allowedVariants } from './resolve-overrides'
+import { allowedVariants, allowedPageVariants } from './resolve-overrides'
 
 // reconcile-theme — recompile-keep-vibe when invariants change.
 //
@@ -91,6 +91,8 @@ export function reconcileStoredTheme(raw: AnyThemeJson, config: InvarianceConfig
     // Drop only the variants the current config no longer allows; keep the rest.
     const variants = allowedVariants(upgraded.variants, config)
     if (variants) candidate.variants = variants
+    const pageVariants = allowedPageVariants(upgraded.page_variants, config)
+    if (pageVariants) candidate.page_variants = pageVariants
   }
 
   // Re-verify and schema-check the recompiled candidate; if it still fails, drop.
@@ -109,9 +111,16 @@ export function reconcileStoredTheme(raw: AnyThemeJson, config: InvarianceConfig
 
 function pruneDisallowedVariants(raw: AnyThemeJson, config: InvarianceConfig): ThemeJsonV2 | null {
   const { theme: upgraded } = upgradeThemeJson(raw)
-  if (!isV2Theme(upgraded) || upgraded.variants === undefined) return null
+  if (!isV2Theme(upgraded)) return null
+  if (upgraded.variants === undefined && upgraded.page_variants === undefined) return null
   const variants = allowedVariants(upgraded.variants, config)
-  if (variants && Object.keys(variants).length === Object.keys(upgraded.variants).length) return null
-  const { variants: _dropped, ...rest } = upgraded
-  return variants ? { ...rest, variants } : rest
+  const pageVariants = allowedPageVariants(upgraded.page_variants, config)
+  const count = (v: Record<string, string> | undefined) => Object.keys(v ?? {}).length
+  const pageCount = (pv: Record<string, Record<string, string>> | undefined) =>
+    Object.values(pv ?? {}).reduce((n, v) => n + count(v), 0)
+  const unchanged =
+    count(variants) === count(upgraded.variants) && pageCount(pageVariants) === pageCount(upgraded.page_variants)
+  if (unchanged) return null
+  const { variants: _v, page_variants: _pv, ...rest } = upgraded
+  return { ...rest, ...(variants ? { variants } : {}), ...(pageVariants ? { page_variants: pageVariants } : {}) }
 }
